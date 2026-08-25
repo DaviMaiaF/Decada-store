@@ -7,8 +7,9 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 0 concluída — esqueleto do backend, health check e banco em Docker.
-> Modelagem de dados, motor de casamento, preços, NFC-e e app mobile ainda não existem.
+> **Status:** etapa 1 concluída — esqueleto do backend, health check, banco em Docker
+> e modelo de dados completo com migração Alembic. Seed do catálogo, motor de
+> casamento, cálculo de preço, NFC-e e app mobile ainda não existem.
 
 ## Stack
 
@@ -39,7 +40,32 @@ docker compose up -d          # sobe o PostgreSQL 16
 cd backend
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
+.venv/bin/alembic upgrade head   # cria as tabelas
 ```
+
+## Banco de dados
+
+As migrações ficam em `backend/alembic/versions/` e leem a URL de conexão do `.env`,
+via `Settings` — o `alembic.ini` não guarda credenciais.
+
+```bash
+cd backend
+.venv/bin/alembic upgrade head        # aplica todas as migrações
+.venv/bin/alembic current             # mostra a revisão aplicada
+.venv/bin/alembic downgrade base      # desfaz tudo (apaga os dados)
+.venv/bin/alembic check               # acusa modelo fora de sincronia com as migrações
+```
+
+Depois de mudar um modelo, gere a revisão e **leia o arquivo gerado antes de aplicar**:
+
+```bash
+cd backend
+.venv/bin/alembic revision --autogenerate -m "descricao da mudanca"
+```
+
+As dez tabelas do domínio são `users`, `meal_plans`, `plan_items`, `products`,
+`markets`, `price_records`, `shopping_lists`, `shopping_list_items`, `recipes` e
+`recipe_ingredients`. O diagrama ER entra em `docs/modelo-dados.md` na etapa 10.
 
 ## Execução
 
@@ -108,8 +134,10 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 .
 ├── backend/
 │   ├── app/
-│   │   ├── core/          # configuração
+│   │   ├── core/          # configuração e sessão do banco
+│   │   ├── models/        # modelos SQLAlchemy
 │   │   └── main.py        # aplicação FastAPI
+│   ├── alembic/           # migrações
 │   ├── tests/
 │   └── pyproject.toml
 ├── docs/

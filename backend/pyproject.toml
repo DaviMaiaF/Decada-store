@@ -37,3 +37,24 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Migrações são geradas pelo Alembic a partir de um template fixo; não vale
+# reformatá-las a cada revisão nova.
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+# Sem isto o ruff confunde a biblioteca `alembic` com a pasta alembic/ do projeto.
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Chamar Depends() no valor padrão do argumento é o idioma do FastAPI.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]
