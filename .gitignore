@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# --- Node / React Native / Expo ---
+node_modules/
+.expo/
+.expo-shared/
+npm-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# --- Ambiente e segredos ---
+.env
+.env.local
+*.pem
+
+# --- Editores e SO ---
+.vscode/
+.idea/
+.DS_Store

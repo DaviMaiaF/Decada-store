@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nutricart-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nutricart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nutricart}
+      POSTGRES_DB: ${POSTGRES_DB:-nutricart}
+    ports:
+      # Se a 5432 já estiver ocupada na sua máquina, defina POSTGRES_PORT no .env.
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - nutricart_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nutricart} -d ${POSTGRES_DB:-nutricart}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nutricart_pgdata:
