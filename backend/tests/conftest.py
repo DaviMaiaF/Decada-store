@@ -12,7 +12,9 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Base
+from app.models import Base, Product
+from app.seeds.catalog import PRODUCTS
+from app.services.text import normalize_text
 
 TEST_DATABASE_NAME = "nutricart_test"
 
@@ -47,3 +49,26 @@ def db_session(test_engine):
         session.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
         session.commit()
         yield session
+
+
+@pytest.fixture(scope="session")
+def catalogo() -> list[Product]:
+    """Os 120 produtos do seed como objetos Product, sem passar pelo banco.
+
+    O casamento item–produto não precisa de sessão para funcionar, e manter
+    esses testes fora do banco os deixa na casa dos milissegundos.
+    """
+    return [
+        Product(
+            name=produto.name,
+            slug=str(indice),
+            normalized_name=normalize_text(produto.name),
+            brand=produto.brand,
+            package_size=produto.package_size,
+            package_unit=produto.package_unit,
+            base_unit=produto.base_unit,
+            category=produto.category,
+            is_fictitious=True,
+        )
+        for indice, produto in enumerate(PRODUCTS)
+    ]
