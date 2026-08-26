@@ -7,8 +7,8 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 1 concluída — esqueleto do backend, health check, banco em Docker
-> e modelo de dados completo com migração Alembic. Seed do catálogo, motor de
+> **Status:** etapa 2 concluída — backend, banco em Docker, modelo de dados com
+> migração Alembic e catálogo fictício de desenvolvimento carregado. Motor de
 > casamento, cálculo de preço, NFC-e e app mobile ainda não existem.
 
 ## Stack
@@ -63,6 +63,20 @@ cd backend
 .venv/bin/alembic revision --autogenerate -m "descricao da mudanca"
 ```
 
+## Dados de desenvolvimento
+
+```bash
+cd backend
+.venv/bin/python -m app.seeds
+```
+
+Carrega 3 mercados no DF, 120 produtos e 1.080 registros de preço. É idempotente:
+rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
+
+**Todos esses dados são fictícios.** Mercados e produtos ficam com
+`is_fictitious = true`, os preços têm origem `seed` e as marcas são inventadas.
+O script se recusa a rodar se `APP_ENV` não for `dev`.
+
 As dez tabelas do domínio são `users`, `meal_plans`, `plan_items`, `products`,
 `markets`, `price_records`, `shopping_lists`, `shopping_list_items`, `recipes` e
 `recipe_ingredients`. O diagrama ER entra em `docs/modelo-dados.md` na etapa 10.
@@ -104,6 +118,14 @@ cd backend
 .venv/bin/pytest
 ```
 
+Parte dos testes usa um banco de testes (`nutricart_test`), criado automaticamente
+no mesmo container. Sem Docker no ar, rode apenas os que não dependem do banco:
+
+```bash
+cd backend
+.venv/bin/pytest -m "not db"
+```
+
 Com relatório de cobertura:
 
 ```bash
@@ -136,6 +158,8 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   ├── app/
 │   │   ├── core/          # configuração e sessão do banco
 │   │   ├── models/        # modelos SQLAlchemy
+│   │   ├── seeds/         # catálogo fictício de desenvolvimento
+│   │   ├── services/      # regras de negócio
 │   │   └── main.py        # aplicação FastAPI
 │   ├── alembic/           # migrações
 │   ├── tests/

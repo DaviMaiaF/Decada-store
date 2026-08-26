@@ -33,6 +33,9 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "db: precisa do PostgreSQL no ar (docker compose up -d). Pule com -m 'not db'.",
+]
 
 [tool.ruff]
 line-length = 100
