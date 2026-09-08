@@ -60,6 +60,7 @@ decada/
 │   │   └── types/
 │   └── app.json
 ├── docs/
+│   └── design/        # protótipos, sistema de design, contrato das telas
 └── docker-compose.yml
 ```
 
@@ -73,9 +74,12 @@ decada/
   com um score de confiança. Nunca é 100% automático — o usuário confirma.
 - **PriceRecord (registro de preço)**: preço de um Product, em um Market, em uma data,
   com uma origem (`nfce`, `scraping`, `usuario`, `seed`).
+- **PantryItem (item da despensa)**: o que o usuário já tem em casa. Abate da lista
+  de compras e alimenta a sugestão de receitas.
 - **ShoppingList (lista de compras)**: resultado final — produtos escolhidos,
   quantidades e custo estimado.
-- **Recipe (receita)**: preparo que consome ingredientes presentes na lista.
+- **Recipe (receita)**: preparo que consome ingredientes presentes na lista
+  ou na despensa.
 
 ## Decisões já tomadas (não reabrir sem discutir)
 
@@ -87,6 +91,20 @@ decada/
 4. O app **não prescreve dieta**. Ele operacionaliza uma prescrição existente.
 5. Plano alimentar é dado pessoal sensível de saúde (LGPD, art. 5º, II):
    consentimento explícito, minimização e exclusão sob demanda são requisitos.
+6. A marca é **DÉCADA** (feminina: *a* DÉCADA). Tabelas, colunas e enums seguem
+   em inglês, como sempre.
+7. Import de plano é **PDF com texto**. OCR de foto está fora do MVP.
+8. Substituição de alimento só existe se veio da nutricionista. O app pode comparar
+   preços do mesmo item; não pode trocar o alimento prescrito por outro.
+
+## Design
+
+Os protótipos das telas, o sistema de design e o contrato que cada tela exige do
+backend estão em [`docs/design/`](docs/design/). Antes de implementar qualquer tela
+ou endpoint que a alimente, leia [`docs/design/telas.md`](docs/design/telas.md): ele
+diz o que já existe, o que falta e o que ficou fora do MVP.
+
+A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**.
 
 ## Como rodar
 
@@ -100,7 +118,7 @@ python3 -m venv .venv                      # apenas na primeira vez
 
 .venv/bin/pytest -q                        # testes do backend
 
-cd ../mobile && npx expo start             # (ainda não existe — etapa 8)
+cd ../mobile && npx expo start             # (ainda não existe — etapa 9)
 ```
 
 > **Nota de ambiente:** a máquina de desenvolvimento tem Python 3.10.12.

@@ -7,9 +7,27 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 2 concluída — backend, banco em Docker, modelo de dados com
-> migração Alembic e catálogo fictício de desenvolvimento carregado. Motor de
-> casamento, cálculo de preço, NFC-e e app mobile ainda não existem.
+> **Status:** etapa 4 concluída — backend, banco em Docker, modelo de dados com
+> migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto e
+> cálculo de preço por região. A API ainda expõe só `/health`: nenhuma rota de
+> domínio, NFC-e ou app mobile existe.
+
+## Design
+
+Os protótipos das telas, o sistema de design e o contrato que cada tela exige do
+backend estão em [`docs/design/`](docs/design/). O aplicativo tem quatro abas —
+Dieta, Mercado, Despensa e Economia.
+
+## Próximas etapas
+
+| Etapa | O que é |
+|---|---|
+| 5 | Despensa (`PantryItem`) e o desconto dela na lista de compras |
+| 6 | Geração da lista de compras com confirmação do casamento pelo usuário |
+| 7 | Sugestão de receitas pelo que há na despensa e na lista |
+| 8 | Import do plano por PDF com texto |
+| 9 | Rotas da API e app mobile em React Native |
+| 10 | Autenticação, LGPD (consentimento e exclusão) e documentação final |
 
 ## Stack
 

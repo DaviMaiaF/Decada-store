@@ -53,7 +53,7 @@ class PriceRecord(UUIDPrimaryKeyMixin, Base):
         index=True,
     )
     # Quem contribuiu com o preço. SET NULL na exclusão da conta: o preço
-    # sobrevive anonimizado (requisito da etapa 9).
+    # sobrevive anonimizado (requisito da etapa 10).
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

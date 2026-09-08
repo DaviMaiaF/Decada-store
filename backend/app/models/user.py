@@ -15,7 +15,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    # Nulo até a etapa 9 (autenticação): usuários criados em desenvolvimento
+    # Nulo até a etapa 10 (autenticação): usuários criados em desenvolvimento
     # ainda não têm senha. Passa a ser obrigatório quando o login existir.
     password_hash: Mapped[str | None] = mapped_column(String(255))
     full_name: Mapped[str | None] = mapped_column(String(255))

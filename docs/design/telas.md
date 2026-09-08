@@ -1,0 +1,161 @@
+# O que cada tela exige do backend
+
+Mapa entre os protótipos e o código. Serve para responder duas perguntas antes de
+implementar qualquer tela: *o que falta no backend?* e *isto entra no MVP?*
+
+Legenda:
+
+- ✅ **existe** — a regra de negócio já está implementada e testada
+- 🔨 **falta** — entra no MVP, ainda não foi feito
+- ⛔ **fora do MVP** — documentado, fica para depois
+
+> **Nenhuma rota de domínio existe ainda.** A API tem só `GET /health`. Onde este
+> documento diz ✅, quer dizer que a regra existe em `app/services/` — a rota que a
+> expõe ainda precisa ser escrita, em todos os casos.
+
+## O que já está pronto no backend
+
+| Camada | O que tem |
+|---|---|
+| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient` |
+| `services/text.py` | normalização de texto para comparação |
+| `services/units.py` | conversão para a unidade base do produto (kg, l, unidade) |
+| `services/parsing.py` | leitura de uma linha do plano: quantidade + unidade + descrição |
+| `services/matching.py` | casamento item do plano ↔ produto do catálogo, com score |
+| `services/pricing.py` | média, mediana e desvio por região; custo da lista de compras |
+
+---
+
+## 1. Upload de prescrição
+
+[Protótipo](prototipos/01-upload-prescricao.html) · [captura](prototipos/capturas/01-upload-prescricao.png)
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| Escolher PDF | 🔨 | Extrair texto de PDF pesquisável e passar linha a linha pelo `parsing.py` |
+| Tirar foto | ⛔ | Exige OCR. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso |
+| Nome e CRN da nutricionista | 🔨 | `MealPlan.nutritionist_name` ✅ existe; **CRN não tem campo** |
+| "Plano de 4 semanas • Foco: Energia" | ⛔ | Não há duração nem objetivo no modelo |
+| "5 refeições diárias organizadas" | ⛔ | Depende de `Meal`, que está fora do MVP |
+| "28 itens mapeados" | ✅ | Contagem de `PlanItem` com match |
+| "100% válido" | ✅ | Derivável de `PlanItemStatus`: nenhum item `nao_identificado` |
+| "Custo semanal estimado R$ 168,50" | ✅ | `pricing.price_shopping_list` — mas veja as divergências abaixo |
+| Confirmar e gerar lista | 🔨 | Cria a `ShoppingList` a partir dos itens confirmados |
+
+**Falta um passo de consentimento.** `MealPlan.consent_at` e `consent_version` são
+`NOT NULL` — sem consentimento explícito o plano não pode ser gravado (decisão 5, LGPD).
+O protótipo vai direto do upload para o resultado. A tela precisa de um aceite antes de
+enviar o arquivo.
+
+## 2. Dieta
+
+[Protótipo](prototipos/02-dieta.html) · [captura](prototipos/capturas/02-dieta.png)
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| Carrossel da semana | ⛔ | Depende de `Meal` com data |
+| "Refeições 3/5 · 60% cumprido" | ⛔ | Depende de registro de consumo |
+| Água 1.8 / 2.5 L | ⛔ | Não é do domínio do app hoje |
+| Linha do dia com horário e "Feito/Pendente" | ⛔ | Depende de `Meal` |
+| Texto de cada refeição | ✅ | `PlanItem.raw_description` |
+| "Tudo disponível na sua despensa!" | 🔨 | Cruzamento com `PantryItem` |
+| Substituições autorizadas | ⛔ | Ver divergência 3 |
+| Card "Mercado Inteligente · ~ R$ 42,80" | ✅ | `ShoppingList.estimated_total` |
+
+**No MVP esta tela vira a lista dos itens prescritos do plano ativo**, sem horário, sem
+status e sem carrossel — com o card de custo e o atalho para a lista de compras.
+
+Para implementar a tela completa depois: um modelo `Meal` (plano, dia, horário, tipo) com
+os `PlanItem` pendurados nele, mais um registro de consumo (refeição, data, horário do
+aceite). O parser precisaria reconhecer os cabeçalhos de refeição do PDF, não só as linhas
+de item.
+
+## 3. Mercado
+
+[Protótipo](prototipos/03-mercado.html) · [captura](prototipos/capturas/03-mercado.png)
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| Agrupamento por corredor | ✅ | `Product.category` já existe e o catálogo já usa `hortifruti`, `proteinas`, `laticinios`, `mercearia` — falta só o rótulo de exibição |
+| "Est. R$ 5,50" por item | ✅ | `ShoppingListItem.estimated_cost` |
+| "R$ 174,20 / 7 dias" | ✅ | `ShoppingList.estimated_total` |
+| Marcar "já comprei" | 🔨 | Campo novo em `ShoppingListItem` (ex.: `purchased_at`) |
+| Progresso "14 de 22 (63%)" | 🔨 | Contagem sobre o campo acima |
+| "8 itens dispensados da compra" | 🔨 | Desconto da despensa — o coração do MVP |
+| Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
+| "Dica de economia da semana" | ⛔ | Ver divergência 3 |
+| Adicionar item avulso | 🔨 | Produto fora do plano, sem `plan_item_id` |
+| Exportar para WhatsApp | ⛔ | |
+
+O mapa de rótulos, para não inventar categoria nova no banco:
+
+| `Product.category` | Rótulo na tela |
+|---|---|
+| `hortifruti` | Hortifrúti |
+| `proteinas` | Carnes & Ovos |
+| `laticinios` | Laticínios |
+| `mercearia` | Mercearia & Grãos |
+
+## 4. Despensa
+
+[Protótipo](prototipos/04-despensa.html) · [captura](prototipos/capturas/04-despensa.png)
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| Lista do que tem em casa | 🔨 | `PantryItem` — **entra no MVP** |
+| Adicionar e remover item | 🔨 | CRUD de `PantryItem` |
+| "3 receitas 100% compatíveis" | 🔨 | Etapa 7, cruzando receita × despensa |
+| "85% disponível (falta chia)" | 🔨 | Cobertura da receita = ingredientes disponíveis ÷ total |
+| "+ Chia" → lista de mercado | 🔨 | Adiciona o ingrediente faltante à lista |
+| Fotos das receitas | ⛔ | Não há campo de imagem em `Recipe` |
+| "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
+| "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
+| Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
+
+## 5. Economia
+
+Não tem protótipo. No MVP a aba fica como tela informativa simples, reaproveitando o que
+o cálculo de preço já devolve: total estimado da lista, quantos itens têm preço, quantos
+não têm e o selo de confiança do preço mais fraco.
+
+---
+
+## Divergências entre o protótipo e as decisões do projeto
+
+Estas cinco precisam ser resolvidas na implementação — o protótipo, como está, contraria
+decisões já tomadas.
+
+**1. Preço aparece sem data e sem origem.** As telas mostram "Est. R$ 5,50" e "R$ 174,20"
+soltos. A decisão 1 exige que todo preço carregue data da coleta e origem, e que preço com
+mais de 30 dias seja exibido como estimativa. O `pricing.py` já devolve tudo isso
+(`price_reference_date`, `price_origin`, `price_confidence`); a tela é que precisa mostrar
+— ao menos um selo de confiança na lista e data + origem no detalhe do item.
+
+**2. Região fixa.** A tela de upload diz "baseado na feira e mercados locais de São Paulo".
+A decisão 2 é média **por região**, e a região tem que vir do usuário — o catálogo de
+desenvolvimento é do DF. O texto da tela não pode ser fixo.
+
+**3. O app opinando sobre a dieta.** A tela de Mercado sugere "substituir morango fresco
+por banana ou mamão" como dica de economia. Isso é o app alterando uma prescrição, o que
+a decisão 4 proíbe. A tela de Dieta faz certo: lista "opções autorizadas pela Nutri
+Camila". Regra: **substituição só existe se veio da nutricionista.** Economia se mostra
+comparando preços do mesmo item, nunca trocando o alimento prescrito.
+
+**4. Números de economia sem base.** "Evitou desperdício de R$ 14,00" e "+R$ 42" não têm
+como ser calculados com o que o modelo guarda, e a decisão de nunca inventar dado de preço
+vale também para dado de economia. Ou se define a conta (o que entrou na despensa, a que
+preço, e o que foi consumido antes de vencer) ou o número não aparece.
+
+**5. Consentimento ausente no upload.** Descrito na seção 1.
+
+---
+
+## Resumo do que entra no MVP
+
+**Entra:** despensa (`PantryItem`) e o desconto dela na lista de compras; import de plano
+por PDF com texto; agrupamento por corredor; marcar item como comprado; receitas com
+percentual de disponibilidade.
+
+**Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR de foto,
+projeção mensal, métricas de desperdício, dicas de substituição geradas pelo app, validade
+de item da despensa, exportação para WhatsApp e fotos de receita.
