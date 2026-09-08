@@ -17,12 +17,13 @@ Legenda:
 
 | Camada | O que tem |
 |---|---|
-| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient` |
+| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient`, `PantryItem` |
 | `services/text.py` | normalização de texto para comparação |
 | `services/units.py` | conversão para a unidade base do produto (kg, l, unidade) |
 | `services/parsing.py` | leitura de uma linha do plano: quantidade + unidade + descrição |
 | `services/matching.py` | casamento item do plano ↔ produto do catálogo, com score |
 | `services/pricing.py` | média, mediana e desvio por região; custo da lista de compras |
+| `services/pantry.py` | quanto da compra a despensa já cobre, com abatimento parcial |
 
 ---
 
@@ -58,7 +59,7 @@ enviar o arquivo.
 | Água 1.8 / 2.5 L | ⛔ | Não é do domínio do app hoje |
 | Linha do dia com horário e "Feito/Pendente" | ⛔ | Depende de `Meal` |
 | Texto de cada refeição | ✅ | `PlanItem.raw_description` |
-| "Tudo disponível na sua despensa!" | 🔨 | Cruzamento com `PantryItem` |
+| "Tudo disponível na sua despensa!" | ✅ | `pantry.coverage`, campo `fully_covered` |
 | Substituições autorizadas | ⛔ | Ver divergência 3 |
 | Card "Mercado Inteligente · ~ R$ 42,80" | ✅ | `ShoppingList.estimated_total` |
 
@@ -81,7 +82,7 @@ de item.
 | "R$ 174,20 / 7 dias" | ✅ | `ShoppingList.estimated_total` |
 | Marcar "já comprei" | 🔨 | Campo novo em `ShoppingListItem` (ex.: `purchased_at`) |
 | Progresso "14 de 22 (63%)" | 🔨 | Contagem sobre o campo acima |
-| "8 itens dispensados da compra" | 🔨 | Desconto da despensa — o coração do MVP |
+| "8 itens dispensados da compra" | ✅ | `pantry.coverage` (etapa 5); falta aplicar na geração da lista, na etapa 6 |
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | 🔨 | Produto fora do plano, sem `plan_item_id` |
@@ -102,8 +103,8 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 
 | A tela mostra | Backend | Observação |
 |---|---|---|
-| Lista do que tem em casa | 🔨 | `PantryItem` — **entra no MVP** |
-| Adicionar e remover item | 🔨 | CRUD de `PantryItem` |
+| Lista do que tem em casa | ✅ | `PantryItem` e `services/pantry.py` (etapa 5) |
+| Adicionar e remover item | 🔨 | Falta a rota; o modelo já aceita item só com texto |
 | "3 receitas 100% compatíveis" | 🔨 | Etapa 7, cruzando receita × despensa |
 | "85% disponível (falta chia)" | 🔨 | Cobertura da receita = ingredientes disponíveis ÷ total |
 | "+ Chia" → lista de mercado | 🔨 | Adiciona o ingrediente faltante à lista |

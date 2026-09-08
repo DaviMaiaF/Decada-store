@@ -9,6 +9,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.meal_plan import MealPlan
+    from app.models.pantry import PantryItem
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -21,5 +22,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     full_name: Mapped[str | None] = mapped_column(String(255))
 
     meal_plans: Mapped[list["MealPlan"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    pantry_items: Mapped[list["PantryItem"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

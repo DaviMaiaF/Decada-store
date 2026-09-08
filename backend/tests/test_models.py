@@ -20,6 +20,7 @@ TABELAS_ESPERADAS = {
     "shopping_list_items",
     "recipes",
     "recipe_ingredients",
+    "pantry_items",
 }
 
 
@@ -39,6 +40,18 @@ def test_excluir_usuario_apaga_os_planos_alimentares():
     # LGPD: exclusão sob demanda precisa levar embora o dado de saúde.
     assert _regra_de_exclusao("meal_plans", "user_id") == "CASCADE"
     assert _regra_de_exclusao("plan_items", "meal_plan_id") == "CASCADE"
+
+
+def test_excluir_usuario_apaga_a_despensa():
+    # Despensa é dado pessoal: sai junto com a pessoa (LGPD, exclusão sob demanda).
+    assert _regra_de_exclusao("pantry_items", "user_id") == "CASCADE"
+
+
+def test_apagar_produto_do_catalogo_nao_apaga_a_despensa():
+    # O item continua existindo com o texto que a pessoa digitou; perde só o
+    # vínculo com o catálogo, e com ele a capacidade de abater da lista.
+    assert _regra_de_exclusao("pantry_items", "product_id") == "SET NULL"
+    assert Base.metadata.tables["pantry_items"].c.product_id.nullable is True
 
 
 def test_excluir_usuario_preserva_os_precos_anonimizados():

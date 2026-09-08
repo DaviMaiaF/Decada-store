@@ -36,6 +36,15 @@ _RATIO_WEIGHT = Decimal("0.4")
 
 
 @dataclass(frozen=True)
+class ScoredProduct:
+    """Um produto e o quanto o nome dele se parece com o texto buscado."""
+
+    product: Product
+    # De 0 a 1, com três casas.
+    score: Decimal
+
+
+@dataclass(frozen=True)
 class MatchCandidate:
     """Um produto que pode atender ao item, com o quanto se parece e a conversão."""
 
@@ -97,29 +106,42 @@ def _convert(
     return True, quantity_in_base, packages_needed
 
 
+def rank_products(
+    description: str, catalog: Sequence[Product], limit: int = MAX_CANDIDATES
+) -> list[ScoredProduct]:
+    """Produtos mais parecidos com uma descrição, do mais parecido ao menos.
+
+    Responde "que produto é este?" sem envolver quantidade — que é o que a
+    despensa precisa, onde o item pode não ter quantidade nenhuma.
+
+    Função pura: recebe o catálogo pronto e não conhece o banco.
+    """
+    normalized_query = normalize_text(description)
+
+    ranked = [ScoredProduct(product, _score(normalized_query, product)) for product in catalog]
+    # O nome desempata scores iguais, para a ordem não variar entre execuções.
+    ranked.sort(key=lambda scored: (-scored.score, scored.product.name))
+    return ranked[:limit]
+
+
 def find_candidates(
     description: str,
     quantity: Decimal,
     unit: MeasurementUnit,
     catalog: Sequence[Product],
 ) -> list[MatchCandidate]:
-    """Os melhores candidatos para uma descrição, do mais parecido ao menos.
+    """Os melhores candidatos para uma descrição, já com a quantidade convertida.
 
     Função pura: recebe o catálogo pronto e não conhece o banco.
     """
-    normalized_query = normalize_text(description)
-
-    candidates = [
+    return [
         MatchCandidate(
-            product,
-            _score(normalized_query, product),
-            *_convert(quantity, unit, product),
+            scored.product,
+            scored.score,
+            *_convert(quantity, unit, scored.product),
         )
-        for product in catalog
+        for scored in rank_products(description, catalog)
     ]
-    # O nome desempata scores iguais, para a ordem não variar entre execuções.
-    candidates.sort(key=lambda candidate: (-candidate.score, candidate.product.name))
-    return candidates[:MAX_CANDIDATES]
 
 
 def _status(candidates: Sequence[MatchCandidate]) -> PlanItemStatus:

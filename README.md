@@ -7,10 +7,10 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 4 concluída — backend, banco em Docker, modelo de dados com
-> migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto e
-> cálculo de preço por região. A API ainda expõe só `/health`: nenhuma rota de
-> domínio, NFC-e ou app mobile existe.
+> **Status:** etapa 5 concluída — backend, banco em Docker, modelo de dados com
+> migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto,
+> cálculo de preço por região e despensa com abatimento da compra. A API ainda expõe
+> só `/health`: nenhuma rota de domínio, NFC-e ou app mobile existe.
 
 ## Design
 
@@ -22,7 +22,6 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 5 | Despensa (`PantryItem`) e o desconto dela na lista de compras |
 | 6 | Geração da lista de compras com confirmação do casamento pelo usuário |
 | 7 | Sugestão de receitas pelo que há na despensa e na lista |
 | 8 | Import do plano por PDF com texto |
@@ -95,9 +94,10 @@ rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
 `is_fictitious = true`, os preços têm origem `seed` e as marcas são inventadas.
 O script se recusa a rodar se `APP_ENV` não for `dev`.
 
-As dez tabelas do domínio são `users`, `meal_plans`, `plan_items`, `products`,
-`markets`, `price_records`, `shopping_lists`, `shopping_list_items`, `recipes` e
-`recipe_ingredients`. O diagrama ER entra em `docs/modelo-dados.md` na etapa 10.
+As onze tabelas do domínio são `users`, `meal_plans`, `plan_items`, `products`,
+`markets`, `price_records`, `shopping_lists`, `shopping_list_items`, `recipes`,
+`recipe_ingredients` e `pantry_items`. O diagrama ER entra em `docs/modelo-dados.md`
+na etapa 10.
 
 ## Execução
 
@@ -183,6 +183,7 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   ├── tests/
 │   └── pyproject.toml
 ├── docs/
+│   └── design/        # protótipos, sistema de design, contrato das telas
 ├── docker-compose.yml
 └── CLAUDE.md              # contexto do projeto para o Claude Code
 ```
