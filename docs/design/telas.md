@@ -24,6 +24,7 @@ Legenda:
 | `services/matching.py` | casamento item do plano ↔ produto do catálogo, com score |
 | `services/pricing.py` | média, mediana e desvio por região; custo da lista de compras |
 | `services/pantry.py` | quanto da compra a despensa já cobre, com abatimento parcial |
+| `services/shopping.py` | geração da lista: casamento confirmado, desconto da despensa e preço |
 
 ---
 
@@ -41,7 +42,7 @@ Legenda:
 | "28 itens mapeados" | ✅ | Contagem de `PlanItem` com match |
 | "100% válido" | ✅ | Derivável de `PlanItemStatus`: nenhum item `nao_identificado` |
 | "Custo semanal estimado R$ 168,50" | ✅ | `pricing.price_shopping_list` — mas veja as divergências abaixo |
-| Confirmar e gerar lista | 🔨 | Cria a `ShoppingList` a partir dos itens confirmados |
+| Confirmar e gerar lista | ✅ | `shopping.generate_shopping_list` (etapa 6) |
 
 **Falta um passo de consentimento.** `MealPlan.consent_at` e `consent_version` são
 `NOT NULL` — sem consentimento explícito o plano não pode ser gravado (decisão 5, LGPD).
@@ -82,7 +83,7 @@ de item.
 | "R$ 174,20 / 7 dias" | ✅ | `ShoppingList.estimated_total` |
 | Marcar "já comprei" | 🔨 | Campo novo em `ShoppingListItem` (ex.: `purchased_at`) |
 | Progresso "14 de 22 (63%)" | 🔨 | Contagem sobre o campo acima |
-| "8 itens dispensados da compra" | ✅ | `pantry.coverage` (etapa 5); falta aplicar na geração da lista, na etapa 6 |
+| "8 itens dispensados da compra" | ✅ | Item dispensado fica na lista com quantidade zero (`dispensed_by_pantry`) |
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | 🔨 | Produto fora do plano, sem `plan_item_id` |

@@ -61,6 +61,9 @@ def test_excluir_usuario_preserva_os_precos_anonimizados():
 
 
 def test_produto_com_preco_nao_pode_ser_apagado_por_acidente():
+    # No item do plano o RESTRICT protege a confirmação do usuário: sem ele o
+    # status ficaria "confirmado" apontando para produto nenhum.
+    assert _regra_de_exclusao("plan_items", "product_id") == "RESTRICT"
     assert _regra_de_exclusao("shopping_list_items", "product_id") == "RESTRICT"
     assert _regra_de_exclusao("recipe_ingredients", "product_id") == "RESTRICT"
     assert _regra_de_exclusao("price_records", "market_id") == "RESTRICT"

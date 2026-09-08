@@ -7,10 +7,11 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 5 concluída — backend, banco em Docker, modelo de dados com
+> **Status:** etapa 6 concluída — backend, banco em Docker, modelo de dados com
 > migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto,
-> cálculo de preço por região e despensa com abatimento da compra. A API ainda expõe
-> só `/health`: nenhuma rota de domínio, NFC-e ou app mobile existe.
+> cálculo de preço por região, despensa e geração da lista de compras já descontada
+> e precificada. A API ainda expõe só `/health`: nenhuma rota de domínio, NFC-e ou
+> app mobile existe.
 
 ## Design
 
@@ -22,7 +23,6 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 6 | Geração da lista de compras com confirmação do casamento pelo usuário |
 | 7 | Sugestão de receitas pelo que há na despensa e na lista |
 | 8 | Import do plano por PDF com texto |
 | 9 | Rotas da API e app mobile em React Native |

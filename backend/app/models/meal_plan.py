@@ -12,6 +12,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
 from app.models.enums import MeasurementUnit, PlanItemStatus
 
 if TYPE_CHECKING:
+    from app.models.product import Product
     from app.models.shopping_list import ShoppingList
     from app.models.user import User
 
@@ -73,5 +74,16 @@ class PlanItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=PlanItemStatus.PENDENTE,
         server_default=PlanItemStatus.PENDENTE.value,
     )
+    # O produto que o usuário confirmou para este item. Nulo enquanto ninguém
+    # confirmou — o status sozinho diria "confirmado" sem dizer confirmado o quê.
+    # A escolha fica aqui, e não só na lista de compras, para que gerar a lista
+    # da semana seguinte não peça confirmação de novo.
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), index=True
+    )
+    # Score do casamento no momento da confirmação, para a escolha continuar
+    # rastreável mesmo depois de o catálogo mudar.
+    match_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
 
     meal_plan: Mapped["MealPlan"] = relationship(back_populates="items")
+    product: Mapped["Product | None"] = relationship()

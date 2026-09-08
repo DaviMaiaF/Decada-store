@@ -73,10 +73,17 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
     )
 
+    # Quanto comprar, já descontado o que havia na despensa. Zero significa que
+    # a despensa cobriu o item inteiro — ver `dispensed_by_pantry`.
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     unit: Mapped[MeasurementUnit] = mapped_column(
         pg_enum(MeasurementUnit, "measurement_unit"),
         nullable=False,
+    )
+    # Quanto do que o plano pedia já estava em casa. Guardado para a tela poder
+    # explicar por que a quantidade a comprar é menor que a prescrita.
+    quantity_from_pantry: Mapped[Decimal] = mapped_column(
+        Numeric(12, 3), nullable=False, default=Decimal("0"), server_default="0"
     )
     # Quantas embalagens comprar para cobrir a quantidade prescrita.
     packages_needed: Mapped[int | None] = mapped_column(Integer)
@@ -98,3 +105,12 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
     plan_item: Mapped["PlanItem"] = relationship()
     product: Mapped["Product"] = relationship()
+
+    @property
+    def dispensed_by_pantry(self) -> bool:
+        """Item que não precisa ser comprado: a despensa cobriu tudo.
+
+        Continua na lista de propósito. Sumir sem explicação esconderia do
+        usuário uma decisão que o aplicativo tomou por ele.
+        """
+        return self.quantity == 0 and self.quantity_from_pantry > 0
