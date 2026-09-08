@@ -1,4 +1,4 @@
-"""Modelos do NutriCart.
+"""Modelos da DÉCADA.
 
 Todos são importados aqui para que o Alembic enxergue o metadata completo
 ao gerar migrações automaticamente.

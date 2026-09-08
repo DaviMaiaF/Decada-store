@@ -164,7 +164,7 @@ def test_casa_um_item_ja_gravado_no_banco(db_session):
 
     carregar_seed(db_session)
 
-    usuario = User(email="teste@nutricart.local")
+    usuario = User(email="teste@decada.local")
     plano = MealPlan(
         user=usuario,
         consent_at=datetime.now(timezone.utc),

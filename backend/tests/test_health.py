@@ -15,5 +15,5 @@ def test_health_responde_200():
 def test_health_retorna_status_e_identificacao_do_app():
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert body["app"] == "nutricart"
+    assert body["app"] == "decada"
     assert "env" in body

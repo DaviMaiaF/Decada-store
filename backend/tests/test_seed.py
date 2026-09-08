@@ -1,6 +1,6 @@
 """Testes da carga de dados fictícios.
 
-Todos usam o banco `nutricart_test`: o objetivo é provar idempotência, que só
+Todos usam o banco `decada_test`: o objetivo é provar idempotência, que só
 existe de verdade contra um banco real.
 """
 

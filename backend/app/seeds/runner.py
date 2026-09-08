@@ -23,7 +23,7 @@ from app.services.text import normalize_text, slugify
 from app.services.units import measurement_unit_of, to_base_quantity
 
 # Namespace fixo do projeto: muda-lo faria o seed gerar IDs novos e duplicar tudo.
-SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "seed.nutricart.local")
+SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "seed.decada.local")
 
 DEFAULT_RANDOM_SEED = 42
 

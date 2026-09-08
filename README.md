@@ -1,4 +1,4 @@
-# NutriCart
+# DÉCADA
 
 Aplicativo mobile que recebe o plano alimentar de uma nutricionista, traduz os itens
 prescritos em produtos reais de supermercado, calcula o custo estimado da compra
@@ -100,7 +100,7 @@ curl -i http://localhost:8000/health
 Resposta esperada — `200 OK` com:
 
 ```json
-{"status": "ok", "app": "nutricart", "env": "dev"}
+{"status": "ok", "app": "decada", "env": "dev"}
 ```
 
 Estado do banco:
@@ -118,7 +118,7 @@ cd backend
 .venv/bin/pytest
 ```
 
-Parte dos testes usa um banco de testes (`nutricart_test`), criado automaticamente
+Parte dos testes usa um banco de testes (`decada_test`), criado automaticamente
 no mesmo container. Sem Docker no ar, rode apenas os que não dependem do banco:
 
 ```bash
@@ -141,9 +141,9 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `APP_ENV` | `dev` | Ambiente da aplicação |
-| `POSTGRES_USER` | `nutricart` | Usuário do banco |
-| `POSTGRES_PASSWORD` | `nutricart` | Senha do banco (só desenvolvimento) |
-| `POSTGRES_DB` | `nutricart` | Nome do banco |
+| `POSTGRES_USER` | `decada` | Usuário do banco |
+| `POSTGRES_PASSWORD` | `decada` | Senha do banco (só desenvolvimento) |
+| `POSTGRES_DB` | `decada` | Nome do banco |
 | `POSTGRES_HOST` | `localhost` | Host do banco visto pelo backend |
 | `POSTGRES_PORT` | `5432` | Porta publicada pelo container |
 

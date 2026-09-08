@@ -1,6 +1,6 @@
 """Fixtures compartilhadas.
 
-Os testes marcados com `db` usam um banco separado (`nutricart_test`) no mesmo
+Os testes marcados com `db` usam um banco separado (`decada_test`) no mesmo
 Postgres do docker compose, recriado a cada execução da suíte. As tabelas vêm
 de `create_all` e não do Alembic: é mais rápido, e a migração já tem seu
 próprio teste de ida e volta feito na etapa 1.
@@ -16,7 +16,7 @@ from app.models import Base, Product
 from app.seeds.catalog import PRODUCTS
 from app.services.text import normalize_text
 
-TEST_DATABASE_NAME = "nutricart_test"
+TEST_DATABASE_NAME = "decada_test"
 
 
 @pytest.fixture(scope="session")

@@ -1,4 +1,4 @@
-# NutriCart — Contexto do Projeto
+# DÉCADA — Contexto do Projeto
 
 > Este arquivo é lido automaticamente pelo Claude Code em toda sessão.
 > Mantenha-o atualizado conforme o projeto evolui.
@@ -40,7 +40,7 @@ bem documentado**, não escala de produção.
 ## Estrutura de pastas
 
 ```
-nutricart/
+decada/
 ├── backend/
 │   ├── app/
 │   │   ├── api/           # rotas FastAPI

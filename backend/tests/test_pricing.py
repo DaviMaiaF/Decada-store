@@ -192,7 +192,7 @@ def lista_de_compras(db_session):
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
 
     plano = MealPlan(
-        user=User(email="teste@nutricart.local"),
+        user=User(email="teste@decada.local"),
         consent_at=AGORA,
         consent_version="v1",
         items=[

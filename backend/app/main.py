@@ -1,11 +1,11 @@
-"""Ponto de entrada da API do NutriCart."""
+"""Ponto de entrada da API da DÉCADA."""
 
 from fastapi import Depends, FastAPI
 
 from app.core.config import Settings, get_settings
 
 app = FastAPI(
-    title="NutriCart API",
+    title="DÉCADA API",
     version="0.1.0",
     description=(
         "Traduz um plano alimentar prescrito em produtos de supermercado, "

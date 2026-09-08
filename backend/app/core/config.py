@@ -22,12 +22,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "nutricart"
+    app_name: str = "decada"
     app_env: str = "dev"
 
-    postgres_user: str = "nutricart"
-    postgres_password: str = "nutricart"
-    postgres_db: str = "nutricart"
+    postgres_user: str = "decada"
+    postgres_password: str = "decada"
+    postgres_db: str = "decada"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
 
