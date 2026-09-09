@@ -26,6 +26,8 @@ Legenda:
 | `services/pantry.py` | quanto da compra a despensa já cobre, com abatimento parcial |
 | `services/shopping.py` | geração da lista: casamento confirmado, desconto da despensa e preço |
 | `services/recipes.py` | disponibilidade de receita pela despensa somada à lista de compras |
+| `services/pdf.py` | texto de PDF pesquisável; recusa arquivo digitalizado |
+| `services/import_plan.py` | PDF → plano alimentar, com consentimento e relatório do descarte |
 
 ---
 
@@ -35,20 +37,27 @@ Legenda:
 
 | A tela mostra | Backend | Observação |
 |---|---|---|
-| Escolher PDF | 🔨 | Extrair texto de PDF pesquisável e passar linha a linha pelo `parsing.py` |
+| Escolher PDF | ✅ | `import_plan.import_plan_from_pdf` (etapa 8) |
 | Tirar foto | ⛔ | Exige OCR. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso |
-| Nome e CRN da nutricionista | 🔨 | `MealPlan.nutritionist_name` ✅ existe; **CRN não tem campo** |
+| Nome e CRN da nutricionista | 🔨 | `nutritionist_name` é parâmetro de quem importa, não é detectado no PDF; **CRN não tem campo** |
 | "Plano de 4 semanas • Foco: Energia" | ⛔ | Não há duração nem objetivo no modelo |
 | "5 refeições diárias organizadas" | ⛔ | Depende de `Meal`, que está fora do MVP |
-| "28 itens mapeados" | ✅ | Contagem de `PlanItem` com match |
-| "100% válido" | ✅ | Derivável de `PlanItemStatus`: nenhum item `nao_identificado` |
+| "28 itens mapeados" | ✅ | `ImportedPlan.items_matched` |
+| "100% válido" | ✅ | `ImportedPlan.items_unidentified == 0` |
 | "Custo semanal estimado R$ 168,50" | ✅ | `pricing.price_shopping_list` — mas veja as divergências abaixo |
 | Confirmar e gerar lista | ✅ | `shopping.generate_shopping_list` (etapa 6) |
 
-**Falta um passo de consentimento.** `MealPlan.consent_at` e `consent_version` são
-`NOT NULL` — sem consentimento explícito o plano não pode ser gravado (decisão 5, LGPD).
-O protótipo vai direto do upload para o resultado. A tela precisa de um aceite antes de
-enviar o arquivo.
+**Falta um passo de consentimento na tela.** `import_plan_from_pdf` exige `consent_at`
+como argumento obrigatório e sem valor padrão: desde a etapa 8 não existe caminho de
+código que grave um plano sem registrar quando a pessoa aceitou o termo (decisão 5, LGPD).
+A versão do termo vem de `CONSENT_VERSION`. O protótipo, porém, vai direto do upload para
+o resultado — a tela precisa de um aceite antes de enviar o arquivo, senão não há o que
+passar para a função.
+
+**Falta onde mostrar o que foi descartado.** O import devolve as linhas que ignorou e o
+motivo ("cabeçalho de refeição", "número de página", "texto de orientação"). Nada some em
+silêncio no backend, mas o protótipo não tem lugar para exibir isso. Sem esse espaço, uma
+linha mal interpretada vira comida que some do plano sem a pessoa saber.
 
 ## 2. Dieta
 
@@ -159,7 +168,8 @@ como ser calculados com o que o modelo guarda, e a decisão de nunca inventar da
 vale também para dado de economia. Ou se define a conta (o que entrou na despensa, a que
 preço, e o que foi consumido antes de vencer) ou o número não aparece.
 
-**5. Consentimento ausente no upload.** Descrito na seção 1.
+**5. Consentimento ausente no upload.** Descrito na seção 1. O backend já não permite
+gravar plano sem consentimento; a tela é que ainda não tem o passo de aceite.
 
 ---
 

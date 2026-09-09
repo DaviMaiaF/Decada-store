@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     app_name: str = "decada"
     app_env: str = "dev"
 
+    # Versão vigente do termo de consentimento (LGPD). Fica gravada em cada
+    # plano alimentar: trocar o termo aqui não reescreve o que já foi aceito.
+    consent_version: str = "v1"
+
     postgres_user: str = "decada"
     postgres_password: str = "decada"
     postgres_db: str = "decada"

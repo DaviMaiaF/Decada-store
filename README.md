@@ -7,11 +7,11 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 7 concluída — backend, banco em Docker, modelo de dados com
-> migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto,
-> cálculo de preço por região, despensa, geração da lista de compras já descontada
-> e precificada e sugestão de receitas. A API ainda expõe só `/health`: nenhuma rota
-> de domínio, NFC-e ou app mobile existe.
+> **Status:** etapa 8 concluída — backend, banco em Docker, modelo de dados com
+> migração Alembic, catálogo fictício de desenvolvimento, import do plano por PDF,
+> casamento item–produto, cálculo de preço por região, despensa, geração da lista de
+> compras já descontada e precificada e sugestão de receitas. A API ainda expõe só
+> `/health`: nenhuma rota de domínio, NFC-e ou app mobile existe.
 
 ## Design
 
@@ -23,7 +23,6 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 8 | Import do plano por PDF com texto |
 | 9 | Rotas da API e app mobile em React Native |
 | 10 | Autenticação, LGPD (consentimento e exclusão) e documentação final |
 
@@ -159,6 +158,7 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `APP_ENV` | `dev` | Ambiente da aplicação |
+| `CONSENT_VERSION` | `v1` | Versão vigente do termo de consentimento (LGPD) |
 | `POSTGRES_USER` | `decada` | Usuário do banco |
 | `POSTGRES_PASSWORD` | `decada` | Senha do banco (só desenvolvimento) |
 | `POSTGRES_DB` | `decada` | Nome do banco |
