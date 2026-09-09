@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-from app.models import Market, PriceRecord, Product
+from app.models import Market, PriceRecord, Product, Recipe
 from app.models.enums import PriceOrigin
 from app.seeds.runner import COLLECTION_DAYS_AGO, run
 
@@ -22,6 +22,7 @@ def _contagens(session):
         "markets": session.scalar(select(func.count()).select_from(Market)),
         "products": session.scalar(select(func.count()).select_from(Product)),
         "prices": session.scalar(select(func.count()).select_from(PriceRecord)),
+        "recipes": session.scalar(select(func.count()).select_from(Recipe)),
     }
 
 
@@ -29,18 +30,31 @@ def test_carrega_o_catalogo_completo(db_session):
     resumo = run(db_session)
 
     assert (resumo.markets, resumo.products, resumo.price_records) == (3, 120, 1080)
-    assert _contagens(db_session) == {"markets": 3, "products": 120, "prices": 1080}
+    assert resumo.recipes == 10
+    assert _contagens(db_session) == {
+        "markets": 3,
+        "products": 120,
+        "prices": 1080,
+        "recipes": 10,
+    }
 
 
 def test_rodar_duas_vezes_nao_duplica(db_session):
     run(db_session)
-    ids_da_primeira = set(db_session.scalars(select(PriceRecord.id)).all())
+    precos_da_primeira = set(db_session.scalars(select(PriceRecord.id)).all())
+    receitas_da_primeira = set(db_session.scalars(select(Recipe.id)).all())
 
     run(db_session)
 
-    assert _contagens(db_session) == {"markets": 3, "products": 120, "prices": 1080}
+    assert _contagens(db_session) == {
+        "markets": 3,
+        "products": 120,
+        "prices": 1080,
+        "recipes": 10,
+    }
     # Mesmos identificadores: a segunda carga atualizou as linhas, não criou outras.
-    assert set(db_session.scalars(select(PriceRecord.id)).all()) == ids_da_primeira
+    assert set(db_session.scalars(select(PriceRecord.id)).all()) == precos_da_primeira
+    assert set(db_session.scalars(select(Recipe.id)).all()) == receitas_da_primeira
 
 
 def test_todo_dado_carregado_e_identificavel_como_ficticio(db_session):
@@ -48,8 +62,10 @@ def test_todo_dado_carregado_e_identificavel_como_ficticio(db_session):
 
     produtos_reais = select(Product).where(Product.is_fictitious.is_(False))
     mercados_reais = select(Market).where(Market.is_fictitious.is_(False))
+    receitas_reais = select(Recipe).where(Recipe.is_fictitious.is_(False))
     assert db_session.scalars(produtos_reais).first() is None
     assert db_session.scalars(mercados_reais).first() is None
+    assert db_session.scalars(receitas_reais).first() is None
 
     origens = set(db_session.scalars(select(PriceRecord.origin).distinct()).all())
     assert origens == {PriceOrigin.SEED}

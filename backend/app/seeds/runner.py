@@ -16,9 +16,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Market, PriceRecord, Product
+from app.models import Market, PriceRecord, Product, Recipe, RecipeIngredient
 from app.models.enums import MeasurementUnit, PriceOrigin
 from app.seeds.catalog import MARKETS, PRODUCTS, MarketSeed, ProductSeed
+from app.seeds.recipes import RECIPES, RecipeSeed
 from app.services.text import normalize_text, slugify
 from app.services.units import measurement_unit_of, to_base_quantity
 
@@ -53,6 +54,7 @@ class SeedSummary:
     markets: int
     products: int
     price_records: int
+    recipes: int
 
 
 def ensure_development_environment() -> None:
@@ -81,6 +83,14 @@ def _product_slug(product: ProductSeed) -> str:
 
 def _product_id(product: ProductSeed) -> uuid.UUID:
     return uuid.uuid5(SEED_NAMESPACE, f"product|{_product_slug(product)}")
+
+
+def _recipe_id(recipe: RecipeSeed) -> uuid.UUID:
+    return uuid.uuid5(SEED_NAMESPACE, f"recipe|{recipe.slug}")
+
+
+def _recipe_ingredient_id(recipe: RecipeSeed, product_name: str) -> uuid.UUID:
+    return uuid.uuid5(SEED_NAMESPACE, f"recipe_ingredient|{recipe.slug}|{product_name}")
 
 
 def _price_id(product: ProductSeed, market: MarketSeed, index: int) -> uuid.UUID:
@@ -164,12 +174,52 @@ def _load_price_records(session: Session, generator: random.Random) -> None:
                 )
 
 
+def _load_recipes(session: Session) -> None:
+    """Carrega as receitas fictícias, ligando cada ingrediente ao produto do catálogo."""
+    produtos_por_nome = {product.name: product for product in PRODUCTS}
+
+    for recipe in RECIPES:
+        session.merge(
+            Recipe(
+                id=_recipe_id(recipe),
+                slug=recipe.slug,
+                name=recipe.name,
+                instructions=recipe.instructions,
+                servings=recipe.servings,
+                prep_minutes=recipe.prep_minutes,
+                is_fictitious=True,
+            )
+        )
+
+        for ingredient in recipe.ingredients:
+            product = produtos_por_nome.get(ingredient.product_name)
+            if product is None:
+                # Receita apontando para produto que não existe no catálogo é
+                # erro de edição, não dado faltando: falhar aqui é mais barato
+                # que descobrir depois com a receita sugerida pela metade.
+                raise ValueError(
+                    f"receita '{recipe.slug}' cita produto inexistente: "
+                    f"'{ingredient.product_name}'"
+                )
+
+            session.merge(
+                RecipeIngredient(
+                    id=_recipe_ingredient_id(recipe, ingredient.product_name),
+                    recipe_id=_recipe_id(recipe),
+                    product_id=_product_id(product),
+                    quantity=Decimal(ingredient.quantity),
+                    unit=ingredient.unit,
+                    optional=ingredient.optional,
+                )
+            )
+
+
 def _count(session: Session, model: type) -> int:
     return session.scalar(select(func.count()).select_from(model)) or 0
 
 
 def run(session: Session, *, random_seed: int = DEFAULT_RANDOM_SEED) -> SeedSummary:
-    """Carrega mercados, produtos e preços fictícios. Pode rodar quantas vezes quiser.
+    """Carrega mercados, produtos, preços e receitas fictícios. Pode rodar quantas vezes quiser.
 
     O gerador é semeado com um valor fixo: os mesmos preços saem em toda
     execução, o que torna o resultado reproduzível numa apresentação.
@@ -180,10 +230,12 @@ def run(session: Session, *, random_seed: int = DEFAULT_RANDOM_SEED) -> SeedSumm
     _load_products(session)
     session.flush()  # produtos e mercados precisam existir antes das chaves estrangeiras
     _load_price_records(session, generator)
+    _load_recipes(session)
     session.commit()
 
     return SeedSummary(
         markets=_count(session, Market),
         products=_count(session, Product),
         price_records=_count(session, PriceRecord),
+        recipes=_count(session, Recipe),
     )

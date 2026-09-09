@@ -14,9 +14,10 @@ def main() -> None:
     print(f"  mercados ....... {summary.markets}")
     print(f"  produtos ....... {summary.products}")
     print(f"  preços ......... {summary.price_records}")
+    print(f"  receitas ....... {summary.recipes}")
     print()
     print("ATENÇÃO: todos os dados carregados são FICTÍCIOS.")
-    print("Mercados e produtos estão marcados com is_fictitious = true e")
+    print("Mercados, produtos e receitas estão marcados com is_fictitious = true e")
     print("os preços têm origem 'seed'. Nenhum valor foi coletado de mercado real.")
 
 

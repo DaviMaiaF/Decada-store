@@ -7,11 +7,11 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 6 concluída — backend, banco em Docker, modelo de dados com
+> **Status:** etapa 7 concluída — backend, banco em Docker, modelo de dados com
 > migração Alembic, catálogo fictício de desenvolvimento, casamento item–produto,
-> cálculo de preço por região, despensa e geração da lista de compras já descontada
-> e precificada. A API ainda expõe só `/health`: nenhuma rota de domínio, NFC-e ou
-> app mobile existe.
+> cálculo de preço por região, despensa, geração da lista de compras já descontada
+> e precificada e sugestão de receitas. A API ainda expõe só `/health`: nenhuma rota
+> de domínio, NFC-e ou app mobile existe.
 
 ## Design
 
@@ -23,7 +23,6 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 7 | Sugestão de receitas pelo que há na despensa e na lista |
 | 8 | Import do plano por PDF com texto |
 | 9 | Rotas da API e app mobile em React Native |
 | 10 | Autenticação, LGPD (consentimento e exclusão) e documentação final |
@@ -87,10 +86,11 @@ cd backend
 .venv/bin/python -m app.seeds
 ```
 
-Carrega 3 mercados no DF, 120 produtos e 1.080 registros de preço. É idempotente:
+Carrega 3 mercados no DF, 120 produtos, 1.080 registros de preço e 10 receitas.
+É idempotente:
 rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
 
-**Todos esses dados são fictícios.** Mercados e produtos ficam com
+**Todos esses dados são fictícios.** Mercados, produtos e receitas ficam com
 `is_fictitious = true`, os preços têm origem `seed` e as marcas são inventadas.
 O script se recusa a rodar se `APP_ENV` não for `dev`.
 

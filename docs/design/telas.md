@@ -25,6 +25,7 @@ Legenda:
 | `services/pricing.py` | média, mediana e desvio por região; custo da lista de compras |
 | `services/pantry.py` | quanto da compra a despensa já cobre, com abatimento parcial |
 | `services/shopping.py` | geração da lista: casamento confirmado, desconto da despensa e preço |
+| `services/recipes.py` | disponibilidade de receita pela despensa somada à lista de compras |
 
 ---
 
@@ -106,13 +107,23 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 |---|---|---|
 | Lista do que tem em casa | ✅ | `PantryItem` e `services/pantry.py` (etapa 5) |
 | Adicionar e remover item | 🔨 | Falta a rota; o modelo já aceita item só com texto |
-| "3 receitas 100% compatíveis" | 🔨 | Etapa 7, cruzando receita × despensa |
-| "85% disponível (falta chia)" | 🔨 | Cobertura da receita = ingredientes disponíveis ÷ total |
-| "+ Chia" → lista de mercado | 🔨 | Adiciona o ingrediente faltante à lista |
+| "3 receitas 100% compatíveis" | ✅ | `recipes.suggest_recipes` com `minimum_percentage=100` |
+| "85% disponível (falta chia)" | ✅ | `RecipeAvailability.percentage` e `.missing` (etapa 7) |
+| "+ Chia" → lista de mercado | 🔨 | `.missing` já diz o que falta; falta a rota que adiciona à lista |
 | Fotos das receitas | ⛔ | Não há campo de imagem em `Recipe` |
 | "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
 | Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
+
+**O que conta como disponível.** A porcentagem soma duas fontes: a despensa e a lista
+de compras corrente. "100% disponível" quer dizer que a receita não exige nenhuma ida
+extra ao mercado, não que tudo já esteja em casa — se a tela precisar separar as duas
+coisas, `suggest_recipes` aceita ser chamada sem lista.
+
+O percentual é a proporção de ingredientes **obrigatórios** disponíveis: 3 de 4 são 75%.
+Ingrediente opcional não entra na conta. Item da despensa sem quantidade conta como
+disponível — regra oposta à da lista de compras, onde item sem quantidade não abate
+nada, porque aqui o custo do erro é uma sugestão imprecisa, não uma compra a menos.
 
 ## 5. Economia
 
