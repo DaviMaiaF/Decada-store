@@ -168,6 +168,16 @@ docker compose ps
 
 O serviço `db` deve aparecer como `running (healthy)`.
 
+## Demonstração
+
+Roteiro de cinco minutos, com os números esperados em cada passo, em
+[`docs/demo/roteiro.md`](docs/demo/roteiro.md). O plano alimentar de exemplo é
+gerado por:
+
+```bash
+cd backend && .venv/bin/python -m app.seeds.demo_plan
+```
+
 ## App mobile
 
 ```bash

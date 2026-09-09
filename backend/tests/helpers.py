@@ -6,51 +6,13 @@ por causa de uma mudança no vizinho.
 """
 
 from app.models import User
+
+# O mesmo gerador que produz o PDF de demonstração, para o teste exercitar
+# exatamente o que a apresentação usa.
+from app.seeds.demo_plan import build_pdf
 from app.services.security import create_access_token
 
-
-def build_pdf(lines: list[str]) -> bytes:
-    """Um PDF de uma página com as linhas dadas, em Helvetica.
-
-    Montado byte a byte de propósito: o teste mostra exatamente o que está
-    sendo lido, e o repositório não carrega binário nem uma dependência a mais
-    só para gerar PDF.
-    """
-
-    def escape(text: str) -> str:
-        return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
-
-    parts = ["BT", "/F1 12 Tf", "14 TL", "1 0 0 1 50 780 Tm"]
-    for line in lines:
-        parts.append(f"({escape(line)}) Tj")
-        parts.append("T*")
-    parts.append("ET")
-    stream = "\n".join(parts).encode("cp1252")
-
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-    ]
-
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = []
-    for numero, obj in enumerate(objects, start=1):
-        offsets.append(len(out))
-        out += f"{numero} 0 obj\n".encode() + obj + b"\nendobj\n"
-
-    xref = len(out)
-    out += f"xref\n0 {len(objects) + 1}\n".encode()
-    out += b"0000000000 65535 f \n"
-    for offset in offsets:
-        out += f"{offset:010d} 00000 n \n".encode()
-    out += (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
-    ).encode()
-    return bytes(out)
+__all__ = ["build_pdf", "auth_headers", "importar_plano", "plano_confirmado", "PLANO_REALISTA"]
 
 
 def auth_headers(user: User) -> dict[str, str]:
