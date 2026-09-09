@@ -22,7 +22,7 @@ Dieta, Mercado, Despensa e Economia.
 | O que | Situação |
 |---|---|
 | Aba Economia | Sem protótipo; hoje mostra a conta e o botão de sair |
-| Vincular item da despensa ao catálogo | O item entra por texto e só desconta da compra depois de vinculado |
+| Vincular item já salvo ao catálogo | Só dá para escolher o produto na hora de adicionar; não há como vincular depois |
 | Leitura de NFC-e por QR Code | Fora do MVP |
 | Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
 
@@ -141,7 +141,8 @@ trocá-la invalida todos os tokens já emitidos.
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
 | `DELETE` | `/pantry/{id}` | Remove item da despensa |
-| `GET` | `/pantry/{id}/candidates` | Produtos parecidos com o item digitado |
+| `GET` | `/pantry/{id}/candidates` | Produtos parecidos com um item já salvo |
+| `GET` | `/products/search` | Produtos parecidos com um texto livre (`?q=`) |
 | `GET` | `/recipes/suggestions` | Receitas ordenadas por disponibilidade |
 
 Valores decimais viajam como **string** no JSON (`"12.90"`), não como número: é o que

@@ -381,3 +381,29 @@ def test_sugestao_com_lista_de_compras_de_outra_pessoa_devolve_404(
     )
 
     assert resposta.status_code == 404
+
+
+# --------------------------------------------------------------------------
+# busca no catálogo
+# --------------------------------------------------------------------------
+
+def test_busca_produto_por_texto_livre(client, marina):
+    resposta = client.get("/products/search?q=aveia em flocos", headers=_headers(marina))
+
+    assert resposta.status_code == 200
+    assert resposta.json()[0]["product"]["name"] == "Aveia em flocos"
+
+
+def test_a_busca_respeita_o_limite(client, marina):
+    corpo = client.get("/products/search?q=arroz&limit=3", headers=_headers(marina)).json()
+
+    assert len(corpo) == 3
+
+
+def test_busca_curta_demais_e_recusada(client, marina):
+    # Uma letra devolveria o catálogo inteiro ordenado por ruído.
+    assert client.get("/products/search?q=a", headers=_headers(marina)).status_code == 422
+
+
+def test_busca_exige_autenticacao(client):
+    assert client.get("/products/search?q=aveia").status_code == 401

@@ -34,6 +34,7 @@ Legenda:
 | `services/shopping.py` | geração da lista: casamento confirmado, desconto da despensa e preço |
 | `services/recipes.py` | disponibilidade de receita pela despensa somada à lista de compras |
 | `services/pdf.py` | texto de PDF pesquisável; recusa arquivo digitalizado |
+| `GET /products/search` | produtos parecidos com um texto livre, para o cadastro da despensa |
 | `services/import_plan.py` | PDF → plano alimentar, com consentimento e relatório do descarte |
 
 ---
@@ -123,7 +124,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | A tela mostra | Backend | Observação |
 |---|---|---|
 | Lista do que tem em casa | ✅ | Tela pronta: chips com remoção |
-| Adicionar e remover item | ✅ | Vira chip na hora, sem escolher produto |
+| Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e salva |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | 🔨 | **Fora da beta.** Depende da rota de item avulso, que não existe |
@@ -132,10 +133,14 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
 | Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
 
-**Item da despensa sem produto do catálogo não abate da compra.** O cadastro é por
-texto, num toque, e o vínculo com o catálogo fica para depois. A tela marca esses itens
-com contorno tracejado e avisa quantos são — sem isso a pessoa cadastra "aveia", acha
-que descontou da lista e não descontou.
+**Item da despensa sem produto do catálogo não abate da compra.** Por isso o cadastro
+pede a escolha do produto: digita, o app busca no catálogo por semelhança de nome e a
+pessoa toca no produto certo. Guardar só como texto continua possível, para o que não
+existe no catálogo — e nesse caso a tela marca o chip com contorno tracejado e avisa
+quantos itens estão assim.
+
+O protótipo mostrava o cadastro num toque só. Ele não previa que um item sem produto
+não faz nada: nem desconta da lista, nem conta para as receitas.
 
 **O que conta como disponível.** A porcentagem soma duas fontes: a despensa e a lista
 de compras corrente. "100% disponível" quer dizer que a receita não exige nenhuma ida

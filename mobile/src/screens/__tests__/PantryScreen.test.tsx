@@ -18,12 +18,14 @@ jest.mock('../../services/api', () => ({
   addPantryItem: jest.fn(),
   removePantryItem: jest.fn(),
   readRecipeSuggestions: jest.fn(),
+  searchProducts: jest.fn(),
 }));
 
 const lerDespensa = api.readPantry as jest.Mock;
 const adicionar = api.addPantryItem as jest.Mock;
 const remover = api.removePantryItem as jest.Mock;
 const lerReceitas = api.readRecipeSuggestions as jest.Mock;
+const buscarProdutos = api.searchProducts as jest.Mock;
 
 function produto(nome: string) {
   return {
@@ -89,6 +91,10 @@ beforeEach(() => {
   cliente = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   lerDespensa.mockResolvedValue([]);
   lerReceitas.mockResolvedValue([]);
+  buscarProdutos.mockResolvedValue([
+    { product: produto('Aveia em flocos'), score: '0.930' },
+    { product: produto('Granola tradicional'), score: '0.640' },
+  ]);
 });
 
 afterEach(() => {
@@ -126,23 +132,12 @@ describe('despensa', () => {
     expect(await screen.findByText('aveia (300 g)')).toBeTruthy();
   });
 
-  it('adiciona o que foi digitado', async () => {
-    adicionar.mockResolvedValue(naDespensa({ id: '3', raw_description: 'azeite' }));
-    await montar();
-
-    await fireEvent.changeText(screen.getByLabelText('Adicionar ingrediente'), 'azeite');
-    await fireEvent.press(screen.getByLabelText('Adicionar à despensa'));
-
-    await waitFor(() =>
-      expect(adicionar).toHaveBeenCalledWith({ raw_description: 'azeite' }),
-    );
-  });
-
   it('não adiciona texto vazio', async () => {
     await montar();
 
     await fireEvent.press(screen.getByLabelText('Adicionar à despensa'));
 
+    expect(buscarProdutos).not.toHaveBeenCalled();
     expect(adicionar).not.toHaveBeenCalled();
   });
 
@@ -233,5 +228,77 @@ describe('receitas', () => {
     await montar();
 
     expect(await screen.findByText('receita fictícia de desenvolvimento')).toBeTruthy();
+  });
+});
+
+
+describe('escolher o produto ao adicionar', () => {
+  async function digitarEAvancar(texto = 'aveia em flocos') {
+    await montar();
+    await fireEvent.changeText(screen.getByLabelText('Adicionar ingrediente'), texto);
+    await fireEvent.press(screen.getByLabelText('Adicionar à despensa'));
+  }
+
+  it('busca candidatos no catálogo antes de salvar', async () => {
+    await digitarEAvancar();
+
+    await waitFor(() => expect(buscarProdutos).toHaveBeenCalledWith('aveia em flocos'));
+    expect(await screen.findByText('Qual produto é "aveia em flocos"?')).toBeTruthy();
+    // Nada foi gravado ainda: quem escolhe é o usuário.
+    expect(adicionar).not.toHaveBeenCalled();
+  });
+
+  it('salva com o produto escolhido', async () => {
+    adicionar.mockResolvedValue(naDespensa({ id: '9' }));
+    await digitarEAvancar();
+
+    await fireEvent.press(await screen.findByLabelText('Usar Aveia em flocos'));
+
+    await waitFor(() =>
+      expect(adicionar).toHaveBeenCalledWith({
+        raw_description: 'aveia em flocos',
+        product_id: 'produto-Aveia em flocos',
+      }),
+    );
+  });
+
+  it('mostra o quanto cada candidato se parece', async () => {
+    await digitarEAvancar();
+
+    expect(await screen.findByText('93% de semelhança')).toBeTruthy();
+    expect(screen.getByText('64% de semelhança')).toBeTruthy();
+  });
+
+  it('deixa guardar só como texto', async () => {
+    // Nem tudo que está em casa existe no catálogo.
+    adicionar.mockResolvedValue(naDespensa({ id: '9' }));
+    await digitarEAvancar('canela em pó');
+
+    await fireEvent.press(await screen.findByText('Guardar só como texto'));
+
+    await waitFor(() =>
+      expect(adicionar).toHaveBeenCalledWith({
+        raw_description: 'canela em pó',
+        product_id: null,
+      }),
+    );
+  });
+
+  it('cancela sem gravar nada', async () => {
+    await digitarEAvancar();
+
+    await fireEvent.press(await screen.findByText('Cancelar'));
+
+    expect(screen.queryByText(/Qual produto é/)).toBeNull();
+    expect(adicionar).not.toHaveBeenCalled();
+  });
+
+  it('avisa quando o catálogo não tem nada parecido', async () => {
+    buscarProdutos.mockResolvedValue([]);
+    await digitarEAvancar('suplemento xyz');
+
+    expect(
+      await screen.findByText('Nenhum produto do catálogo se parece com isso.'),
+    ).toBeTruthy();
   });
 });

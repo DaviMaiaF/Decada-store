@@ -15,6 +15,7 @@ import type {
   MealPlan,
   PantryItem,
   PlanItem,
+  ProductSuggestion,
   RecipeAvailability,
   ShoppingList,
   Token,
@@ -192,6 +193,17 @@ export const addPantryItem = (item: {
 
 export const removePantryItem = (itemId: string) =>
   request<void>(`/pantry/${itemId}`, { method: 'DELETE' });
+
+/**
+ * Produtos do catálogo parecidos com um texto digitado.
+ *
+ * É o que permite escolher o produto antes de guardar o item na despensa —
+ * item sem produto não abate da compra nem conta para as receitas.
+ */
+export const searchProducts = (termo: string, limit = 5) =>
+  request<ProductSuggestion[]>(
+    `/products/search?${new URLSearchParams({ q: termo, limit: String(limit) })}`,
+  );
 
 // --- receitas ---
 

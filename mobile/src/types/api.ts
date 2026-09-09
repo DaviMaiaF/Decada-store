@@ -106,6 +106,12 @@ export interface GeneratedList {
   lowest_confidence: PriceConfidence | null;
 }
 
+export interface ProductSuggestion {
+  product: Product;
+  /** Semelhança de nome, de 0 a 1. */
+  score: string;
+}
+
 export interface PantryItem {
   id: string;
   raw_description: string;

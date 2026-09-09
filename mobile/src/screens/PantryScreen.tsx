@@ -4,9 +4,12 @@
  * As duas coisas moram na mesma tela porque uma existe por causa da outra: a
  * lista do que está em casa e o que dá para cozinhar com isso.
  *
- * Item adicionado aqui vira chip na hora, sem escolher produto do catálogo. Em
- * troca da rapidez, ele **não abate** da lista de compras enquanto não estiver
- * vinculado — e a tela precisa dizer isso, senão a pessoa acha que descontou.
+ * Ao adicionar, a pessoa escolhe qual produto do catálogo é aquilo. Sem esse
+ * vínculo o item não abate da lista de compras nem conta para as receitas, e um
+ * item que não faz nada é pior que dois toques a mais no cadastro.
+ *
+ * Guardar só como texto continua possível, para o que não existe no catálogo —
+ * e nesse caso a tela avisa que aquele item não desconta nada.
  */
 
 import { useState } from 'react';
@@ -28,14 +31,17 @@ import {
   readPantry,
   readRecipeSuggestions,
   removePantryItem,
+  searchProducts,
 } from '../services/api';
 import { formatQuantity } from '../services/format';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import type { PantryItem, RecipeAvailability } from '../types/api';
+import type { PantryItem, ProductSuggestion, RecipeAvailability } from '../types/api';
 
 export default function PantryScreen() {
   const cliente = useQueryClient();
   const [texto, setTexto] = useState('');
+  // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
+  const [escolhendo, setEscolhendo] = useState<string | null>(null);
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
 
@@ -50,13 +56,27 @@ export default function PantryScreen() {
     cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
   }
 
+  const candidatos = useQuery({
+    queryKey: ['product-search', escolhendo],
+    queryFn: () => searchProducts(escolhendo!),
+    enabled: escolhendo !== null,
+  });
+
   const adicionar = useMutation({
-    mutationFn: (descricao: string) => addPantryItem({ raw_description: descricao }),
+    mutationFn: ({ descricao, produtoId }: { descricao: string; produtoId: string | null }) =>
+      addPantryItem({ raw_description: descricao, product_id: produtoId }),
     onSuccess: () => {
       setTexto('');
+      setEscolhendo(null);
       recarregar();
     },
   });
+
+  function comecarEscolha() {
+    const descricao = texto.trim();
+    if (descricao.length < 2) return;
+    setEscolhendo(descricao);
+  }
 
   const remover = useMutation({
     mutationFn: (itemId: string) => removePantryItem(itemId),
@@ -96,17 +116,17 @@ export default function PantryScreen() {
                 style={styles.campo}
                 value={texto}
                 onChangeText={setTexto}
-                onSubmitEditing={() => texto.trim() && adicionar.mutate(texto.trim())}
+                onSubmitEditing={comecarEscolha}
                 returnKeyType="done"
               />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Adicionar à despensa"
-                disabled={!texto.trim() || adicionar.isPending}
-                onPress={() => adicionar.mutate(texto.trim())}
+                disabled={texto.trim().length < 2 || adicionar.isPending}
+                onPress={comecarEscolha}
                 style={({ pressed }) => [
                   styles.botaoAdicionar,
-                  (!texto.trim() || adicionar.isPending) && styles.botaoInativo,
+                  (texto.trim().length < 2 || adicionar.isPending) && styles.botaoInativo,
                   pressed && styles.botaoPressionado,
                 ]}
               >
@@ -117,6 +137,65 @@ export default function PantryScreen() {
                 )}
               </Pressable>
             </View>
+
+            {escolhendo !== null ? (
+              <View style={styles.escolha}>
+                <Text style={styles.escolhaTitulo}>Qual produto é "{escolhendo}"?</Text>
+                <Body muted>
+                  Escolher o produto é o que faz este item descontar da sua lista de
+                  compras e contar nas receitas.
+                </Body>
+
+                {candidatos.isPending ? <Body muted>Buscando no catálogo…</Body> : null}
+                {candidatos.isError ? (
+                  <ErrorNotice message="não foi possível buscar no catálogo" />
+                ) : null}
+
+                {candidatos.data?.map((sugestao: ProductSuggestion) => (
+                  <Pressable
+                    key={sugestao.product.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Usar ${sugestao.product.name}`}
+                    disabled={adicionar.isPending}
+                    onPress={() =>
+                      adicionar.mutate({
+                        descricao: escolhendo,
+                        produtoId: sugestao.product.id,
+                      })
+                    }
+                    style={styles.candidato}
+                  >
+                    <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
+                    <Text style={styles.candidatoDetalhe}>
+                      {Math.round(Number(sugestao.score) * 100)}% de semelhança
+                    </Text>
+                  </Pressable>
+                ))}
+
+                {candidatos.data?.length === 0 ? (
+                  <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
+                ) : null}
+
+                <View style={styles.escolhaAcoes}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      adicionar.mutate({ descricao: escolhendo, produtoId: null })
+                    }
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Guardar só como texto</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setEscolhendo(null)}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             {adicionar.isError ? (
               <ErrorNotice
@@ -281,6 +360,27 @@ const styles = StyleSheet.create({
   botaoInativo: { opacity: 0.4 },
   botaoPressionado: { transform: [{ scale: 0.98 }] },
   botaoAdicionarTexto: { ...typography.headlineSm, color: colors.onPrimary },
+
+  escolha: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  escolhaTitulo: { ...typography.labelLg, color: colors.onSurface },
+  candidato: {
+    minHeight: MIN_TOUCH_HEIGHT,
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  candidatoNome: { ...typography.labelLg, color: colors.onSurface },
+  candidatoDetalhe: { ...typography.labelSm, color: colors.onSurfaceVariant },
+  escolhaAcoes: { flexDirection: 'row', gap: spacing.sm },
+  acaoSecundaria: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
+  acaoSecundariaTexto: { ...typography.labelLg, color: colors.primary },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chipItem: {

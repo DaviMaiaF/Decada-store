@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
-from app.api.routes import auth, meal_plans, pantry, recipes, shopping_lists
+from app.api.routes import auth, meal_plans, pantry, products, recipes, shopping_lists
 from app.core.config import Settings, get_settings
 
 app = FastAPI(
@@ -41,6 +41,7 @@ app.include_router(auth.router)
 app.include_router(meal_plans.router)
 app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
+app.include_router(products.router)
 app.include_router(recipes.router)
 
 
