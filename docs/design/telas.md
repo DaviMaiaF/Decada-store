@@ -13,9 +13,12 @@ Legenda:
 > negócio em `app/services/` e rota HTTP que a expõe. A lista de rotas está no
 > [README](../../README.md#rotas). Falta o app mobile que as consome.
 >
-> A autenticação existe: `POST /auth/register` e `/auth/login` devolvem um token,
-> mandado em `Authorization: Bearer`. Falta a tela de login no protótipo — nenhuma
-> das quatro telas mostra como a pessoa entra no aplicativo.
+> A autenticação existe e o app tem tela de login, que **nenhum protótipo previu** —
+> nenhuma das quatro telas mostra como a pessoa entra no aplicativo. Ela foi montada
+> com os mesmos tokens do sistema de design.
+>
+> O app em `mobile/` implementa a jornada principal: login, upload, confirmação e
+> lista de compras. Despensa e Receitas têm backend pronto e ainda não têm tela.
 
 ## O que já está pronto no backend
 
@@ -58,10 +61,11 @@ A versão do termo vem de `CONSENT_VERSION`. O protótipo, porém, vai direto do
 o resultado — a tela precisa de um aceite antes de enviar o arquivo, senão não há o que
 passar para a função.
 
-**Falta onde mostrar o que foi descartado.** O import devolve as linhas que ignorou e o
-motivo ("cabeçalho de refeição", "número de página", "texto de orientação"). Nada some em
-silêncio no backend, mas o protótipo não tem lugar para exibir isso. Sem esse espaço, uma
-linha mal interpretada vira comida que some do plano sem a pessoa saber.
+**O relatório do descarte ganhou lugar na tela.** O import devolve as linhas que ignorou
+e o motivo ("cabeçalho de refeição", "número de página", "texto de orientação"). O
+protótipo não tinha onde exibir isso; o app mostra a lista depois do envio, com o aviso
+de conferir se alguma delas era comida. Sem esse espaço, uma linha mal interpretada
+viraria comida sumindo do plano sem a pessoa saber.
 
 ## 2. Dieta
 

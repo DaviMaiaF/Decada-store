@@ -108,7 +108,9 @@ backend estão em [`docs/design/`](docs/design/). Antes de implementar qualquer 
 ou endpoint que a alimente, leia [`docs/design/telas.md`](docs/design/telas.md): ele
 diz o que já existe, o que falta e o que ficou fora do MVP.
 
-A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**.
+A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**. O app vive em
+`mobile/`; os tokens do sistema de design estão em `mobile/src/theme/tokens.ts` e
+vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
 
 ## Documentação
 
@@ -129,7 +131,8 @@ python3 -m venv .venv                      # apenas na primeira vez
 
 .venv/bin/pytest -q                        # testes do backend
 
-cd ../mobile && npx expo start             # (ainda não existe — última etapa)
+cd ../mobile && npx expo start             # app mobile
+cd ../mobile && npm test                   # testes do app
 ```
 
 > **Nota de ambiente:** a máquina de desenvolvimento tem Python 3.10.12.

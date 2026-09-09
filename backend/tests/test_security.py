@@ -92,7 +92,9 @@ def test_token_assinado_com_outra_chave_e_recusado():
             "sub": str(uuid.uuid4()),
             "exp": datetime.now(timezone.utc) + timedelta(hours=1),
         },
-        "chave-do-atacante",
+        # 32 bytes ou mais: abaixo disso o PyJWT avisa que a chave é fraca para
+        # HMAC-SHA256, e o aviso poluiria a saída da suíte.
+        "chave-do-atacante-suficientemente-longa",
         algorithm="HS256",
     )
 

@@ -7,12 +7,10 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** backend completo — etapas 1 a 8 e 10 concluídas. API REST de 15 rotas
-> com autenticação, import do plano por PDF, casamento item–produto, cálculo de preço
-> por região, despensa, lista de compras já descontada e precificada, sugestão de
-> receitas e exclusão de dados sob demanda. **Falta o app mobile** (etapa 9, feita
-> depois da 10 de propósito, para o app já nascer falando com a autenticação real).
-> NFC-e continua fora do MVP.
+> **Status:** backend completo e app mobile com a jornada principal — login, envio da
+> prescrição em PDF, confirmação dos produtos e lista de compras. As abas Despensa e
+> Economia existem na navegação, mas ainda sem interface: o backend delas está pronto
+> e testado. NFC-e continua fora do MVP.
 
 ## Design
 
@@ -20,11 +18,14 @@ Os protótipos das telas, o sistema de design e o contrato que cada tela exige d
 backend estão em [`docs/design/`](docs/design/). O aplicativo tem quatro abas —
 Dieta, Mercado, Despensa e Economia.
 
-## Próximas etapas
+## O que falta
 
-| Etapa | O que é |
+| O que | Situação |
 |---|---|
-| 9 | App mobile em React Native — última etapa que falta |
+| Telas de Despensa e Receitas | Backend pronto e testado; falta a interface |
+| Aba Economia | Sem protótipo; hoje mostra a conta e o botão de sair |
+| Leitura de NFC-e por QR Code | Fora do MVP |
+| Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
 
 ## Stack
 
@@ -167,6 +168,30 @@ docker compose ps
 
 O serviço `db` deve aparecer como `running (healthy)`.
 
+## App mobile
+
+```bash
+cd mobile
+npm install                  # apenas na primeira vez
+cp .env.example .env         # ajuste EXPO_PUBLIC_API_URL
+npx expo start
+```
+
+`localhost` não serve para celular nem emulador: eles resolvem esse nome para o
+próprio aparelho. Use o IP da sua máquina na rede local:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.0.10:8000
+```
+
+Verificação:
+
+```bash
+cd mobile
+npm test          # Jest + React Native Testing Library
+npm run typecheck # tsc --noEmit
+```
+
 ## Testes
 
 ```bash
@@ -225,6 +250,15 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   ├── alembic/           # migrações
 │   ├── tests/
 │   └── pyproject.toml
+├── mobile/
+│   ├── src/
+│   │   ├── components/    # cartão, botão, chip, campo
+│   │   ├── navigation/    # abas Dieta, Mercado, Despensa, Economia
+│   │   ├── screens/       # login, upload, confirmação, mercado
+│   │   ├── services/      # cliente HTTP, sessão, formatação
+│   │   ├── theme/         # tokens do sistema de design
+│   │   └── types/         # contrato da API
+│   └── App.tsx
 ├── docs/
 │   ├── design/        # protótipos, sistema de design, contrato das telas
 │   ├── lgpd.md        # consentimento, minimização e exclusão
