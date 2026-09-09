@@ -176,12 +176,32 @@ cp .env.example .env         # ajuste EXPO_PUBLIC_API_URL
 npx expo start
 ```
 
-`localhost` não serve para celular nem emulador: eles resolvem esse nome para o
-próprio aparelho. Use o IP da sua máquina na rede local:
+No navegador, `localhost` funciona. **No celular ou no emulador, não**: eles
+resolvem esse nome para o próprio aparelho, não para a máquina que roda o backend.
+Este comando descobre o IP da sua máquina na rede e escreve o `.env` já preenchido:
 
 ```bash
-EXPO_PUBLIC_API_URL=http://192.168.0.10:8000
+cd mobile && printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$(hostname -I | awk '{print $1}')" > .env && cat .env
 ```
+
+E o backend precisa aceitar conexões de fora da máquina:
+
+```bash
+cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --reload
+```
+
+### Conta de desenvolvimento
+
+O seed cria uma conta pronta, para não precisar cadastrar uma a cada banco novo:
+
+| | |
+|---|---|
+| e-mail | `beta@example.com` |
+| senha | `decada-beta-2026` |
+
+Não é exceção na autenticação — é um usuário comum, com senha passando pelo mesmo
+bcrypt. O que a protege é a trava de ambiente do seed, que se recusa a rodar se
+`APP_ENV` não for `dev`.
 
 Verificação:
 

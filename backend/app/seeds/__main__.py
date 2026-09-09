@@ -1,7 +1,12 @@
 """Linha de comando do seed: `python -m app.seeds`."""
 
 from app.core.database import SessionLocal
-from app.seeds.runner import ensure_development_environment, run
+from app.seeds.runner import (
+    DEV_USER_EMAIL,
+    DEV_USER_PASSWORD,
+    ensure_development_environment,
+    run,
+)
 
 
 def main() -> None:
@@ -15,6 +20,10 @@ def main() -> None:
     print(f"  produtos ....... {summary.products}")
     print(f"  preços ......... {summary.price_records}")
     print(f"  receitas ....... {summary.recipes}")
+    print()
+    print("Conta de desenvolvimento para entrar no app:")
+    print(f"  e-mail ......... {DEV_USER_EMAIL}")
+    print(f"  senha .......... {DEV_USER_PASSWORD}")
     print()
     print("ATENÇÃO: todos os dados carregados são FICTÍCIOS.")
     print("Mercados, produtos e receitas estão marcados com is_fictitious = true e")

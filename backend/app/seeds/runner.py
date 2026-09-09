@@ -16,10 +16,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Market, PriceRecord, Product, Recipe, RecipeIngredient
+from app.models import Market, PriceRecord, Product, Recipe, RecipeIngredient, User
 from app.models.enums import MeasurementUnit, PriceOrigin
 from app.seeds.catalog import MARKETS, PRODUCTS, MarketSeed, ProductSeed
 from app.seeds.recipes import RECIPES, RecipeSeed
+from app.services.security import hash_password
 from app.services.text import normalize_text, slugify
 from app.services.units import measurement_unit_of, to_base_quantity
 
@@ -27,6 +28,13 @@ from app.services.units import measurement_unit_of, to_base_quantity
 SEED_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "seed.decada.local")
 
 DEFAULT_RANDOM_SEED = 42
+
+# Conta de desenvolvimento, para não precisar cadastrar uma a cada banco novo.
+# Não é exceção na autenticação: é um usuário comum, com senha de verdade
+# passando pelo mesmo bcrypt. O que a protege é a trava de ambiente do seed —
+# ele se recusa a rodar se APP_ENV não for dev.
+DEV_USER_EMAIL = "beta@example.com"
+DEV_USER_PASSWORD = "decada-beta-2026"
 
 # Idades das coletas, uma em cada faixa de confiança da etapa 4:
 #   3 dias  -> "atual"      (até 7 dias)
@@ -174,6 +182,26 @@ def _load_price_records(session: Session, generator: random.Random) -> None:
                 )
 
 
+def _dev_user_id() -> uuid.UUID:
+    return uuid.uuid5(SEED_NAMESPACE, f"user|{DEV_USER_EMAIL}")
+
+
+def _load_dev_user(session: Session) -> None:
+    """Cria (ou atualiza) a conta de desenvolvimento.
+
+    O hash é recalculado a cada carga, o que é lento de propósito no bcrypt e
+    irrelevante aqui: são milissegundos, uma vez por execução do seed.
+    """
+    session.merge(
+        User(
+            id=_dev_user_id(),
+            email=DEV_USER_EMAIL,
+            password_hash=hash_password(DEV_USER_PASSWORD),
+            full_name="Beta da Silva",
+        )
+    )
+
+
 def _load_recipes(session: Session) -> None:
     """Carrega as receitas fictícias, ligando cada ingrediente ao produto do catálogo."""
     produtos_por_nome = {product.name: product for product in PRODUCTS}
@@ -231,6 +259,7 @@ def run(session: Session, *, random_seed: int = DEFAULT_RANDOM_SEED) -> SeedSumm
     session.flush()  # produtos e mercados precisam existir antes das chaves estrangeiras
     _load_price_records(session, generator)
     _load_recipes(session)
+    _load_dev_user(session)
     session.commit()
 
     return SeedSummary(

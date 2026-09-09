@@ -1,6 +1,7 @@
 """Ponto de entrada da API da DÉCADA."""
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
 from app.api.routes import auth, meal_plans, pantry, recipes, shopping_lists
@@ -19,6 +20,22 @@ app = FastAPI(
 )
 
 register_error_handlers(app)
+
+# CORS existe só para a versão web do Expo, que roda em outra porta e por isso é
+# bloqueada pelo navegador. O app nativo não precisa disto.
+#
+# Fica atrás de uma checagem de ambiente de propósito: liberar origem cruzada
+# numa API que serve dado de saúde é decisão que precisa ser tomada de novo, com
+# a lista de origens de verdade, se um dia isto for para produção.
+if get_settings().app_env == "dev":
+    app.add_middleware(
+        CORSMiddleware,
+        # Qualquer porta de localhost: o Expo troca de porta quando a 8081 está ocupada.
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.include_router(auth.router)
 app.include_router(meal_plans.router)
