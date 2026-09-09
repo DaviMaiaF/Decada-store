@@ -122,15 +122,20 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 
 | A tela mostra | Backend | Observação |
 |---|---|---|
-| Lista do que tem em casa | ✅ | `PantryItem` e `services/pantry.py` (etapa 5) |
-| Adicionar e remover item | ✅ | `POST` e `DELETE /pantry` |
-| "3 receitas 100% compatíveis" | ✅ | `recipes.suggest_recipes` com `minimum_percentage=100` |
-| "85% disponível (falta chia)" | ✅ | `RecipeAvailability.percentage` e `.missing` (etapa 7) |
-| "+ Chia" → lista de mercado | 🔨 | `missing` já diz o que falta; depende da rota de item avulso |
+| Lista do que tem em casa | ✅ | Tela pronta: chips com remoção |
+| Adicionar e remover item | ✅ | Vira chip na hora, sem escolher produto |
+| "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade |
+| "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
+| "+ Chia" → lista de mercado | 🔨 | **Fora da beta.** Depende da rota de item avulso, que não existe |
 | Fotos das receitas | ⛔ | Não há campo de imagem em `Recipe` |
 | "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
 | Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
+
+**Item da despensa sem produto do catálogo não abate da compra.** O cadastro é por
+texto, num toque, e o vínculo com o catálogo fica para depois. A tela marca esses itens
+com contorno tracejado e avisa quantos são — sem isso a pessoa cadastra "aveia", acha
+que descontou da lista e não descontou.
 
 **O que conta como disponível.** A porcentagem soma duas fontes: a despensa e a lista
 de compras corrente. "100% disponível" quer dizer que a receita não exige nenhuma ida

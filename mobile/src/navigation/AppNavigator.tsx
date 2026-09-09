@@ -13,7 +13,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components';
 import ConfirmationScreen from '../screens/ConfirmationScreen';
 import MarketScreen from '../screens/MarketScreen';
-import PlaceholderScreen from '../screens/PlaceholderScreen';
+import PantryScreen from '../screens/PantryScreen';
 import UploadScreen from '../screens/UploadScreen';
 import { useAuth } from '../services/auth';
 import { colors, spacing, typography } from '../theme/tokens';
@@ -64,14 +64,11 @@ export default function AppNavigator() {
           )}
         </Tab.Screen>
 
-        <Tab.Screen name="Despensa" options={{ title: 'Despensa' }}>
-          {() => (
-            <PlaceholderScreen
-              titulo="Despensa"
-              descricao="Cadastrar o que você já tem em casa, para descontar da compra e sugerir receitas."
-            />
-          )}
-        </Tab.Screen>
+        <Tab.Screen
+          name="Despensa"
+          component={PantryScreen}
+          options={{ title: 'Despensa' }}
+        />
 
         <Tab.Screen name="Economia" options={{ title: 'Economia' }}>
           {() => <ContaScreen />}

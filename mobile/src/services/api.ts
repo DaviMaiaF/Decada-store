@@ -15,6 +15,7 @@ import type {
   MealPlan,
   PantryItem,
   PlanItem,
+  RecipeAvailability,
   ShoppingList,
   Token,
 } from '../types/api';
@@ -191,3 +192,17 @@ export const addPantryItem = (item: {
 
 export const removePantryItem = (itemId: string) =>
   request<void>(`/pantry/${itemId}`, { method: 'DELETE' });
+
+// --- receitas ---
+
+/**
+ * Receitas ordenadas da mais disponível para a menos.
+ *
+ * Sem `shoppingListId`, a disponibilidade conta só o que está na despensa
+ * agora; com ele, conta também o que será comprado.
+ */
+export const readRecipeSuggestions = (shoppingListId?: string, minimumPercentage = 0) => {
+  const parametros = new URLSearchParams({ minimum_percentage: String(minimumPercentage) });
+  if (shoppingListId) parametros.set('shopping_list_id', shoppingListId);
+  return request<RecipeAvailability[]>(`/recipes/suggestions?${parametros.toString()}`);
+};

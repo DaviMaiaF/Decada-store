@@ -125,3 +125,33 @@ export interface Token {
   access_token: string;
   token_type: string;
 }
+
+export interface RecipeIngredient {
+  product: Product;
+  quantity: string;
+  unit: MeasurementUnit;
+  optional: boolean;
+}
+
+export interface Recipe {
+  id: string;
+  slug: string;
+  name: string;
+  servings: number | null;
+  prep_minutes: number | null;
+  instructions: string | null;
+  is_fictitious: boolean;
+  ingredients: RecipeIngredient[];
+}
+
+export interface RecipeAvailability {
+  recipe: Recipe;
+  /** Proporção de ingredientes obrigatórios disponíveis, de 0 a 100. */
+  percentage: number;
+  complete: boolean;
+  required_total: number;
+  required_available: number;
+  /** Obrigatórios que faltam — é o "falta chia" da tela. */
+  missing: RecipeIngredient[];
+  missing_optional: RecipeIngredient[];
+}

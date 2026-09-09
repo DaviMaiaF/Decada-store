@@ -1,0 +1,237 @@
+/**
+ * Testes da despensa e das receitas.
+ *
+ * O ponto mais importante é o aviso do item não vinculado: sem ele a pessoa
+ * cadastra "aveia", acha que descontou da compra, e não descontou.
+ */
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import PantryScreen from '../PantryScreen';
+import * as api from '../../services/api';
+import type { PantryItem, Recipe, RecipeAvailability } from '../../types/api';
+
+jest.mock('../../services/api', () => ({
+  ...jest.requireActual('../../services/api'),
+  readPantry: jest.fn(),
+  addPantryItem: jest.fn(),
+  removePantryItem: jest.fn(),
+  readRecipeSuggestions: jest.fn(),
+}));
+
+const lerDespensa = api.readPantry as jest.Mock;
+const adicionar = api.addPantryItem as jest.Mock;
+const remover = api.removePantryItem as jest.Mock;
+const lerReceitas = api.readRecipeSuggestions as jest.Mock;
+
+function produto(nome: string) {
+  return {
+    id: `produto-${nome}`,
+    name: nome,
+    brand: null,
+    category: 'mercearia',
+    base_unit: 'kg' as const,
+    package_size: null,
+    package_unit: null,
+    is_fictitious: false,
+  };
+}
+
+function naDespensa(over: Partial<PantryItem> & { id: string }): PantryItem {
+  return {
+    raw_description: 'aveia em flocos',
+    product: null,
+    quantity: null,
+    unit: null,
+    ...over,
+  };
+}
+
+function receita(over: Partial<Recipe> & { id: string }): Recipe {
+  return {
+    slug: 'panqueca',
+    name: 'Panqueca de aveia e banana',
+    servings: 2,
+    prep_minutes: 10,
+    instructions: 'Amasse a banana e misture com a aveia.',
+    is_fictitious: true,
+    ingredients: [],
+    ...over,
+  };
+}
+
+function disponibilidade(over: Partial<RecipeAvailability> = {}): RecipeAvailability {
+  return {
+    recipe: receita({ id: 'receita-1' }),
+    percentage: 100,
+    complete: true,
+    required_total: 3,
+    required_available: 3,
+    missing: [],
+    missing_optional: [],
+    ...over,
+  };
+}
+
+let cliente: QueryClient;
+
+async function montar() {
+  await render(
+    <QueryClientProvider client={cliente}>
+      <PantryScreen />
+    </QueryClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  cliente = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  lerDespensa.mockResolvedValue([]);
+  lerReceitas.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  cliente.clear();
+  cliente.unmount();
+});
+
+describe('despensa', () => {
+  it('lista o que está em casa', async () => {
+    lerDespensa.mockResolvedValue([
+      naDespensa({ id: '1', raw_description: 'canela em pó' }),
+      naDespensa({ id: '2', raw_description: 'ovos caipiras' }),
+    ]);
+
+    await montar();
+
+    expect(await screen.findByText('canela em pó')).toBeTruthy();
+    expect(screen.getByText('ovos caipiras')).toBeTruthy();
+    expect(screen.getByText('2 itens')).toBeTruthy();
+  });
+
+  it('mostra a quantidade quando o item tem uma', async () => {
+    lerDespensa.mockResolvedValue([
+      naDespensa({
+        id: '1',
+        raw_description: 'aveia',
+        product: produto('Aveia em flocos'),
+        quantity: '0.300',
+        unit: 'kg',
+      }),
+    ]);
+
+    await montar();
+
+    expect(await screen.findByText('aveia (300 g)')).toBeTruthy();
+  });
+
+  it('adiciona o que foi digitado', async () => {
+    adicionar.mockResolvedValue(naDespensa({ id: '3', raw_description: 'azeite' }));
+    await montar();
+
+    await fireEvent.changeText(screen.getByLabelText('Adicionar ingrediente'), 'azeite');
+    await fireEvent.press(screen.getByLabelText('Adicionar à despensa'));
+
+    await waitFor(() =>
+      expect(adicionar).toHaveBeenCalledWith({ raw_description: 'azeite' }),
+    );
+  });
+
+  it('não adiciona texto vazio', async () => {
+    await montar();
+
+    await fireEvent.press(screen.getByLabelText('Adicionar à despensa'));
+
+    expect(adicionar).not.toHaveBeenCalled();
+  });
+
+  it('remove um item', async () => {
+    lerDespensa.mockResolvedValue([naDespensa({ id: '1', raw_description: 'canela em pó' })]);
+    remover.mockResolvedValue(undefined);
+    await montar();
+
+    await fireEvent.press(await screen.findByLabelText('Remover canela em pó'));
+
+    await waitFor(() => expect(remover).toHaveBeenCalledWith('1'));
+  });
+
+  it('avisa que item sem produto não desconta da compra', async () => {
+    lerDespensa.mockResolvedValue([naDespensa({ id: '1', product: null })]);
+
+    await montar();
+
+    // Sem este aviso a pessoa acha que descontou, e não descontou.
+    expect(
+      await screen.findByText(
+        '1 item ainda não foi ligado a um produto do mercado, então não desconta da sua lista de compras.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('não avisa quando todos os itens estão vinculados', async () => {
+    lerDespensa.mockResolvedValue([
+      naDespensa({ id: '1', product: produto('Aveia em flocos') }),
+    ]);
+
+    await montar();
+
+    await screen.findByText('aveia em flocos');
+    expect(screen.queryByText(/não desconta da sua lista/)).toBeNull();
+  });
+
+  it('explica a despensa vazia', async () => {
+    await montar();
+
+    expect(await screen.findByText(/Sua despensa está vazia/)).toBeTruthy();
+  });
+});
+
+describe('receitas', () => {
+  it('mostra a receita que dá para fazer agora', async () => {
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+
+    await montar();
+
+    expect(await screen.findByText('Panqueca de aveia e banana')).toBeTruthy();
+    expect(screen.getByText('100% disponível')).toBeTruthy();
+    expect(screen.getByText('Dá para fazer com o que você já tem.')).toBeTruthy();
+  });
+
+  it('nomeia o que falta', async () => {
+    lerReceitas.mockResolvedValue([
+      disponibilidade({
+        percentage: 85,
+        complete: false,
+        required_available: 2,
+        missing: [
+          { product: produto('Chia sementes'), quantity: '10', unit: 'g', optional: false },
+        ],
+      }),
+    ]);
+
+    await montar();
+
+    expect(await screen.findByText('85% disponível')).toBeTruthy();
+    expect(screen.getByText('Falta: Chia sementes')).toBeTruthy();
+  });
+
+  it('abre e fecha o modo de preparo', async () => {
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+    await montar();
+
+    await fireEvent.press(await screen.findByText('Ver modo de preparo'));
+    expect(screen.getByText('Amasse a banana e misture com a aveia.')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Ocultar preparo'));
+    expect(screen.queryByText('Amasse a banana e misture com a aveia.')).toBeNull();
+  });
+
+  it('marca receita fictícia do seed', async () => {
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+
+    await montar();
+
+    expect(await screen.findByText('receita fictícia de desenvolvimento')).toBeTruthy();
+  });
+});

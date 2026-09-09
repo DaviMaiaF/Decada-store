@@ -7,10 +7,9 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** backend completo e app mobile com a jornada principal — login, envio da
-> prescrição em PDF, confirmação dos produtos e lista de compras. As abas Despensa e
-> Economia existem na navegação, mas ainda sem interface: o backend delas está pronto
-> e testado. NFC-e continua fora do MVP.
+> **Status:** beta. Backend completo e app mobile com login, envio da prescrição em
+> PDF, confirmação dos produtos, lista de compras, despensa e sugestão de receitas. A
+> aba Economia ainda não tem interface. NFC-e continua fora do MVP.
 
 ## Design
 
@@ -22,8 +21,8 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
-| Telas de Despensa e Receitas | Backend pronto e testado; falta a interface |
 | Aba Economia | Sem protótipo; hoje mostra a conta e o botão de sair |
+| Vincular item da despensa ao catálogo | O item entra por texto e só desconta da compra depois de vinculado |
 | Leitura de NFC-e por QR Code | Fora do MVP |
 | Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
 
