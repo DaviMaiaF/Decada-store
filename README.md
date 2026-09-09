@@ -7,11 +7,12 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 8 concluída — backend, banco em Docker, modelo de dados com
-> migração Alembic, catálogo fictício de desenvolvimento, import do plano por PDF,
-> casamento item–produto, cálculo de preço por região, despensa, geração da lista de
-> compras já descontada e precificada e sugestão de receitas. A API ainda expõe só
-> `/health`: nenhuma rota de domínio, NFC-e ou app mobile existe.
+> **Status:** etapa 9 concluída pela metade — o backend está completo e exposto por
+> uma API REST de 11 rotas: import do plano por PDF, casamento item–produto, cálculo
+> de preço por região, despensa, lista de compras já descontada e precificada e
+> sugestão de receitas. **Falta a segunda metade da etapa 9, o app mobile**, e falta
+> a autenticação (etapa 10) — até lá as rotas identificam o usuário por um cabeçalho
+> provisório. NFC-e continua fora.
 
 ## Design
 
@@ -23,7 +24,7 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 9 | Rotas da API e app mobile em React Native |
+| 9 | App mobile em React Native (as rotas da API já existem) |
 | 10 | Autenticação, LGPD (consentimento e exclusão) e documentação final |
 
 ## Stack
@@ -108,6 +109,35 @@ cd backend
 - API: <http://localhost:8000>
 - Documentação interativa (Swagger): <http://localhost:8000/docs>
 
+### Autenticação provisória
+
+Enquanto a etapa 10 não chega, as rotas de domínio identificam o usuário pelo
+cabeçalho `X-User-Id`, com o UUID de uma linha da tabela `users`. Sem ele a resposta
+é `401`. Quando a autenticação existir, só o corpo de `get_current_user` muda — as
+rotas continuam iguais.
+
+```bash
+curl -H "X-User-Id: <uuid-do-usuario>" http://localhost:8000/pantry
+```
+
+### Rotas
+
+| Método | Caminho | O que faz |
+|---|---|---|
+| `POST` | `/meal-plans` | Importa o plano do PDF (multipart: `file` + `consent_accepted`) |
+| `GET` | `/meal-plans/{id}` | Plano com seus itens |
+| `GET` | `/meal-plans/{id}/items/{item_id}/candidates` | Produtos candidatos para o item |
+| `POST` | `/meal-plans/{id}/items/{item_id}/confirmation` | Confirma o produto escolhido |
+| `POST` | `/meal-plans/{id}/shopping-lists` | Gera a lista de compras para uma região |
+| `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
+| `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
+| `DELETE` | `/pantry/{id}` | Remove item da despensa |
+| `GET` | `/pantry/{id}/candidates` | Produtos parecidos com o item digitado |
+| `GET` | `/recipes/suggestions` | Receitas ordenadas por disponibilidade |
+
+Valores decimais viajam como **string** no JSON (`"12.90"`), não como número: é o que
+preserva a precisão de dinheiro no cliente.
+
 Validando que está tudo de pé:
 
 ```bash
@@ -174,8 +204,10 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 .
 ├── backend/
 │   ├── app/
+│   │   ├── api/           # rotas HTTP, dependências e tratamento de erro
 │   │   ├── core/          # configuração e sessão do banco
 │   │   ├── models/        # modelos SQLAlchemy
+│   │   ├── schemas/       # contrato de entrada e saída (Pydantic)
 │   │   ├── seeds/         # catálogo fictício de desenvolvimento
 │   │   ├── services/      # regras de negócio
 │   │   └── main.py        # aplicação FastAPI

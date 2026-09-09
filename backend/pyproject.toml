@@ -21,6 +21,8 @@ dependencies = [
     "rapidfuzz>=3.10",
     # Leitura do PDF do plano alimentar (etapa 8). Só texto: OCR está fora do MVP.
     "pypdf>=5.1",
+    # Upload multipart do PDF nas rotas (etapa 9).
+    "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]

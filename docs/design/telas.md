@@ -9,9 +9,12 @@ Legenda:
 - 🔨 **falta** — entra no MVP, ainda não foi feito
 - ⛔ **fora do MVP** — documentado, fica para depois
 
-> **Nenhuma rota de domínio existe ainda.** A API tem só `GET /health`. Onde este
-> documento diz ✅, quer dizer que a regra existe em `app/services/` — a rota que a
-> expõe ainda precisa ser escrita, em todos os casos.
+> **As rotas existem desde a etapa 9.** Onde este documento diz ✅, há regra de
+> negócio em `app/services/` e rota HTTP que a expõe. A lista de rotas está no
+> [README](../../README.md#rotas). Falta o app mobile que as consome.
+>
+> Até a etapa 10 as rotas identificam o usuário pelo cabeçalho `X-User-Id`, e não
+> por autenticação de verdade.
 
 ## O que já está pronto no backend
 
@@ -96,7 +99,7 @@ de item.
 | "8 itens dispensados da compra" | ✅ | Item dispensado fica na lista com quantidade zero (`dispensed_by_pantry`) |
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
-| Adicionar item avulso | 🔨 | Produto fora do plano, sem `plan_item_id` |
+| Adicionar item avulso | 🔨 | Exige `plan_item_id` nulo em `ShoppingListItem`; a rota ainda não existe |
 | Exportar para WhatsApp | ⛔ | |
 
 O mapa de rótulos, para não inventar categoria nova no banco:
@@ -115,10 +118,10 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | A tela mostra | Backend | Observação |
 |---|---|---|
 | Lista do que tem em casa | ✅ | `PantryItem` e `services/pantry.py` (etapa 5) |
-| Adicionar e remover item | 🔨 | Falta a rota; o modelo já aceita item só com texto |
+| Adicionar e remover item | ✅ | `POST` e `DELETE /pantry` |
 | "3 receitas 100% compatíveis" | ✅ | `recipes.suggest_recipes` com `minimum_percentage=100` |
 | "85% disponível (falta chia)" | ✅ | `RecipeAvailability.percentage` e `.missing` (etapa 7) |
-| "+ Chia" → lista de mercado | 🔨 | `.missing` já diz o que falta; falta a rota que adiciona à lista |
+| "+ Chia" → lista de mercado | 🔨 | `missing` já diz o que falta; depende da rota de item avulso |
 | Fotos das receitas | ⛔ | Não há campo de imagem em `Recipe` |
 | "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |

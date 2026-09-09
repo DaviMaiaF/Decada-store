@@ -2,6 +2,8 @@
 
 from fastapi import Depends, FastAPI
 
+from app.api.errors import register_error_handlers
+from app.api.routes import meal_plans, pantry, recipes, shopping_lists
 from app.core.config import Settings, get_settings
 
 app = FastAPI(
@@ -9,9 +11,18 @@ app = FastAPI(
     version="0.1.0",
     description=(
         "Traduz um plano alimentar prescrito em produtos de supermercado, "
-        "estima o custo da compra e sugere receitas com os itens da lista."
+        "estima o custo da compra e sugere receitas com os itens da lista.\n\n"
+        "**Autenticação ainda não existe (etapa 10).** Até lá, toda rota de "
+        "domínio identifica o usuário pelo cabeçalho `X-User-Id`."
     ),
 )
+
+register_error_handlers(app)
+
+app.include_router(meal_plans.router)
+app.include_router(shopping_lists.router)
+app.include_router(pantry.router)
+app.include_router(recipes.router)
 
 
 @app.get("/health", tags=["infra"])
