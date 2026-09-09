@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
+    "pydantic[email]>=2.9",
     "pydantic-settings>=2.6",
     # Banco: ainda não usados em código (entram na etapa 1), já declarados
     # para não mexer neste arquivo de novo.
@@ -23,6 +23,9 @@ dependencies = [
     "pypdf>=5.1",
     # Upload multipart do PDF nas rotas (etapa 9).
     "python-multipart>=0.0.18",
+    # Autenticação (etapa 10): hash de senha e token assinado.
+    "bcrypt>=4.2",
+    "pyjwt>=2.10",
 ]
 
 [project.optional-dependencies]

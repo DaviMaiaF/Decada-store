@@ -13,8 +13,9 @@ Legenda:
 > negócio em `app/services/` e rota HTTP que a expõe. A lista de rotas está no
 > [README](../../README.md#rotas). Falta o app mobile que as consome.
 >
-> Até a etapa 10 as rotas identificam o usuário pelo cabeçalho `X-User-Id`, e não
-> por autenticação de verdade.
+> A autenticação existe: `POST /auth/register` e `/auth/login` devolvem um token,
+> mandado em `Authorization: Bearer`. Falta a tela de login no protótipo — nenhuma
+> das quatro telas mostra como a pessoa entra no aplicativo.
 
 ## O que já está pronto no backend
 

@@ -20,6 +20,7 @@ from app.services.pantry import (
     user_pantry,
 )
 from app.services.units import IncompatibleUnitError
+from tests.conftest import novo_usuario
 
 KG = MeasurementUnit.QUILOGRAMA
 G = MeasurementUnit.GRAMA
@@ -226,15 +227,14 @@ def test_available_quantity_devolve_a_soma_e_o_sinal():
 @pytest.fixture
 def usuario_com_despensa(db_session):
     """Um usuário com três itens na despensa e o catálogo do seed carregado."""
-    from app.models import User
     from app.seeds.runner import run as carregar_seed
 
     carregar_seed(db_session)
 
     aveia = db_session.scalars(select(Product).where(Product.name == "Aveia em flocos")).one()
 
-    usuario = User(
-        email="marina@decada.local",
+    usuario = novo_usuario(
+        "marina@decada.local",
         pantry_items=[
             PantryItem(
                 raw_description="aveia em flocos finos (aberto)",
@@ -254,10 +254,9 @@ def usuario_com_despensa(db_session):
 
 @pytest.mark.db
 def test_despensa_e_do_usuario(db_session, usuario_com_despensa):
-    from app.models import User
 
-    outro = User(
-        email="outro@decada.local",
+    outro = novo_usuario(
+        "outro@decada.local",
         pantry_items=[PantryItem(raw_description="feijão carioca")],
     )
     db_session.add(outro)

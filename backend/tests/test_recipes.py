@@ -17,6 +17,7 @@ from app.seeds.catalog import PRODUCTS
 from app.seeds.recipes import RECIPES
 from app.services.recipes import availability, suggest_recipes
 from app.services.units import base_unit_of
+from tests.conftest import novo_usuario
 
 AGORA = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
@@ -281,7 +282,6 @@ def test_toda_receita_do_seed_tem_ingrediente_obrigatorio():
 @pytest.fixture
 def usuario_com_despensa(db_session):
     """Usuário com aveia, banana e ovos em casa — a panqueca fica completa."""
-    from app.models import User
     from app.seeds.runner import run as carregar_seed
 
     carregar_seed(db_session)
@@ -289,8 +289,8 @@ def usuario_com_despensa(db_session):
     def produto(nome: str) -> Product:
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
 
-    pessoa = User(
-        email="marina@decada.local",
+    pessoa = novo_usuario(
+        "marina@decada.local",
         pantry_items=[
             PantryItem(raw_description="aveia", product=produto("Aveia em flocos"),
                        quantity=Decimal("500"), unit=G),
@@ -331,11 +331,10 @@ def test_filtra_pelo_percentual_minimo(db_session, usuario_com_despensa):
 
 @pytest.mark.db
 def test_despensa_vazia_nao_completa_nenhuma_receita(db_session):
-    from app.models import User
     from app.seeds.runner import run as carregar_seed
 
     carregar_seed(db_session)
-    pessoa = User(email="vazia@decada.local")
+    pessoa = novo_usuario("vazia@decada.local")
     db_session.add(pessoa)
     db_session.commit()
 

@@ -9,33 +9,13 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
-from app.models import MealPlan, PlanItem, User
+from app.models import MealPlan, PlanItem
 from app.models.enums import PlanItemStatus
 from app.services.import_plan import _discard_reason, import_plan_from_pdf
 from app.services.pdf import PdfWithoutTextError
-from tests.test_pdf import build_pdf
+from tests.helpers import PLANO_REALISTA, build_pdf
 
 AGORA = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
-
-# Um PDF parecido com o que uma nutricionista entrega: cabeçalho, refeições,
-# itens, uma orientação em prosa e o rodapé.
-PLANO_REALISTA = [
-    "Plano Alimentar Personalizado",
-    "Dra. Camila Fernandes",
-    "CRN-3 48291",
-    "Café da Manhã:",
-    "2 ovos de galinha",
-    "200 ml de leite integral UHT",
-    "07:30 - Lanche da manhã",
-    "1 banana prata",
-    "Almoço",
-    "150 g de peito de frango sem pele",
-    "100 g de arroz integral",
-    "Beba pelo menos dois litros de água ao longo do dia e evite líquidos "
-    "durante as refeições principais para não atrapalhar a digestão.",
-    "Página 1 de 2",
-]
-
 
 # --------------------------------------------------------------------------
 # filtro de ruído
@@ -101,7 +81,9 @@ def usuario(db_session):
     from app.seeds.runner import run as carregar_seed
 
     carregar_seed(db_session)
-    pessoa = User(email="marina@decada.local")
+    from tests.conftest import novo_usuario
+
+    pessoa = novo_usuario("marina@example.com")
     db_session.add(pessoa)
     db_session.flush()
     return pessoa

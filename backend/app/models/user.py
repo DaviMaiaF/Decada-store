@@ -16,9 +16,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    # Nulo até a etapa 10 (autenticação): usuários criados em desenvolvimento
-    # ainda não têm senha. Passa a ser obrigatório quando o login existir.
-    password_hash: Mapped[str | None] = mapped_column(String(255))
+    # Hash bcrypt, nunca a senha. Obrigatório desde a etapa 10: usuário sem
+    # senha não conseguiria entrar, então não deveria existir.
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255))
 
     meal_plans: Mapped[list["MealPlan"]] = relationship(

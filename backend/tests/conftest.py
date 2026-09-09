@@ -12,11 +12,22 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Base, Product
+from app.models import Base, Product, User
 from app.seeds.catalog import PRODUCTS
+from app.services.security import hash_password
 from app.services.text import normalize_text
 
 TEST_DATABASE_NAME = "decada_test"
+
+SENHA_DE_TESTE = "senha-de-teste"
+# bcrypt é lento de propósito. Calcular o hash uma vez por sessão em vez de uma
+# vez por teste tira segundos da suíte.
+HASH_DE_TESTE = hash_password(SENHA_DE_TESTE)
+
+
+def novo_usuario(email: str, **campos) -> User:
+    """Usuário de teste já com senha, que passou a ser obrigatória na etapa 10."""
+    return User(email=email, password_hash=HASH_DE_TESTE, **campos)
 
 
 @pytest.fixture(scope="session")
@@ -72,3 +83,36 @@ def catalogo() -> list[Product]:
         )
         for indice, produto in enumerate(PRODUCTS)
     ]
+
+
+@pytest.fixture
+def client(db_session):
+    """Cliente HTTP usando a sessão de teste, com o catálogo já carregado."""
+    from fastapi.testclient import TestClient
+
+    from app.core.database import get_db
+    from app.main import app
+    from app.seeds.runner import run as carregar_seed
+
+    carregar_seed(db_session)
+
+    app.dependency_overrides[get_db] = lambda: db_session
+    with TestClient(app) as cliente:
+        yield cliente
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def marina(db_session) -> User:
+    pessoa = novo_usuario("marina@example.com")
+    db_session.add(pessoa)
+    db_session.commit()
+    return pessoa
+
+
+@pytest.fixture
+def outra_pessoa(db_session) -> User:
+    pessoa = novo_usuario("outra@example.com")
+    db_session.add(pessoa)
+    db_session.commit()
+    return pessoa

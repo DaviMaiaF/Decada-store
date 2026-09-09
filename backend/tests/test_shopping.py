@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.models import MealPlan, PantryItem, PlanItem, Product, ShoppingList, User
 from app.models.enums import MeasurementUnit, PlanItemStatus
 from app.services.shopping import generate_shopping_list
+from tests.conftest import novo_usuario
 
 pytestmark = pytest.mark.db
 
@@ -40,7 +41,7 @@ def catalogo_carregado(db_session):
 
 @pytest.fixture
 def usuario(db_session):
-    pessoa = User(email="marina@decada.local")
+    pessoa = novo_usuario("marina@decada.local")
     db_session.add(pessoa)
     db_session.flush()
     return pessoa
@@ -200,7 +201,7 @@ def test_despensa_nao_abate_mais_do_que_o_item_pedia(db_session, usuario, catalo
 
 def test_despensa_de_outro_usuario_nao_entra_na_conta(db_session, usuario, catalogo_carregado):
     frango = catalogo_carregado(FRANGO)
-    outro = User(email="outro@decada.local")
+    outro = novo_usuario("outro@decada.local")
     db_session.add(outro)
     db_session.flush()
     _guardar(db_session, PantryItem(raw_description="frango", product=frango,

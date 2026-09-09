@@ -17,6 +17,7 @@ from app.services.pricing import (
     aggregate_prices,
     classify_confidence,
 )
+from tests.conftest import novo_usuario
 
 AGORA = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
@@ -182,7 +183,7 @@ def test_nenhum_numero_viaja_sem_data_amostra_e_origem():
 @pytest.fixture
 def lista_de_compras(db_session):
     """Uma lista com queijo (embalado) e frango (granel), pronta para precificar."""
-    from app.models import MealPlan, PlanItem, Product, ShoppingList, ShoppingListItem, User
+    from app.models import MealPlan, PlanItem, Product, ShoppingList, ShoppingListItem
     from app.models.enums import MeasurementUnit
     from app.seeds.runner import run as carregar_seed
 
@@ -192,7 +193,7 @@ def lista_de_compras(db_session):
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
 
     plano = MealPlan(
-        user=User(email="teste@decada.local"),
+        user=novo_usuario("teste@decada.local"),
         consent_at=AGORA,
         consent_version="v1",
         items=[

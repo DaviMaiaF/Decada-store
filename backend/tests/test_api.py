@@ -10,83 +10,46 @@ outra pessoa.
 from decimal import Decimal
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.core.database import get_db
-from app.main import app
-from app.models import PantryItem, Product, User
-from tests.test_import_plan import PLANO_REALISTA
-from tests.test_pdf import build_pdf
+from app.models import PantryItem, Product
+from app.services.security import create_access_token
+from tests.helpers import PLANO_REALISTA, build_pdf, importar_plano, plano_confirmado
+from tests.helpers import auth_headers as _headers
 
 pytestmark = pytest.mark.db
 
 
-@pytest.fixture
-def client(db_session):
-    """Cliente HTTP usando a sessão de teste, para tudo rodar na mesma transação."""
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
-
-    app.dependency_overrides[get_db] = lambda: db_session
-    with TestClient(app) as cliente:
-        yield cliente
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def marina(db_session) -> User:
-    pessoa = User(email="marina@decada.local")
-    db_session.add(pessoa)
-    db_session.commit()
-    return pessoa
-
-
-@pytest.fixture
-def outra_pessoa(db_session) -> User:
-    pessoa = User(email="outra@decada.local")
-    db_session.add(pessoa)
-    db_session.commit()
-    return pessoa
-
-
-def _headers(user: User) -> dict[str, str]:
-    return {"X-User-Id": str(user.id)}
-
-
-def _importar(client, user, linhas=None) -> dict:
-    resposta = client.post(
-        "/meal-plans",
-        headers=_headers(user),
-        files={"file": ("plano.pdf", build_pdf(linhas or PLANO_REALISTA), "application/pdf")},
-        data={"consent_accepted": "true"},
-    )
-    assert resposta.status_code == 201, resposta.text
-    return resposta.json()
-
-
 # --------------------------------------------------------------------------
-# identidade provisória
+# autenticação
 # --------------------------------------------------------------------------
 
 def test_health_continua_aberto(client):
     assert client.get("/health").status_code == 200
 
 
-def test_rota_de_dominio_sem_o_cabecalho_recusa(client):
+def test_rota_de_dominio_sem_token_recusa(client):
     assert client.get("/pantry").status_code == 401
 
 
-def test_cabecalho_apontando_para_usuario_inexistente_recusa(client):
-    resposta = client.get(
-        "/pantry", headers={"X-User-Id": "00000000-0000-0000-0000-000000000000"}
-    )
+def test_token_de_usuario_inexistente_recusa(client):
+    import uuid
+
+    token = create_access_token(uuid.uuid4())
+    resposta = client.get("/pantry", headers={"Authorization": f"Bearer {token}"})
+
     assert resposta.status_code == 401
 
 
-def test_cabecalho_malformado_recusa(client):
-    assert client.get("/pantry", headers={"X-User-Id": "isto-nao-e-uuid"}).status_code == 422
+def test_token_adulterado_recusa(client, marina):
+    token = create_access_token(marina.id)
+    resposta = client.get("/pantry", headers={"Authorization": f"Bearer {token}x"})
+
+    assert resposta.status_code == 401
+
+
+def test_token_malformado_recusa(client):
+    assert client.get("/pantry", headers={"Authorization": "Bearer nada"}).status_code == 401
 
 
 # --------------------------------------------------------------------------
@@ -94,7 +57,7 @@ def test_cabecalho_malformado_recusa(client):
 # --------------------------------------------------------------------------
 
 def test_importa_o_plano_por_pdf(client, marina):
-    corpo = _importar(client, marina)
+    corpo = importar_plano(client, marina)
 
     assert corpo["items_created"] == 5
     assert corpo["meal_plan"]["consent_version"] == "v1"
@@ -102,7 +65,7 @@ def test_importa_o_plano_por_pdf(client, marina):
 
 
 def test_o_relatorio_do_descarte_volta_na_resposta(client, marina):
-    corpo = _importar(client, marina)
+    corpo = importar_plano(client, marina)
 
     motivos = {linha["reason"] for linha in corpo["discarded"]}
     assert "cabeçalho de refeição" in motivos
@@ -147,7 +110,7 @@ def test_arquivo_que_nao_e_pdf_devolve_400(client, marina):
 
 
 def test_plano_de_outra_pessoa_devolve_404(client, marina, outra_pessoa):
-    plano_id = _importar(client, marina)["meal_plan"]["id"]
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
 
     resposta = client.get(f"/meal-plans/{plano_id}", headers=_headers(outra_pessoa))
 
@@ -160,7 +123,7 @@ def test_plano_de_outra_pessoa_devolve_404(client, marina, outra_pessoa):
 # --------------------------------------------------------------------------
 
 def test_lista_candidatos_para_um_item(client, marina):
-    plano = _importar(client, marina, ["1,2 kg de peito de frango sem pele"])
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
     item = plano["meal_plan"]["items"][0]
 
     resposta = client.get(
@@ -176,7 +139,7 @@ def test_lista_candidatos_para_um_item(client, marina):
 
 
 def test_confirmar_grava_o_produto_escolhido(client, marina, db_session):
-    plano = _importar(client, marina, ["1,2 kg de peito de frango sem pele"])
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
     item = plano["meal_plan"]["items"][0]
     produto = db_session.scalars(
         select(Product).where(Product.name == "Peito de frango sem pele")
@@ -195,7 +158,7 @@ def test_confirmar_grava_o_produto_escolhido(client, marina, db_session):
 
 
 def test_nao_da_para_confirmar_item_de_plano_alheio(client, marina, outra_pessoa, db_session):
-    plano = _importar(client, marina, ["1,2 kg de peito de frango sem pele"])
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
     item = plano["meal_plan"]["items"][0]
     produto = db_session.scalars(select(Product).limit(1)).one()
 
@@ -212,22 +175,8 @@ def test_nao_da_para_confirmar_item_de_plano_alheio(client, marina, outra_pessoa
 # lista de compras
 # --------------------------------------------------------------------------
 
-def _plano_confirmado(client, user, db_session, descricao="1,2 kg de peito de frango sem pele"):
-    plano = _importar(client, user, [descricao])
-    item = plano["meal_plan"]["items"][0]
-    produto = db_session.scalars(
-        select(Product).where(Product.name == "Peito de frango sem pele")
-    ).one()
-    client.post(
-        f"/meal-plans/{plano['meal_plan']['id']}/items/{item['id']}/confirmation",
-        headers=_headers(user),
-        json={"product_id": str(produto.id)},
-    )
-    return plano["meal_plan"]["id"], produto
-
-
 def test_gera_a_lista_de_compras(client, marina, db_session):
-    plano_id, _ = _plano_confirmado(client, marina, db_session)
+    plano_id, _ = plano_confirmado(client, marina, db_session)
 
     resposta = client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
@@ -242,7 +191,7 @@ def test_gera_a_lista_de_compras(client, marina, db_session):
 
 
 def test_todo_preco_vem_com_data_origem_e_confianca(client, marina, db_session):
-    plano_id, _ = _plano_confirmado(client, marina, db_session)
+    plano_id, _ = plano_confirmado(client, marina, db_session)
     lista = client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
         headers=_headers(marina),
@@ -258,7 +207,7 @@ def test_todo_preco_vem_com_data_origem_e_confianca(client, marina, db_session):
 
 
 def test_o_item_traz_a_categoria_para_a_tela_agrupar(client, marina, db_session):
-    plano_id, _ = _plano_confirmado(client, marina, db_session)
+    plano_id, _ = plano_confirmado(client, marina, db_session)
     lista = client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
         headers=_headers(marina),
@@ -269,7 +218,7 @@ def test_o_item_traz_a_categoria_para_a_tela_agrupar(client, marina, db_session)
 
 
 def test_a_despensa_desconta_na_lista_gerada_pela_api(client, marina, db_session):
-    plano_id, produto = _plano_confirmado(client, marina, db_session)
+    plano_id, produto = plano_confirmado(client, marina, db_session)
 
     client.post(
         "/pantry",
@@ -294,7 +243,7 @@ def test_a_despensa_desconta_na_lista_gerada_pela_api(client, marina, db_session
 
 
 def test_lista_de_outra_pessoa_devolve_404(client, marina, outra_pessoa, db_session):
-    plano_id, _ = _plano_confirmado(client, marina, db_session)
+    plano_id, _ = plano_confirmado(client, marina, db_session)
     lista_id = client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
         headers=_headers(marina),
@@ -420,7 +369,7 @@ def test_o_que_falta_na_receita_vem_nomeado(client, marina):
 def test_sugestao_com_lista_de_compras_de_outra_pessoa_devolve_404(
     client, marina, outra_pessoa, db_session
 ):
-    plano_id, _ = _plano_confirmado(client, marina, db_session)
+    plano_id, _ = plano_confirmado(client, marina, db_session)
     lista_id = client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
         headers=_headers(marina),

@@ -10,6 +10,7 @@ import pytest
 
 from app.models.enums import MeasurementUnit, PlanItemStatus
 from app.services.matching import MAX_CANDIDATES, MINIMUM_SCORE, match_text
+from tests.conftest import novo_usuario
 
 
 def _melhor(catalogo, texto):
@@ -158,13 +159,13 @@ def test_casa_um_item_ja_gravado_no_banco(db_session):
     """O caminho que passa pelo banco: catálogo vem do Postgres, não da fixture."""
     from datetime import datetime, timezone
 
-    from app.models import MealPlan, PlanItem, User
+    from app.models import MealPlan, PlanItem
     from app.seeds.runner import run as carregar_seed
     from app.services.matching import match_plan_item
 
     carregar_seed(db_session)
 
-    usuario = User(email="teste@decada.local")
+    usuario = novo_usuario("teste@decada.local")
     plano = MealPlan(
         user=usuario,
         consent_at=datetime.now(timezone.utc),

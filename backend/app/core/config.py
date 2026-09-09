@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # plano alimentar: trocar o termo aqui não reescreve o que já foi aceito.
     consent_version: str = "v1"
 
+    # Chave que assina os tokens. O padrão só serve para desenvolvimento:
+    # em qualquer outro ambiente precisa vir do ambiente real, e trocá-la
+    # invalida todos os tokens já emitidos.
+    secret_key: str = "chave-de-desenvolvimento-nao-use-em-producao"
+    access_token_expire_minutes: int = 60 * 24 * 7
+
     postgres_user: str = "decada"
     postgres_password: str = "decada"
     postgres_db: str = "decada"

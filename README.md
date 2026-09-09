@@ -7,12 +7,12 @@ os ingredientes da lista.
 
 Projeto acadêmico — Engenharia de Software, UCB.
 
-> **Status:** etapa 9 concluída pela metade — o backend está completo e exposto por
-> uma API REST de 11 rotas: import do plano por PDF, casamento item–produto, cálculo
-> de preço por região, despensa, lista de compras já descontada e precificada e
-> sugestão de receitas. **Falta a segunda metade da etapa 9, o app mobile**, e falta
-> a autenticação (etapa 10) — até lá as rotas identificam o usuário por um cabeçalho
-> provisório. NFC-e continua fora.
+> **Status:** backend completo — etapas 1 a 8 e 10 concluídas. API REST de 15 rotas
+> com autenticação, import do plano por PDF, casamento item–produto, cálculo de preço
+> por região, despensa, lista de compras já descontada e precificada, sugestão de
+> receitas e exclusão de dados sob demanda. **Falta o app mobile** (etapa 9, feita
+> depois da 10 de propósito, para o app já nascer falando com a autenticação real).
+> NFC-e continua fora do MVP.
 
 ## Design
 
@@ -24,8 +24,7 @@ Dieta, Mercado, Despensa e Economia.
 
 | Etapa | O que é |
 |---|---|
-| 9 | App mobile em React Native (as rotas da API já existem) |
-| 10 | Autenticação, LGPD (consentimento e exclusão) e documentação final |
+| 9 | App mobile em React Native — última etapa que falta |
 
 ## Stack
 
@@ -94,10 +93,9 @@ rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
 `is_fictitious = true`, os preços têm origem `seed` e as marcas são inventadas.
 O script se recusa a rodar se `APP_ENV` não for `dev`.
 
-As onze tabelas do domínio são `users`, `meal_plans`, `plan_items`, `products`,
-`markets`, `price_records`, `shopping_lists`, `shopping_list_items`, `recipes`,
-`recipe_ingredients` e `pantry_items`. O diagrama ER entra em `docs/modelo-dados.md`
-na etapa 10.
+As onze tabelas do domínio estão documentadas em
+[`docs/modelo-dados.md`](docs/modelo-dados.md), com diagrama ER e a razão de cada
+regra de exclusão.
 
 ## Execução
 
@@ -109,21 +107,32 @@ cd backend
 - API: <http://localhost:8000>
 - Documentação interativa (Swagger): <http://localhost:8000/docs>
 
-### Autenticação provisória
-
-Enquanto a etapa 10 não chega, as rotas de domínio identificam o usuário pelo
-cabeçalho `X-User-Id`, com o UUID de uma linha da tabela `users`. Sem ele a resposta
-é `401`. Quando a autenticação existir, só o corpo de `get_current_user` muda — as
-rotas continuam iguais.
+### Autenticação
 
 ```bash
-curl -H "X-User-Id: <uuid-do-usuario>" http://localhost:8000/pantry
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "voce@exemplo.com", "password": "uma-senha-boa"}'
 ```
+
+A resposta traz `access_token`. Mande-o em toda rota de domínio:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/pantry
+```
+
+Senha é guardada como hash bcrypt, nunca em texto. O token é um JWT assinado com
+`SECRET_KEY` — **gere uma chave própria fora de desenvolvimento**, e saiba que
+trocá-la invalida todos os tokens já emitidos.
 
 ### Rotas
 
 | Método | Caminho | O que faz |
 |---|---|---|
+| `POST` | `/auth/register` | Cria a conta e devolve o token |
+| `POST` | `/auth/login` | Troca e-mail e senha por um token |
+| `GET` | `/auth/me` | A conta de quem está autenticado |
+| `DELETE` | `/auth/me` | Apaga a conta e todos os dados pessoais (LGPD) |
 | `POST` | `/meal-plans` | Importa o plano do PDF (multipart: `file` + `consent_accepted`) |
 | `GET` | `/meal-plans/{id}` | Plano com seus itens |
 | `GET` | `/meal-plans/{id}/items/{item_id}/candidates` | Produtos candidatos para o item |
@@ -189,6 +198,8 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 |---|---|---|
 | `APP_ENV` | `dev` | Ambiente da aplicação |
 | `CONSENT_VERSION` | `v1` | Versão vigente do termo de consentimento (LGPD) |
+| `SECRET_KEY` | valor de desenvolvimento | Assina os tokens. **Troque em produção** |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | Validade do token, em minutos (7 dias) |
 | `POSTGRES_USER` | `decada` | Usuário do banco |
 | `POSTGRES_PASSWORD` | `decada` | Senha do banco (só desenvolvimento) |
 | `POSTGRES_DB` | `decada` | Nome do banco |
@@ -215,7 +226,9 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   ├── tests/
 │   └── pyproject.toml
 ├── docs/
-│   └── design/        # protótipos, sistema de design, contrato das telas
+│   ├── design/        # protótipos, sistema de design, contrato das telas
+│   ├── lgpd.md        # consentimento, minimização e exclusão
+│   └── modelo-dados.md # diagrama ER e regras de exclusão
 ├── docker-compose.yml
 └── CLAUDE.md              # contexto do projeto para o Claude Code
 ```
@@ -229,4 +242,7 @@ apresentado com a data da coleta e a origem do registro.
 ## Privacidade
 
 Plano alimentar é dado pessoal sensível de saúde (LGPD, art. 5º, II). O projeto exige
-consentimento explícito, minimização de dados e exclusão sob demanda.
+consentimento explícito, minimização de dados e exclusão sob demanda — cada uma
+dessas exigências virou código, e [`docs/lgpd.md`](docs/lgpd.md) aponta o teste que
+sustenta cada uma. `DELETE /auth/me` apaga tudo e devolve o comprovante do que foi
+removido.

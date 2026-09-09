@@ -96,6 +96,10 @@ decada/
 7. Import de plano é **PDF com texto**. OCR de foto está fora do MVP.
 8. Substituição de alimento só existe se veio da nutricionista. O app pode comparar
    preços do mesmo item; não pode trocar o alimento prescrito por outro.
+9. Autenticação é JWT assinado; senha é hash bcrypt. Exclusão de conta apaga a
+   linha de verdade — sem soft delete —, e só o preço sobrevive, anonimizado.
+10. Recurso de outra pessoa responde 404, nunca 403; senha errada e e-mail
+    inexistente respondem igual. Ver [`docs/lgpd.md`](docs/lgpd.md).
 
 ## Design
 
@@ -105,6 +109,13 @@ ou endpoint que a alimente, leia [`docs/design/telas.md`](docs/design/telas.md):
 diz o que já existe, o que falta e o que ficou fora do MVP.
 
 A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**.
+
+## Documentação
+
+- [`docs/modelo-dados.md`](docs/modelo-dados.md) — diagrama ER e a razão de cada
+  regra de exclusão.
+- [`docs/lgpd.md`](docs/lgpd.md) — consentimento, minimização e exclusão, cada um
+  com o teste que o sustenta.
 
 ## Como rodar
 
@@ -118,7 +129,7 @@ python3 -m venv .venv                      # apenas na primeira vez
 
 .venv/bin/pytest -q                        # testes do backend
 
-cd ../mobile && npx expo start             # (ainda não existe — etapa 9)
+cd ../mobile && npx expo start             # (ainda não existe — última etapa)
 ```
 
 > **Nota de ambiente:** a máquina de desenvolvimento tem Python 3.10.12.

@@ -3,7 +3,7 @@
 from fastapi import Depends, FastAPI
 
 from app.api.errors import register_error_handlers
-from app.api.routes import meal_plans, pantry, recipes, shopping_lists
+from app.api.routes import auth, meal_plans, pantry, recipes, shopping_lists
 from app.core.config import Settings, get_settings
 
 app = FastAPI(
@@ -12,13 +12,15 @@ app = FastAPI(
     description=(
         "Traduz um plano alimentar prescrito em produtos de supermercado, "
         "estima o custo da compra e sugere receitas com os itens da lista.\n\n"
-        "**Autenticação ainda não existe (etapa 10).** Até lá, toda rota de "
-        "domínio identifica o usuário pelo cabeçalho `X-User-Id`."
+        "Cadastre-se em `/auth/register` ou entre em `/auth/login` e mande o "
+        "token no cabeçalho `Authorization: Bearer <token>`. Para apagar todos "
+        "os seus dados, `DELETE /auth/me`."
     ),
 )
 
 register_error_handlers(app)
 
+app.include_router(auth.router)
 app.include_router(meal_plans.router)
 app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
