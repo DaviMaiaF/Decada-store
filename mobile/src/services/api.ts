@@ -5,6 +5,8 @@
  * tratamento de erro do servidor vira sempre o mesmo tipo de exceção.
  */
 
+import { Platform } from 'react-native';
+
 import { API_URL } from './config';
 import { readToken } from './session';
 import type {
@@ -122,12 +124,20 @@ export async function importMealPlan(
   const token = await readToken();
   const form = new FormData();
 
-  // O React Native aceita este formato de arquivo no FormData.
-  form.append('file', {
-    uri: file.uri,
-    name: file.name,
-    type: file.mimeType ?? 'application/pdf',
-  } as unknown as Blob);
+  if (Platform.OS === 'web') {
+    // No navegador, FormData converte objeto qualquer em "[object Object]" e o
+    // servidor recebe texto onde esperava arquivo. Aqui o conteúdo precisa ser
+    // lido de verdade e enviado como Blob.
+    const conteudo = await fetch(file.uri).then((resposta) => resposta.blob());
+    form.append('file', conteudo, file.name);
+  } else {
+    // No React Native, este objeto é o formato de arquivo que o FormData aceita.
+    form.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType ?? 'application/pdf',
+    } as unknown as Blob);
+  }
   form.append('consent_accepted', String(consentAccepted));
   if (extras.title) form.append('title', extras.title);
   if (extras.nutritionistName) form.append('nutritionist_name', extras.nutritionistName);
