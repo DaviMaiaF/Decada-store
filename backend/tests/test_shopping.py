@@ -29,10 +29,6 @@ QUEIJO = "Queijo minas frescal"
 
 @pytest.fixture
 def catalogo_carregado(db_session):
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
-
     def buscar(nome: str) -> Product:
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
 

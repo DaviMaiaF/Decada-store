@@ -227,10 +227,6 @@ def test_available_quantity_devolve_a_soma_e_o_sinal():
 @pytest.fixture
 def usuario_com_despensa(db_session):
     """Um usuário com três itens na despensa e o catálogo do seed carregado."""
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
-
     aveia = db_session.scalars(select(Product).where(Product.name == "Aveia em flocos")).one()
 
     usuario = novo_usuario(

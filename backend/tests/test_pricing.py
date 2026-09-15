@@ -185,10 +185,6 @@ def lista_de_compras(db_session):
     """Uma lista com queijo (embalado) e frango (granel), pronta para precificar."""
     from app.models import MealPlan, PlanItem, Product, ShoppingList, ShoppingListItem
     from app.models.enums import MeasurementUnit
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
-
     def produto(nome):
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
 

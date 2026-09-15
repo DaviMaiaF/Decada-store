@@ -78,9 +78,6 @@ def test_na_duvida_a_linha_vira_item():
 
 @pytest.fixture
 def usuario(db_session):
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
     from tests.conftest import novo_usuario
 
     pessoa = novo_usuario("marina@example.com")

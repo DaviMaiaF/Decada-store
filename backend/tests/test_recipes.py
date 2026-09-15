@@ -282,9 +282,6 @@ def test_toda_receita_do_seed_tem_ingrediente_obrigatorio():
 @pytest.fixture
 def usuario_com_despensa(db_session):
     """Usuário com aveia, banana e ovos em casa — a panqueca fica completa."""
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
 
     def produto(nome: str) -> Product:
         return db_session.scalars(select(Product).where(Product.name == nome)).one()
@@ -331,9 +328,6 @@ def test_filtra_pelo_percentual_minimo(db_session, usuario_com_despensa):
 
 @pytest.mark.db
 def test_despensa_vazia_nao_completa_nenhuma_receita(db_session):
-    from app.seeds.runner import run as carregar_seed
-
-    carregar_seed(db_session)
     pessoa = novo_usuario("vazia@decada.local")
     db_session.add(pessoa)
     db_session.commit()

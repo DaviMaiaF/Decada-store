@@ -160,10 +160,7 @@ def test_casa_um_item_ja_gravado_no_banco(db_session):
     from datetime import datetime, timezone
 
     from app.models import MealPlan, PlanItem
-    from app.seeds.runner import run as carregar_seed
     from app.services.matching import match_plan_item
-
-    carregar_seed(db_session)
 
     usuario = novo_usuario("teste@decada.local")
     plano = MealPlan(
