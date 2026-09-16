@@ -19,7 +19,7 @@ Legenda:
 >
 > O app em `mobile/` implementa a jornada principal: login, upload, confirmação,
 > lista de compras e despensa — esta com as receitas ordenadas por
-> disponibilidade dentro dela. Só a aba Economia continua sem tela.
+> disponibilidade dentro dela, e Economia. As quatro abas têm tela.
 
 ## O que já está pronto no backend
 
@@ -137,6 +137,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 |---|---|---|
 | Lista do que tem em casa | ✅ | Tela pronta: chips com remoção |
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e salva |
+| Quantidade do que se tem em casa | 🔨 | A tela envia só descrição e produto. **Sem quantidade a compra não é abatida** e a aba Economia fica em zero |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | 🔨 | **Fora da beta.** Depende da rota de item avulso, que não existe |
@@ -166,9 +167,30 @@ nada, porque aqui o custo do erro é uma sugestão imprecisa, não uma compra a 
 
 ## 5. Economia
 
-Não tem protótipo. No MVP a aba fica como tela informativa simples, reaproveitando o que
-o cálculo de preço já devolve: total estimado da lista, quantos itens têm preço, quantos
-não têm e o selo de confiança do preço mais fraco.
+Não tem protótipo. A tela mostra só conta que o servidor sabe fazer:
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| "A despensa poupou R$ X" | ✅ | `ShoppingListItem.pantry_savings`, somado na lista |
+| Total estimado da compra | ✅ | `ShoppingList.estimated_total` |
+| Já no carrinho · ainda falta | ✅ | Soma de `estimated_cost` dos itens com `purchased` |
+| Itens com preço · sem preço na região | ✅ | Contagem sobre os itens |
+| Selo do preço mais fraco da lista | ✅ | `price_confidence` e `price_reference_date` |
+| Sair da conta | ✅ | Fica no rodapé desta aba |
+| Desperdício evitado · previsão mensal | ⛔ | Ver divergência 4: não há conta que os sustente |
+
+**A economia da despensa é uma diferença, não uma multiplicação.** O `estimated_cost` já
+é calculado sobre a quantidade descontada. Multiplicar `quantity_from_pantry` pelo preço
+daria número errado para produto embalado: quem precisa de 1 L e tem 200 ml em casa leva
+a caixa de 1 L do mesmo jeito, e não poupou nada. A conta é
+
+> o que custaria a quantidade prescrita inteira **−** o que de fato se compra
+
+respeitando o arredondamento para embalagem fechada do
+[`_quantity_to_charge`](../../backend/app/services/pricing.py). Para item a granel dá a
+proporção; para embalado que não reduziu o número de pacotes dá zero, que é a verdade.
+Item sem preço fica com economia **nula**, não zero — nulo é "não sei", zero é "não
+poupou".
 
 ---
 
@@ -193,10 +215,13 @@ a decisão 4 proíbe. A tela de Dieta faz certo: lista "opções autorizadas pel
 Camila". Regra: **substituição só existe se veio da nutricionista.** Economia se mostra
 comparando preços do mesmo item, nunca trocando o alimento prescrito.
 
-**4. Números de economia sem base.** "Evitou desperdício de R$ 14,00" e "+R$ 42" não têm
-como ser calculados com o que o modelo guarda, e a decisão de nunca inventar dado de preço
-vale também para dado de economia. Ou se define a conta (o que entrou na despensa, a que
-preço, e o que foi consumido antes de vencer) ou o número não aparece.
+**4. Números de economia sem base.** ~~"Evitou desperdício de R$ 14,00" e "+R$ 42"~~ —
+**resolvida definindo a conta, não omitindo o número.** A economia da despensa tem base:
+é a diferença entre o custo da prescrição inteira e o da compra descontada, descrita na
+seção 5 e testada em `tests/test_pricing.py`.
+
+O que continua de fora é o **desperdício evitado**, que exigiria saber o que foi consumido
+antes de vencer — e `PantryItem` não guarda validade. Esse número segue sem aparecer.
 
 **5. Consentimento ausente no upload.** Descrito na seção 1. O backend já não permite
 gravar plano sem consentimento; a tela é que ainda não tem o passo de aceite.
@@ -207,7 +232,7 @@ gravar plano sem consentimento; a tela é que ainda não tem o passo de aceite.
 
 **Entra:** despensa (`PantryItem`) e o desconto dela na lista de compras; import de plano
 por PDF com texto; agrupamento por corredor; marcar item como comprado; receitas com
-percentual de disponibilidade.
+percentual de disponibilidade; aba Economia com o que a despensa poupou.
 
 **Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR de foto,
 projeção mensal, métricas de desperdício, dicas de substituição geradas pelo app, validade

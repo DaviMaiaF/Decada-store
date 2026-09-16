@@ -77,12 +77,28 @@ que usam aveia sobem de 0% para 33% na hora.
 Adicione `banana prata` e `ovos de galinha` do mesmo jeito e a **Panqueca de
 aveia e banana chega a 100%**.
 
-**6. Voltar ao Mercado e gerar a lista de novo.** Agora os itens que estão na
-despensa aparecem descontados, e o total cai.
+**6. Voltar ao Mercado e gerar a lista de novo.** O total continua em
+**R$ 110,95**, e é preciso explicar por quê: o abatimento da compra exige saber
+*quanto* se tem em casa, e a tela de Despensa ainda cadastra o item sem
+quantidade. O desconto existe e está testado no backend — só não há como
+informar a quantidade pela interface. Para as receitas, item sem quantidade
+conta como disponível; para a compra, não abate nada. É a regra oposta, e de
+propósito: numa sugestão o custo do erro é uma receita imprecisa, numa compra é
+comida de menos.
+
+**7. Aba Economia.** Mostra o total da compra, quanto já foi para o carrinho e
+o que a despensa poupou. Pelo motivo do passo anterior, a economia aparece como
+**R$ 0,00** — e a tela diz por quê em vez de exibir um número inventado.
+
+Com quantidade informada, o cálculo funciona: os mesmos 15 itens com meio quilo
+de aveia e uma dúzia de ovos em casa dão **R$ 90,93** de lista e **R$ 20,02**
+de economia. Dá para mostrar isso pela API enquanto a tela não tem o campo.
 
 ## O que dizer sobre o que falta
 
-- A aba **Economia** ainda não tem tela.
+- A tela de **Despensa não informa quantidade**, então o abatimento da compra
+  e a economia não aparecem pela interface. O backend faz os dois.
+- **Desperdício evitado** continua fora: exigiria validade no item da despensa.
 - Leitura de **NFC-e por QR Code** está fora do MVP.
 - Item da despensa **já salvo** não pode ser vinculado depois ao catálogo.
 - O filtro de ruído do PDF foi calibrado em planos simples; plano real ainda

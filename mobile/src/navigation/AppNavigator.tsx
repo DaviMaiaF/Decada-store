@@ -8,15 +8,13 @@
 import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '../components';
 import ConfirmationScreen from '../screens/ConfirmationScreen';
+import EconomyScreen from '../screens/EconomyScreen';
 import MarketScreen from '../screens/MarketScreen';
 import PantryScreen from '../screens/PantryScreen';
 import UploadScreen from '../screens/UploadScreen';
-import { useAuth } from '../services/auth';
-import { colors, spacing, typography } from '../theme/tokens';
+import { colors, typography } from '../theme/tokens';
 
 const Tab = createBottomTabNavigator();
 
@@ -71,42 +69,10 @@ export default function AppNavigator() {
         />
 
         <Tab.Screen name="Economia" options={{ title: 'Economia' }}>
-          {() => <ContaScreen />}
+          {() => <EconomyScreen listId={listId} />}
         </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
 }
 
-/**
- * Aba Economia, por enquanto com a conta.
- *
- * Sair fica aqui porque nenhuma das quatro telas do protótipo previu onde
- * colocar isso — e um app com dado de saúde precisa ter como sair.
- */
-function ContaScreen() {
-  const { signOut } = useAuth();
-
-  return (
-    <View style={styles.conta}>
-      <Text style={styles.contaTitulo}>Economia</Text>
-      <Text style={styles.contaTexto}>
-        O acompanhamento de gastos entra numa próxima etapa. O cálculo por região já
-        existe no backend.
-      </Text>
-      <Button label="Sair da conta" variant="ghost" onPress={signOut} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  conta: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    padding: spacing.margin,
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  contaTitulo: { ...typography.headlineLg, color: colors.primary },
-  contaTexto: { ...typography.bodyMd, color: colors.onSurfaceVariant },
-});

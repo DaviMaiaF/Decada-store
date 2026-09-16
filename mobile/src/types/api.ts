@@ -88,6 +88,8 @@ export interface ShoppingListItem {
   purchased: boolean;
   /** Quando marcou. Nulo enquanto não comprou. */
   purchased_at: string | null;
+  /** O que a despensa poupou neste item. Nulo quando não há preço. */
+  pantry_savings: string | null;
 }
 
 export interface ShoppingList {
@@ -107,6 +109,7 @@ export interface GeneratedList {
   items_skipped: number;
   items_priced: number;
   items_without_price: number;
+  pantry_savings: string;
   lowest_confidence: PriceConfidence | null;
 }
 

@@ -257,6 +257,44 @@ def test_lista_de_outra_pessoa_devolve_404(client, marina, outra_pessoa, db_sess
     )
 
 
+def test_a_economia_da_despensa_volta_na_lista(client, marina, db_session):
+    plano_id, produto = plano_confirmado(client, marina, db_session)
+    client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "meio quilo de frango",
+            "product_id": str(produto.id),
+            "quantity": "0.5",
+            "unit": "kg",
+        },
+    )
+
+    corpo = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()
+
+    # Frango é a granel: o que estava em casa sai da conta na proporção.
+    item = corpo["shopping_list"]["items"][0]
+    assert Decimal(item["pantry_savings"]) > 0
+    assert Decimal(corpo["pantry_savings"]) == Decimal(item["pantry_savings"])
+
+
+def test_sem_despensa_a_economia_e_zero_e_nao_nula(client, marina, db_session):
+    plano_id, _ = plano_confirmado(client, marina, db_session)
+
+    corpo = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()
+
+    # Zero é um fato ("não poupou nada"); nulo seria "não sei".
+    assert Decimal(corpo["pantry_savings"]) == Decimal("0.00")
+
+
 # --------------------------------------------------------------------------
 # item comprado dentro do mercado
 # --------------------------------------------------------------------------

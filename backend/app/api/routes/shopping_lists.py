@@ -61,6 +61,7 @@ def create_shopping_list(
         items_priced=result.cost.items_priced,
         items_without_price=result.cost.items_without_price,
         lowest_confidence=result.cost.lowest_confidence,
+        pantry_savings=result.cost.pantry_savings,
     )
 
 

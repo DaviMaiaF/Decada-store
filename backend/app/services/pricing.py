@@ -20,7 +20,7 @@ from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import PriceRecord, Product, ShoppingList
+from app.models import PriceRecord, Product, ShoppingList, ShoppingListItem
 from app.models.enums import BaseUnit, PriceConfidence, PriceOrigin
 from app.services.units import IncompatibleUnitError, to_base_quantity
 
@@ -79,6 +79,9 @@ class ShoppingListCost:
     items_without_price: int
     # O pior selo entre os itens precificados; None se nenhum tem preço.
     lowest_confidence: PriceConfidence | None
+    # Quanto a despensa poupou na lista inteira. Zero quando não havia nada em
+    # casa — ou quando o que havia não chegou a tirar uma embalagem do carrinho.
+    pantry_savings: Decimal = Decimal("0.00")
 
 
 def _now() -> datetime:
@@ -181,6 +184,37 @@ def _quantity_to_charge(quantity_in_base: Decimal, product: Product) -> tuple[De
     return package_in_base * packages_needed, packages_needed
 
 
+def _pantry_savings(
+    item: ShoppingListItem,
+    quantity_in_base: Decimal,
+    unit_price: Decimal,
+    cost: Decimal,
+) -> Decimal:
+    """Quanto a despensa poupou neste item.
+
+    É a diferença entre dois cenários, não uma multiplicação: o que custaria a
+    quantidade prescrita inteira menos o que de fato se compra.
+
+    A diferença importa em produto embalado. Quem precisa de 1 L e tem 200 ml em
+    casa leva a caixa de 1 L do mesmo jeito — `quantity_from_pantry` vezes o
+    preço diria que poupou, e não poupou nada. Só poupa de verdade quando o que
+    havia em casa tira uma embalagem do carrinho.
+
+    `quantity_in_base` vem convertido de quem chama; o que veio da despensa se
+    converte aqui, pela mesma regra. Somar as duas quantidades sem converter
+    daria conta errada para item guardado numa unidade que não é a base.
+    """
+    if item.quantity_from_pantry <= 0:
+        return Decimal("0.00")
+
+    # Não levanta: a conversão de `item.quantity`, na mesma unidade, já passou.
+    da_despensa = to_base_quantity(item.quantity_from_pantry, item.unit, item.product.base_unit)
+    quantidade_cheia, _ = _quantity_to_charge(quantity_in_base + da_despensa, item.product)
+    custo_cheio = (unit_price * quantidade_cheia).quantize(_MONEY, ROUND_HALF_UP)
+
+    return custo_cheio - cost
+
+
 def price_shopping_list(
     session: Session, shopping_list: ShoppingList, *, reference: datetime | None = None
 ) -> ShoppingListCost:
@@ -189,6 +223,7 @@ def price_shopping_list(
     Quem chama decide quando confirmar a transação.
     """
     total = Decimal("0.00")
+    economia = Decimal("0.00")
     priced = 0
     without_price = 0
     confidences: list[PriceConfidence] = []
@@ -210,6 +245,7 @@ def price_shopping_list(
             item.price_confidence = None
             item.price_sample_size = None
             item.estimated_cost = None
+            item.pantry_savings = None
             without_price += 1
             continue
 
@@ -218,6 +254,7 @@ def price_shopping_list(
         except IncompatibleUnitError:
             # Unidade do item não bate com a do produto: não há custo a calcular.
             item.estimated_cost = None
+            item.pantry_savings = None
             without_price += 1
             continue
 
@@ -231,8 +268,10 @@ def price_shopping_list(
         item.price_confidence = aggregate.confidence
         item.price_sample_size = aggregate.sample_size
         item.estimated_cost = cost
+        item.pantry_savings = _pantry_savings(item, quantity_in_base, aggregate.average, cost)
 
         total += cost
+        economia += item.pantry_savings
         priced += 1
         confidences.append(aggregate.confidence)
 
@@ -248,4 +287,5 @@ def price_shopping_list(
         items_priced=priced,
         items_without_price=without_price,
         lowest_confidence=lowest,
+        pantry_savings=economia,
     )

@@ -101,6 +101,14 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     price_sample_size: Mapped[int | None] = mapped_column(Integer)
     estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    # Quanto a despensa poupou neste item: o que custaria a quantidade prescrita
+    # inteira menos o que de fato se compra. Congelado junto com o preço, pela
+    # mesma razão — a lista não pode mudar de valor entre duas consultas.
+    #
+    # Não é `quantity_from_pantry` vezes o preço: produto embalado cobra a
+    # embalagem fechada, então ter meio litro em casa não poupa nada quando a
+    # caixa de um litro vai no carrinho do mesmo jeito.
+    pantry_savings: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
     # Quando a pessoa marcou o item como comprado, dentro do mercado. Guardar o
     # instante em vez de um booleano mantém a informação de *quando* — o

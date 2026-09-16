@@ -327,3 +327,118 @@ def test_o_selo_da_lista_e_o_pior_selo_entre_os_itens(db_session, lista_de_compr
     custo = price_shopping_list(db_session, lista_de_compras)
 
     assert custo.lowest_confidence is PriceConfidence.ESTIMATIVA
+
+
+# --------------------------------------------------------------------------
+# economia da despensa
+# --------------------------------------------------------------------------
+
+@pytest.mark.db
+def test_sem_nada_na_despensa_nao_ha_economia(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    custo = price_shopping_list(db_session, lista_de_compras)
+
+    assert custo.pantry_savings == Decimal("0.00")
+    assert all(item.pantry_savings == Decimal("0.00") for item in lista_de_compras.items)
+
+
+@pytest.mark.db
+def test_produto_a_granel_poupa_na_proporcao(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    # Frango é vendido a granel: meio quilo em casa é meio quilo a menos na conta.
+    frango = lista_de_compras.items[1]
+    frango.quantity = Decimal("0.7")
+    frango.quantity_from_pantry = Decimal("0.5")
+    db_session.flush()
+
+    price_shopping_list(db_session, lista_de_compras)
+
+    esperado = (frango.unit_price_snapshot * Decimal("0.5")).quantize(Decimal("0.01"))
+    assert frango.pantry_savings == esperado
+
+
+@pytest.mark.db
+def test_embalado_que_nao_tira_embalagem_do_carrinho_nao_poupa(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    # Queijo vem em pacote de 500 g. Precisa de 300 g e tem 100 g em casa: ainda
+    # leva um pacote. Dizer que poupou seria inventar economia.
+    queijo = lista_de_compras.items[0]
+    queijo.quantity = Decimal("200")
+    queijo.quantity_from_pantry = Decimal("100")
+    db_session.flush()
+
+    price_shopping_list(db_session, lista_de_compras)
+
+    assert queijo.packages_needed == 1
+    assert queijo.pantry_savings == Decimal("0.00")
+
+
+@pytest.mark.db
+def test_embalado_poupa_quando_tira_uma_embalagem(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    # Precisa de 800 g e tem 300 g: sem a despensa seriam dois pacotes, com ela
+    # é um só. A economia é a embalagem inteira que deixou de ir no carrinho.
+    queijo = lista_de_compras.items[0]
+    queijo.quantity = Decimal("500")
+    queijo.quantity_from_pantry = Decimal("300")
+    db_session.flush()
+
+    price_shopping_list(db_session, lista_de_compras)
+
+    meio_quilo = (queijo.unit_price_snapshot * Decimal("0.5")).quantize(Decimal("0.01"))
+    assert queijo.packages_needed == 1
+    assert queijo.pantry_savings == meio_quilo
+
+
+@pytest.mark.db
+def test_item_coberto_por_inteiro_poupa_o_custo_cheio(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    frango = lista_de_compras.items[1]
+    frango.quantity = Decimal("0")
+    frango.quantity_from_pantry = Decimal("1.2")
+    db_session.flush()
+
+    price_shopping_list(db_session, lista_de_compras)
+
+    # O que não se compra custa zero; o que se poupou é o preço da prescrição inteira.
+    assert frango.estimated_cost == Decimal("0.00")
+    assert frango.pantry_savings == (
+        frango.unit_price_snapshot * Decimal("1.2")
+    ).quantize(Decimal("0.01"))
+
+
+@pytest.mark.db
+def test_item_sem_preco_nao_tem_economia_calculada(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    lista_de_compras.items[0].quantity_from_pantry = Decimal("100")
+    lista_de_compras.city = "Campinas"
+    lista_de_compras.state_code = "SP"
+    db_session.flush()
+
+    custo = price_shopping_list(db_session, lista_de_compras)
+
+    # Sem preço não há economia a afirmar: nulo, não zero.
+    assert all(item.pantry_savings is None for item in lista_de_compras.items)
+    assert custo.pantry_savings == Decimal("0.00")
+
+
+@pytest.mark.db
+def test_a_economia_da_lista_soma_a_dos_itens(db_session, lista_de_compras):
+    from app.services.pricing import price_shopping_list
+
+    lista_de_compras.items[0].quantity = Decimal("500")
+    lista_de_compras.items[0].quantity_from_pantry = Decimal("300")
+    lista_de_compras.items[1].quantity = Decimal("0.7")
+    lista_de_compras.items[1].quantity_from_pantry = Decimal("0.5")
+    db_session.flush()
+
+    custo = price_shopping_list(db_session, lista_de_compras)
+
+    assert custo.pantry_savings == sum(item.pantry_savings for item in lista_de_compras.items)
+    assert custo.pantry_savings > Decimal("0.00")

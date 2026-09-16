@@ -21,7 +21,7 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
-| Aba Economia | Sem protótipo; hoje mostra a conta e o botão de sair |
+| Quantidade no item da despensa | A tela cadastra sem quantidade, e sem ela a compra não é abatida nem há economia a mostrar |
 | Vincular item já salvo ao catálogo | Só dá para escolher o produto na hora de adicionar; não há como vincular depois |
 | Leitura de NFC-e por QR Code | Fora do MVP |
 | Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |

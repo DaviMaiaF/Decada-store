@@ -46,6 +46,9 @@ class ShoppingListItemOut(ApiModel):
     # não o agregado. Mesmo critério do agrupamento por corredor.
     purchased: bool = False
     purchased_at: datetime | None = None
+    # O que a despensa poupou neste item. Nulo quando não há preço; zero quando
+    # o que havia em casa não chegou a tirar uma embalagem do carrinho.
+    pantry_savings: Decimal | None = None
 
 
 class PurchaseIn(BaseModel):
@@ -74,5 +77,7 @@ class GeneratedListOut(ApiModel):
     items_skipped: int
     items_priced: int
     items_without_price: int
+    # Quanto a despensa poupou na lista inteira.
+    pantry_savings: Decimal
     # O pior selo entre os itens precificados.
     lowest_confidence: PriceConfidence | None = None
