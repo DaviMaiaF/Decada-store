@@ -10,12 +10,17 @@
  * onde ela pode se perder.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
-import { ApiError, generateShoppingList, readShoppingList } from '../services/api';
+import {
+  ApiError,
+  generateShoppingList,
+  readShoppingList,
+  setItemPurchased,
+} from '../services/api';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ShoppingList, ShoppingListItem } from '../types/api';
@@ -96,7 +101,42 @@ export default function MarketScreen({
 }
 
 function ListaCarregada({ lista }: { lista: ShoppingList }) {
-  const [comprados, setComprados] = useState<Set<string>>(new Set());
+  const cliente = useQueryClient();
+  const chave = ['shopping-list', lista.id];
+
+  /**
+   * Marcar item é otimista de propósito.
+   *
+   * Quem usa isto está de pé no corredor do mercado, com a rede do celular
+   * oscilando. Esperar a resposta para riscar a linha faria o toque parecer
+   * perdido. Se a chamada falhar, a lista volta ao que era e a mensagem de
+   * erro aparece.
+   */
+  const marcacao = useMutation({
+    mutationFn: ({ itemId, comprado }: { itemId: string; comprado: boolean }) =>
+      setItemPurchased(lista.id, itemId, comprado),
+    onMutate: async ({ itemId, comprado }) => {
+      await cliente.cancelQueries({ queryKey: chave });
+      const anterior = cliente.getQueryData<ShoppingList>(chave);
+
+      cliente.setQueryData<ShoppingList>(chave, (atual) =>
+        atual === undefined
+          ? atual
+          : {
+              ...atual,
+              items: atual.items.map((item) =>
+                item.id === itemId ? { ...item, purchased: comprado } : item,
+              ),
+            },
+      );
+
+      return { anterior };
+    },
+    onError: (_erro, _variaveis, contexto) => {
+      if (contexto?.anterior) cliente.setQueryData(chave, contexto.anterior);
+    },
+    onSettled: () => cliente.invalidateQueries({ queryKey: chave }),
+  });
 
   const porCorredor = useMemo(() => {
     const grupos = new Map<string, ShoppingListItem[]>();
@@ -109,16 +149,10 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
 
   const aComprar = lista.items.filter((item) => !item.dispensed_by_pantry);
   const dispensados = lista.items.filter((item) => item.dispensed_by_pantry);
-  const progresso = aComprar.length === 0 ? 0 : (comprados.size / aComprar.length) * 100;
-
-  function alternar(id: string) {
-    setComprados((atual) => {
-      const proximo = new Set(atual);
-      if (proximo.has(id)) proximo.delete(id);
-      else proximo.add(id);
-      return proximo;
-    });
-  }
+  // Só conta entre o que há para comprar: item que a despensa dispensou aceita
+  // marcação no servidor, mas não faz parte do trajeto pelo mercado.
+  const comprados = aComprar.filter((item) => item.purchased).length;
+  const progresso = aComprar.length === 0 ? 0 : (comprados / aComprar.length) * 100;
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
@@ -133,10 +167,14 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
         <View style={styles.progresso}>
           <ProgressBar percent={progresso} />
           <Text style={styles.progressoTexto}>
-            {comprados.size} de {aComprar.length} itens comprados
+            {comprados} de {aComprar.length} itens comprados
           </Text>
         </View>
       </Card>
+
+      {marcacao.isError ? (
+        <ErrorNotice message="não foi possível salvar o item marcado" />
+      ) : null}
 
       {dispensados.length > 0 ? (
         <Card style={styles.sincronizacao}>
@@ -154,8 +192,9 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
             <ItemDaLista
               key={item.id}
               item={item}
-              comprado={comprados.has(item.id)}
-              onToggle={() => alternar(item.id)}
+              onToggle={() =>
+                marcacao.mutate({ itemId: item.id, comprado: !item.purchased })
+              }
             />
           ))}
         </View>
@@ -164,16 +203,9 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
   );
 }
 
-function ItemDaLista({
-  item,
-  comprado,
-  onToggle,
-}: {
-  item: ShoppingListItem;
-  comprado: boolean;
-  onToggle: () => void;
-}) {
+function ItemDaLista({ item, onToggle }: { item: ShoppingListItem; onToggle: () => void }) {
   const dispensado = item.dispensed_by_pantry;
+  const comprado = item.purchased;
 
   return (
     <Card style={[styles.item, comprado && styles.itemComprado]}>

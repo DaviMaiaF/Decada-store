@@ -84,6 +84,10 @@ export interface ShoppingListItem {
   price_origin: PriceOrigin | null;
   price_confidence: PriceConfidence | null;
   price_sample_size: number | null;
+  /** Se a pessoa já pegou o item na prateleira. */
+  purchased: boolean;
+  /** Quando marcou. Nulo enquanto não comprou. */
+  purchased_at: string | null;
 }
 
 export interface ShoppingList {

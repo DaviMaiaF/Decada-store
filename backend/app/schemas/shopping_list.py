@@ -42,6 +42,17 @@ class ShoppingListItemOut(ApiModel):
     price_confidence: PriceConfidence | None = None
     price_sample_size: int | None = None
 
+    # Quem exibe conta quantos faltam: o servidor devolve o fato de cada item,
+    # não o agregado. Mesmo critério do agrupamento por corredor.
+    purchased: bool = False
+    purchased_at: datetime | None = None
+
+
+class PurchaseIn(BaseModel):
+    """Marcar ou desmarcar um item dentro do mercado."""
+
+    purchased: bool
+
 
 class ShoppingListOut(ApiModel):
     id: uuid.UUID

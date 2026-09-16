@@ -102,6 +102,11 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     price_sample_size: Mapped[int | None] = mapped_column(Integer)
     estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
+    # Quando a pessoa marcou o item como comprado, dentro do mercado. Guardar o
+    # instante em vez de um booleano mantém a informação de *quando* — o
+    # booleano se deriva dele, como em `dispensed_by_pantry`.
+    purchased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
     plan_item: Mapped["PlanItem"] = relationship()
     product: Mapped["Product"] = relationship()
@@ -114,3 +119,8 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         usuário uma decisão que o aplicativo tomou por ele.
         """
         return self.quantity == 0 and self.quantity_from_pantry > 0
+
+    @property
+    def purchased(self) -> bool:
+        """Se a pessoa já pegou este item na prateleira."""
+        return self.purchased_at is not None

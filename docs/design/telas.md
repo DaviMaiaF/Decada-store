@@ -17,8 +17,9 @@ Legenda:
 > nenhuma das quatro telas mostra como a pessoa entra no aplicativo. Ela foi montada
 > com os mesmos tokens do sistema de design.
 >
-> O app em `mobile/` implementa a jornada principal: login, upload, confirmação e
-> lista de compras. Despensa e Receitas têm backend pronto e ainda não têm tela.
+> O app em `mobile/` implementa a jornada principal: login, upload, confirmação,
+> lista de compras e despensa — esta com as receitas ordenadas por
+> disponibilidade dentro dela. Só a aba Economia continua sem tela.
 
 ## O que já está pronto no backend
 
@@ -100,13 +101,24 @@ de item.
 | Agrupamento por corredor | ✅ | `Product.category` já existe e o catálogo já usa `hortifruti`, `proteinas`, `laticinios`, `mercearia` — falta só o rótulo de exibição |
 | "Est. R$ 5,50" por item | ✅ | `ShoppingListItem.estimated_cost` |
 | "R$ 174,20 / 7 dias" | ✅ | `ShoppingList.estimated_total` |
-| Marcar "já comprei" | 🔨 | Campo novo em `ShoppingListItem` (ex.: `purchased_at`) |
-| Progresso "14 de 22 (63%)" | 🔨 | Contagem sobre o campo acima |
+| Marcar "já comprei" | ✅ | `purchased_at` em `ShoppingListItem`, gravado por `PATCH /shopping-lists/{id}/items/{item_id}` |
+| Progresso "14 de 22 (63%)" | ✅ | A tela conta sobre os itens; o servidor devolve o fato de cada um, não o agregado |
 | "8 itens dispensados da compra" | ✅ | Item dispensado fica na lista com quantidade zero (`dispensed_by_pantry`) |
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | 🔨 | Exige `plan_item_id` nulo em `ShoppingListItem`; a rota ainda não existe |
 | Exportar para WhatsApp | ⛔ | |
+
+**O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
+em que a pessoa marcou, e não um booleano: sair da tela e voltar não perde o
+progresso da compra, e fica registrado *quando* cada item entrou no carrinho. A
+marcação é otimista na interface — quem está no corredor do mercado não pode ver
+o toque esperar a rede —, mas quem manda é a resposta do servidor: se ela falhar,
+o item volta a aparecer como não comprado.
+
+Item que a despensa dispensou também aceita marcação. O servidor guarda o fato e
+a tela é que decide não oferecer o botão; a contagem do progresso conta só entre
+os itens que havia para comprar.
 
 O mapa de rótulos, para não inventar categoria nova no banco:
 

@@ -6,7 +6,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
@@ -16,9 +16,11 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readShoppingList: jest.fn(),
   generateShoppingList: jest.fn(),
+  setItemPurchased: jest.fn(),
 }));
 
 const lerLista = api.readShoppingList as jest.Mock;
+const marcarItem = api.setItemPurchased as jest.Mock;
 
 const HA_TRES_DIAS = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -50,6 +52,8 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
     price_origin: 'seed',
     price_confidence: 'atual',
     price_sample_size: 6,
+    purchased: false,
+    purchased_at: null,
     ...over,
   };
 }
@@ -80,7 +84,11 @@ async function montar(dados: ShoppingList) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  cliente = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  // `gcTime` das mutações é 5 minutos por padrão, e cada mutação que roda deixa
+  // esse temporizador de pé — o suficiente para o Jest não encerrar sozinho.
+  cliente = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
 });
 
 // Sem isto o cache do React Query deixa temporizadores abertos e o Jest não
@@ -182,4 +190,68 @@ it('marca produto fictício do seed', async () => {
   );
 
   expect(await screen.findByText('dado fictício de desenvolvimento')).toBeTruthy();
+});
+
+
+// --------------------------------------------------------------------------
+// item comprado
+// --------------------------------------------------------------------------
+
+it('conta os comprados pelo que veio do servidor, não pelo toque', async () => {
+  await montar(
+    lista([
+      item({ id: 'a', purchased: true, purchased_at: HA_TRES_DIAS }),
+      item({ id: 'b' }),
+    ]),
+  );
+
+  // Marcado numa sessão anterior: sair da tela e voltar não perde o progresso.
+  expect(await screen.findByText('1 de 2 itens comprados')).toBeTruthy();
+});
+
+it('marcar o item avisa o servidor', async () => {
+  marcarItem.mockResolvedValue(item({ id: 'a', purchased: true }));
+  await montar(lista([item({ id: 'a' })]));
+
+  await fireEvent.press(await screen.findByText('Já comprei'));
+
+  await waitFor(() => expect(marcarItem).toHaveBeenCalledWith('lista-1', 'a', true));
+});
+
+it('desmarcar o item também avisa o servidor', async () => {
+  marcarItem.mockResolvedValue(item({ id: 'a', purchased: false }));
+  await montar(lista([item({ id: 'a', purchased: true, purchased_at: HA_TRES_DIAS })]));
+
+  await fireEvent.press(await screen.findByText('Desmarcar'));
+
+  await waitFor(() => expect(marcarItem).toHaveBeenCalledWith('lista-1', 'a', false));
+});
+
+it('risca o item na hora, sem esperar a resposta do servidor', async () => {
+  // Quem usa isto está no corredor do mercado: o toque não pode parecer perdido.
+  let responder: (valor: ShoppingListItem) => void = () => {};
+  marcarItem.mockReturnValue(new Promise<ShoppingListItem>((ok) => (responder = ok)));
+  await montar(lista([item({ id: 'a' })]));
+
+  await fireEvent.press(await screen.findByText('Já comprei'));
+
+  // O servidor ainda não respondeu e o item já conta como comprado.
+  expect(await screen.findByText('1 de 1 itens comprados')).toBeTruthy();
+
+  // Encerrar a promessa antes do fim do teste: mutação pendente no teardown
+  // deixa o Jest com um handle aberto e a atualização cai fora do `act`.
+  responder(item({ id: 'a', purchased: true }));
+  await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+});
+
+it('desfaz a marcação quando o servidor recusa', async () => {
+  marcarItem.mockRejectedValue(new Error('sem rede'));
+  await montar(lista([item({ id: 'a' })]));
+
+  await fireEvent.press(await screen.findByText('Já comprei'));
+
+  // Contar como comprado algo que não foi salvo faria a pessoa sair do
+  // mercado sem o item.
+  expect(await screen.findByText('não foi possível salvar o item marcado')).toBeTruthy();
+  expect(screen.getByText('0 de 1 itens comprados')).toBeTruthy();
 });

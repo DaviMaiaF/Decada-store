@@ -139,6 +139,7 @@ trocá-la invalida todos os tokens já emitidos.
 | `POST` | `/meal-plans/{id}/items/{item_id}/confirmation` | Confirma o produto escolhido |
 | `POST` | `/meal-plans/{id}/shopping-lists` | Gera a lista de compras para uma região |
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
+| `PATCH` | `/shopping-lists/{id}/items/{item_id}` | Marca ou desmarca o item como comprado |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
 | `DELETE` | `/pantry/{id}` | Remove item da despensa |
 | `GET` | `/pantry/{id}/candidates` | Produtos parecidos com um item já salvo |

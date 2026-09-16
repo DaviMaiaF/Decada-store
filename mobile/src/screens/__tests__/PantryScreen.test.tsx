@@ -88,7 +88,11 @@ async function montar() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  cliente = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  // `gcTime` das mutações é 5 minutos por padrão, e cada mutação que roda deixa
+  // esse temporizador de pé — o suficiente para o Jest não encerrar sozinho.
+  cliente = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
   lerDespensa.mockResolvedValue([]);
   lerReceitas.mockResolvedValue([]);
   buscarProdutos.mockResolvedValue([

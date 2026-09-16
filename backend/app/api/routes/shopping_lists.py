@@ -1,6 +1,7 @@
 """Rotas da lista de compras: geração a partir do plano e consulta."""
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -8,7 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.models import MealPlan, ShoppingList, ShoppingListItem
-from app.schemas.shopping_list import GeneratedListOut, GenerateListIn, ShoppingListOut
+from app.schemas.shopping_list import (
+    GeneratedListOut,
+    GenerateListIn,
+    PurchaseIn,
+    ShoppingListItemOut,
+    ShoppingListOut,
+)
 from app.services.shopping import generate_shopping_list
 
 router = APIRouter(tags=["listas de compras"])
@@ -77,3 +84,53 @@ def read_shopping_list(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lista de compras não encontrada")
 
     return shopping_list
+
+
+@router.patch(
+    "/shopping-lists/{list_id}/items/{item_id}",
+    response_model=ShoppingListItemOut,
+)
+def set_item_purchased(
+    session: DbSession,
+    user: CurrentUser,
+    list_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: PurchaseIn,
+) -> ShoppingListItem:
+    """Marca ou desmarca um item como comprado.
+
+    Guarda o instante, não um booleano: a tela rabisca o item a partir dele e
+    fica registrado *quando* a pessoa pegou aquilo na prateleira.
+
+    Marcar duas vezes não move a data. A segunda chamada com o mesmo valor é
+    inofensiva de propósito — dentro do mercado o toque repetido acontece, e
+    seria ruim que ele reescrevesse o horário.
+
+    Item que a despensa dispensou também aceita marcação: o servidor guarda o
+    fato, e oferecer ou não o botão é decisão da tela.
+    """
+    item = session.scalars(
+        select(ShoppingListItem)
+        .join(ShoppingList)
+        .join(MealPlan)
+        .where(
+            ShoppingListItem.id == item_id,
+            ShoppingListItem.shopping_list_id == list_id,
+            MealPlan.user_id == user.id,
+        )
+        .options(selectinload(ShoppingListItem.product))
+    ).first()
+
+    # Item de outra pessoa e item que não é desta lista respondem igual: 404,
+    # nunca 403. Ver decisão 10 e docs/lgpd.md.
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "item não encontrado nesta lista")
+
+    if payload.purchased and item.purchased_at is None:
+        item.purchased_at = datetime.now(timezone.utc)
+    elif not payload.purchased:
+        item.purchased_at = None
+
+    session.commit()
+    session.refresh(item)
+    return item

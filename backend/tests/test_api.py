@@ -258,6 +258,141 @@ def test_lista_de_outra_pessoa_devolve_404(client, marina, outra_pessoa, db_sess
 
 
 # --------------------------------------------------------------------------
+# item comprado dentro do mercado
+# --------------------------------------------------------------------------
+
+def _lista_gerada(client, user, db_session) -> tuple[str, str]:
+    """Gera uma lista de um item só e devolve (id da lista, id do item)."""
+    plano_id, _ = plano_confirmado(client, user, db_session)
+    lista = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(user),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()["shopping_list"]
+    return lista["id"], lista["items"][0]["id"]
+
+
+def test_lista_recem_gerada_nasce_toda_desmarcada(client, marina, db_session):
+    _, item_id = _lista_gerada(client, marina, db_session)
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    itens = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()["items"]
+
+    assert [item["purchased"] for item in itens] == [False]
+    assert itens[0]["purchased_at"] is None
+    assert item_id  # a primeira lista continua existindo: o histórico é proposital
+
+
+def test_marca_e_desmarca_o_item_comprado(client, marina, db_session):
+    lista_id, item_id = _lista_gerada(client, marina, db_session)
+
+    marcado = client.patch(
+        f"/shopping-lists/{lista_id}/items/{item_id}",
+        headers=_headers(marina),
+        json={"purchased": True},
+    )
+
+    assert marcado.status_code == 200
+    assert marcado.json()["purchased"] is True
+    assert marcado.json()["purchased_at"] is not None
+
+    desmarcado = client.patch(
+        f"/shopping-lists/{lista_id}/items/{item_id}",
+        headers=_headers(marina),
+        json={"purchased": False},
+    )
+
+    assert desmarcado.json()["purchased"] is False
+    assert desmarcado.json()["purchased_at"] is None
+
+
+def test_o_estado_do_item_comprado_sobrevive_a_releitura(client, marina, db_session):
+    lista_id, item_id = _lista_gerada(client, marina, db_session)
+
+    client.patch(
+        f"/shopping-lists/{lista_id}/items/{item_id}",
+        headers=_headers(marina),
+        json={"purchased": True},
+    )
+
+    # O ponto do recurso: sair da tela e voltar não perde o que foi marcado.
+    relido = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert relido["items"][0]["purchased"] is True
+
+
+def test_marcar_duas_vezes_nao_move_a_data(client, marina, db_session):
+    lista_id, item_id = _lista_gerada(client, marina, db_session)
+    caminho = f"/shopping-lists/{lista_id}/items/{item_id}"
+
+    primeira = client.patch(caminho, headers=_headers(marina), json={"purchased": True}).json()
+    segunda = client.patch(caminho, headers=_headers(marina), json={"purchased": True}).json()
+
+    # Dentro do mercado o toque repetido acontece; ele não pode reescrever o
+    # horário em que a pessoa realmente pegou o item.
+    assert segunda["purchased_at"] == primeira["purchased_at"]
+
+
+def test_item_dispensado_pela_despensa_aceita_marcacao(client, marina, db_session):
+    plano_id, produto = plano_confirmado(client, marina, db_session)
+    client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "frango de sobra",
+            "product_id": str(produto.id),
+            "quantity": "2",
+            "unit": "kg",
+        },
+    )
+    lista = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()["shopping_list"]
+    item = lista["items"][0]
+    assert item["dispensed_by_pantry"] is True
+
+    # O servidor guarda o fato; oferecer ou não o botão é decisão da tela.
+    resposta = client.patch(
+        f"/shopping-lists/{lista['id']}/items/{item['id']}",
+        headers=_headers(marina),
+        json={"purchased": True},
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json()["purchased"] is True
+
+
+def test_item_de_lista_de_outra_pessoa_nao_pode_ser_marcado(
+    client, marina, outra_pessoa, db_session
+):
+    lista_id, item_id = _lista_gerada(client, marina, db_session)
+
+    resposta = client.patch(
+        f"/shopping-lists/{lista_id}/items/{item_id}",
+        headers=_headers(outra_pessoa),
+        json={"purchased": True},
+    )
+
+    # 404 e não 403: responder 403 confirmaria que a lista existe.
+    assert resposta.status_code == 404
+
+
+def test_item_que_nao_e_desta_lista_devolve_404(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    outra_lista_id, item_de_outra = _lista_gerada(client, marina, db_session)
+
+    resposta = client.patch(
+        f"/shopping-lists/{lista_id}/items/{item_de_outra}",
+        headers=_headers(marina),
+        json={"purchased": True},
+    )
+
+    assert resposta.status_code == 404
+    assert outra_lista_id != lista_id
+
+
+# --------------------------------------------------------------------------
 # despensa
 # --------------------------------------------------------------------------
 

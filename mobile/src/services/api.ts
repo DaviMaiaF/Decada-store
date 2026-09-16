@@ -20,6 +20,7 @@ import type {
   ProductSuggestion,
   RecipeAvailability,
   ShoppingList,
+  ShoppingListItem,
   Token,
 } from '../types/api';
 
@@ -189,6 +190,13 @@ export const generateShoppingList = (planId: string, stateCode: string, city: st
 
 export const readShoppingList = (listId: string) =>
   request<ShoppingList>(`/shopping-lists/${listId}`);
+
+/** Marca ou desmarca um item, dentro do mercado. */
+export const setItemPurchased = (listId: string, itemId: string, purchased: boolean) =>
+  request<ShoppingListItem>(`/shopping-lists/${listId}/items/${itemId}`, {
+    method: 'PATCH',
+    body: { purchased },
+  });
 
 // --- despensa ---
 
