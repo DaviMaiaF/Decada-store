@@ -4,12 +4,14 @@
  * As duas coisas moram na mesma tela porque uma existe por causa da outra: a
  * lista do que está em casa e o que dá para cozinhar com isso.
  *
- * Ao adicionar, a pessoa escolhe qual produto do catálogo é aquilo. Sem esse
- * vínculo o item não abate da lista de compras nem conta para as receitas, e um
+ * Ao adicionar, a pessoa escolhe qual produto do catálogo é aquilo e diz quanto
+ * tem. Sem o vínculo o item não abate da lista de compras nem conta para as
+ * receitas; sem a quantidade ele conta para as receitas mas não abate nada. Um
  * item que não faz nada é pior que dois toques a mais no cadastro.
  *
- * Guardar só como texto continua possível, para o que não existe no catálogo —
- * e nesse caso a tela avisa que aquele item não desconta nada.
+ * A quantidade continua opcional: "tenho azeite" é informação válida sem número,
+ * e guardar só como texto continua possível para o que não existe no catálogo.
+ * Nos dois casos a tela avisa o que aquele item deixa de fazer.
  */
 
 import { useState } from 'react';
@@ -34,14 +36,27 @@ import {
   searchProducts,
 } from '../services/api';
 import { formatQuantity } from '../services/format';
+import { parseDecimal, suggestedAmount, unitOptions } from '../services/units';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import type { PantryItem, ProductSuggestion, RecipeAvailability } from '../types/api';
+import type {
+  MeasurementUnit,
+  PantryItem,
+  Product,
+  ProductSuggestion,
+  RecipeAvailability,
+} from '../types/api';
 
 export default function PantryScreen() {
   const cliente = useQueryClient();
   const [texto, setTexto] = useState('');
   // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
   const [escolhendo, setEscolhendo] = useState<string | null>(null);
+  // Produto já escolhido, aguardando a quantidade. Segundo e último passo.
+  const [medindo, setMedindo] = useState<{ descricao: string; produto: Product } | null>(
+    null,
+  );
+  const [quantidade, setQuantidade] = useState('');
+  const [unidade, setUnidade] = useState<MeasurementUnit>('unidade');
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
 
@@ -63,11 +78,25 @@ export default function PantryScreen() {
   });
 
   const adicionar = useMutation({
-    mutationFn: ({ descricao, produtoId }: { descricao: string; produtoId: string | null }) =>
-      addPantryItem({ raw_description: descricao, product_id: produtoId }),
+    mutationFn: ({
+      descricao,
+      produtoId,
+      medida,
+    }: {
+      descricao: string;
+      produtoId: string | null;
+      medida?: { quantidade: string; unidade: MeasurementUnit } | null;
+    }) =>
+      addPantryItem({
+        raw_description: descricao,
+        product_id: produtoId,
+        // O backend recusa o par pela metade, então ou vão os dois ou nenhum.
+        ...(medida ? { quantity: medida.quantidade, unit: medida.unidade } : {}),
+      }),
     onSuccess: () => {
       setTexto('');
       setEscolhendo(null);
+      setMedindo(null);
       recarregar();
     },
   });
@@ -78,6 +107,25 @@ export default function PantryScreen() {
     setEscolhendo(descricao);
   }
 
+  /** Produto escolhido: falta dizer quanto se tem dele. */
+  function comecarMedida(descricao: string, produto: Product) {
+    const sugestao = suggestedAmount(produto);
+    setQuantidade(sugestao.quantity);
+    setUnidade(sugestao.unit);
+    setMedindo({ descricao, produto });
+    setEscolhendo(null);
+  }
+
+  function salvarMedido(comQuantidade: boolean) {
+    if (medindo === null) return;
+    const numero = comQuantidade ? parseDecimal(quantidade) : null;
+    adicionar.mutate({
+      descricao: medindo.descricao,
+      produtoId: medindo.produto.id,
+      medida: numero === null ? null : { quantidade: numero, unidade },
+    });
+  }
+
   const remover = useMutation({
     mutationFn: (itemId: string) => removePantryItem(itemId),
     onSuccess: recarregar,
@@ -85,6 +133,11 @@ export default function PantryScreen() {
 
   const itens = despensa.data ?? [];
   const semVinculo = itens.filter((item) => item.product === null).length;
+  // Item vinculado mas sem quantidade conta para as receitas e não abate nada
+  // da compra. Sem este aviso a pessoa acha que o vínculo bastava.
+  const semQuantidade = itens.filter(
+    (item) => item.product !== null && (item.quantity === null || item.unit === null),
+  ).length;
 
   return (
     <FlatList
@@ -157,12 +210,7 @@ export default function PantryScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Usar ${sugestao.product.name}`}
                     disabled={adicionar.isPending}
-                    onPress={() =>
-                      adicionar.mutate({
-                        descricao: escolhendo,
-                        produtoId: sugestao.product.id,
-                      })
-                    }
+                    onPress={() => comecarMedida(escolhendo, sugestao.product)}
                     style={styles.candidato}
                   >
                     <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
@@ -189,6 +237,66 @@ export default function PantryScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => setEscolhendo(null)}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {medindo !== null ? (
+              <View style={styles.escolha}>
+                <Text style={styles.escolhaTitulo}>
+                  Quanto de {medindo.produto.name} você tem?
+                </Text>
+                <Body muted>
+                  A quantidade é o que faz este item descontar da sua compra. Sem ela o
+                  item fica guardado e conta só para as receitas.
+                </Body>
+
+                <View style={styles.medidaLinha}>
+                  <TextInput
+                    accessibilityLabel="Quantidade"
+                    placeholder="0"
+                    placeholderTextColor={colors.outline}
+                    style={[styles.campo, styles.campoQuantidade]}
+                    value={quantidade}
+                    onChangeText={setQuantidade}
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                  />
+                  <SeletorDeUnidade
+                    produto={medindo.produto}
+                    escolhida={unidade}
+                    onEscolher={setUnidade}
+                  />
+                </View>
+
+                <View style={styles.escolhaAcoes}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Salvar na despensa"
+                    disabled={parseDecimal(quantidade) === null || adicionar.isPending}
+                    onPress={() => salvarMedido(true)}
+                    style={[
+                      styles.acaoSecundaria,
+                      parseDecimal(quantidade) === null && styles.botaoInativo,
+                    ]}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Salvar</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={adicionar.isPending}
+                    onPress={() => salvarMedido(false)}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Não sei a quantidade</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setMedindo(null)}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
@@ -234,6 +342,14 @@ export default function PantryScreen() {
                   : `${semVinculo} itens ainda não foram ligados a produtos do mercado, então não descontam da sua lista de compras.`}
               </Body>
             ) : null}
+
+            {semQuantidade > 0 ? (
+              <Body muted>
+                {semQuantidade === 1
+                  ? '1 item está ligado a um produto mas não tem quantidade, então também não desconta da sua lista de compras.'
+                  : `${semQuantidade} itens estão ligados a produtos mas não têm quantidade, então também não descontam da sua lista de compras.`}
+              </Body>
+            ) : null}
           </Card>
 
           <View style={styles.linhaTitulo}>
@@ -247,6 +363,50 @@ export default function PantryScreen() {
       renderItem={({ item }) => <CartaoDeReceita disponibilidade={item} />}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
     />
+  );
+}
+
+/**
+ * Unidades compatíveis com a grandeza em que o produto é vendido.
+ *
+ * Produto vendido por unidade não tem escolha a fazer — mostra o rótulo e
+ * pronto, em vez de um seletor de uma opção só.
+ */
+function SeletorDeUnidade({
+  produto,
+  escolhida,
+  onEscolher,
+}: {
+  produto: Product;
+  escolhida: MeasurementUnit;
+  onEscolher: (unidade: MeasurementUnit) => void;
+}) {
+  const opcoes = unitOptions(produto.base_unit);
+
+  if (opcoes.length === 1) {
+    return <Text style={styles.unidadeFixa}>unidades</Text>;
+  }
+
+  return (
+    <View style={styles.unidades}>
+      {opcoes.map((opcao) => {
+        const ativa = opcao === escolhida;
+        return (
+          <Pressable
+            key={opcao}
+            accessibilityRole="button"
+            accessibilityLabel={`Unidade ${opcao}`}
+            accessibilityState={{ selected: ativa }}
+            onPress={() => onEscolher(opcao)}
+            style={[styles.unidadeBotao, ativa && styles.unidadeBotaoAtivo]}
+          >
+            <Text style={[styles.unidadeTexto, ativa && styles.unidadeTextoAtivo]}>
+              {opcao}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -378,7 +538,22 @@ const styles = StyleSheet.create({
   },
   candidatoNome: { ...typography.labelLg, color: colors.onSurface },
   candidatoDetalhe: { ...typography.labelSm, color: colors.onSurfaceVariant },
-  escolhaAcoes: { flexDirection: 'row', gap: spacing.sm },
+  escolhaAcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+
+  medidaLinha: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center' },
+  campoQuantidade: { flex: 0, minWidth: 96 },
+  unidades: { flexDirection: 'row', gap: spacing.xs },
+  unidadeBotao: {
+    minHeight: MIN_TOUCH_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  unidadeBotaoAtivo: { backgroundColor: colors.primaryContainer },
+  unidadeTexto: { ...typography.labelLg, color: colors.onSurfaceVariant },
+  unidadeTextoAtivo: { color: colors.onPrimary },
+  unidadeFixa: { ...typography.labelLg, color: colors.onSurfaceVariant },
   acaoSecundaria: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
   acaoSecundariaTexto: { ...typography.labelLg, color: colors.primary },
 

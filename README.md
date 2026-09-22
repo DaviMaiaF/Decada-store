@@ -8,8 +8,8 @@ os ingredientes da lista.
 Projeto acadêmico — Engenharia de Software, UCB.
 
 > **Status:** beta. Backend completo e app mobile com login, envio da prescrição em
-> PDF, confirmação dos produtos, lista de compras, despensa e sugestão de receitas. A
-> aba Economia ainda não tem interface. NFC-e continua fora do MVP.
+> PDF, confirmação dos produtos, lista de compras, despensa com quantidade, sugestão
+> de receitas e a aba Economia. NFC-e continua fora do MVP.
 
 ## Design
 
@@ -21,8 +21,8 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
-| Quantidade no item da despensa | A tela cadastra sem quantidade, e sem ela a compra não é abatida nem há economia a mostrar |
-| Vincular item já salvo ao catálogo | Só dá para escolher o produto na hora de adicionar; não há como vincular depois |
+| Vincular item já salvo ao catálogo | Só dá para escolher o produto e a quantidade na hora de adicionar; não há como vincular nem medir depois |
+| Região escolhida pelo usuário | `MarketScreen` gera a lista com `'DF', 'Brasília'` fixo no código, e a média de preço é sempre regional |
 | Leitura de NFC-e por QR Code | Fora do MVP |
 | Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
 
