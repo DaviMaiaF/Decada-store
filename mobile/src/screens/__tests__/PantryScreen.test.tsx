@@ -16,6 +16,7 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readPantry: jest.fn(),
   addPantryItem: jest.fn(),
+  updatePantryItem: jest.fn(),
   removePantryItem: jest.fn(),
   readRecipeSuggestions: jest.fn(),
   searchProducts: jest.fn(),
@@ -23,6 +24,7 @@ jest.mock('../../services/api', () => ({
 
 const lerDespensa = api.readPantry as jest.Mock;
 const adicionar = api.addPantryItem as jest.Mock;
+const atualizar = api.updatePantryItem as jest.Mock;
 const remover = api.removePantryItem as jest.Mock;
 const lerReceitas = api.readRecipeSuggestions as jest.Mock;
 const buscarProdutos = api.searchProducts as jest.Mock;
@@ -88,8 +90,6 @@ async function montar() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // `gcTime` das mutações é 5 minutos por padrão, e cada mutação que roda deixa
-  // esse temporizador de pé — o suficiente para o Jest não encerrar sozinho.
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
@@ -160,7 +160,6 @@ describe('despensa', () => {
 
     await montar();
 
-    // Sem este aviso a pessoa acha que descontou, e não descontou.
     expect(
       await screen.findByText(
         '1 item ainda não foi ligado a um produto do mercado, então não desconta da sua lista de compras.',
@@ -183,6 +182,36 @@ describe('despensa', () => {
     await montar();
 
     expect(await screen.findByText(/Sua despensa está vazia/)).toBeTruthy();
+  });
+});
+
+describe('vincular e medir item já salvo', () => {
+  it('abre a edição ao tocar no item e permite salvar a medição', async () => {
+    const itemSalvo = naDespensa({
+      id: '10',
+      raw_description: 'aveia',
+      product: produto('Aveia em flocos'),
+    });
+    lerDespensa.mockResolvedValue([itemSalvo]);
+    atualizar.mockResolvedValue(undefined);
+
+    await montar();
+
+    await fireEvent.press(await screen.findByLabelText('Item aveia'));
+
+    expect(await screen.findByText('Medir ou vincular: "aveia"')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByPlaceholderText('Quantidade'), '500');
+
+    await fireEvent.press(screen.getByText('Salvar medição'));
+
+    await waitFor(() =>
+      expect(atualizar).toHaveBeenCalledWith('10', {
+        product_id: 'produto-Aveia em flocos',
+        quantity: '500',
+        unit: 'g',
+      }),
+    );
   });
 });
 
@@ -235,7 +264,6 @@ describe('receitas', () => {
   });
 });
 
-
 describe('escolher o produto ao adicionar', () => {
   async function digitarEAvancar(texto = 'aveia em flocos') {
     await montar();
@@ -248,7 +276,6 @@ describe('escolher o produto ao adicionar', () => {
 
     await waitFor(() => expect(buscarProdutos).toHaveBeenCalledWith('aveia em flocos'));
     expect(await screen.findByText('Qual produto é "aveia em flocos"?')).toBeTruthy();
-    // Nada foi gravado ainda: quem escolhe é o usuário.
     expect(adicionar).not.toHaveBeenCalled();
   });
 
@@ -274,7 +301,6 @@ describe('escolher o produto ao adicionar', () => {
   });
 
   it('deixa guardar só como texto', async () => {
-    // Nem tudo que está em casa existe no catálogo.
     adicionar.mockResolvedValue(naDespensa({ id: '9' }));
     await digitarEAvancar('canela em pó');
 

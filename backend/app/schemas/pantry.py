@@ -30,6 +30,23 @@ class PantryItemIn(BaseModel):
         return self
 
 
+class PantryItemUpdate(BaseModel):
+    """Atualização de um item já salvo na despensa.
+
+    Permite vincular a um produto do catálogo e/ou informar a medição.
+    """
+
+    product_id: uuid.UUID | None = None
+    quantity: Decimal | None = Field(default=None, gt=0)
+    unit: MeasurementUnit | None = None
+
+    @model_validator(mode="after")
+    def quantidade_e_unidade_andam_juntas(self) -> "PantryItemUpdate":
+        if (self.quantity is None) != (self.unit is None):
+            raise ValueError("quantidade e unidade precisam ser informadas juntas")
+        return self
+
+
 class ProductSuggestionOut(ApiModel):
     """Produto parecido com o texto que a pessoa digitou.
 

@@ -8,7 +8,12 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.models import PantryItem, Product
-from app.schemas.pantry import PantryItemIn, PantryItemOut, ProductSuggestionOut
+from app.schemas.pantry import (
+    PantryItemIn,
+    PantryItemOut,
+    PantryItemUpdate,
+    ProductSuggestionOut,
+)
 from app.services.pantry import suggest_products, user_pantry
 from app.services.text import normalize_text
 
@@ -57,6 +62,30 @@ def add_pantry_item(
     session.commit()
     session.refresh(item)
     return item
+
+
+@router.patch("/{item_id}", response_model=PantryItemOut)
+def update_pantry_item(
+    session: DbSession,
+    user: CurrentUser,
+    item_id: uuid.UUID,
+    payload: PantryItemUpdate,
+) -> PantryItem:
+    """Atualiza um item já existente na despensa para vincular produto ou medir."""
+    item = _get_item(session, user, item_id)
+
+    # Verifica se o produto informado existe
+    if payload.product_id is not None and session.get(Product, payload.product_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "produto não encontrado")
+
+    # Atualiza apenas os campos enviados (permitindo desvincular ou redefinir caso seja explicitamente fornecido)
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(item, field, value)
+
+    session.commit()
+    # Recarrega o item e seu produto associado para retorno
+    return _get_item(session, user, item_id)
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

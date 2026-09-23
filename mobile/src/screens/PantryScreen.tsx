@@ -1,15 +1,10 @@
 /**
  * Despensa e receitas — a aba "O que tem na sua casa?" do protótipo.
  *
- * As duas coisas moram na mesma tela porque uma existe por causa da outra: a
- * lista do que está em casa e o que dá para cozinhar com isso.
- *
  * Ao adicionar, a pessoa escolhe qual produto do catálogo é aquilo. Sem esse
- * vínculo o item não abate da lista de compras nem conta para as receitas, e um
- * item que não faz nada é pior que dois toques a mais no cadastro.
+ * vínculo o item não abate da lista de compras nem conta para as receitas.
  *
- * Guardar só como texto continua possível, para o que não existe no catálogo —
- * e nesse caso a tela avisa que aquele item não desconta nada.
+ * Tocar em um item salvo permite vincular e medir (Tarefa 1).
  */
 
 import { useState } from 'react';
@@ -32,16 +27,25 @@ import {
   readRecipeSuggestions,
   removePantryItem,
   searchProducts,
+  updatePantryItem,
 } from '../services/api';
 import { formatQuantity } from '../services/format';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { PantryItem, ProductSuggestion, RecipeAvailability } from '../types/api';
 
+const UNIDADES = ['g', 'kg', 'ml', 'l', 'unidade'];
+
 export default function PantryScreen() {
   const cliente = useQueryClient();
   const [texto, setTexto] = useState('');
-  // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
   const [escolhendo, setEscolhendo] = useState<string | null>(null);
+
+  // Estado para medir/vincular item já salvo
+  const [itemEditando, setItemEditando] = useState<PantryItem | null>(null);
+  const [quantidade, setQuantidade] = useState('');
+  const [unidade, setUnidade] = useState('g');
+  const [buscaEdicao, setBuscaEdicao] = useState('');
+  const [produtoEscolhido, setProdutoEscolhido] = useState<string | null>(null);
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
 
@@ -50,7 +54,6 @@ export default function PantryScreen() {
     queryFn: () => readRecipeSuggestions(),
   });
 
-  /** Depois de mexer na despensa, as receitas mudam junto. */
   function recarregar() {
     cliente.invalidateQueries({ queryKey: ['pantry'] });
     cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
@@ -60,6 +63,12 @@ export default function PantryScreen() {
     queryKey: ['product-search', escolhendo],
     queryFn: () => searchProducts(escolhendo!),
     enabled: escolhendo !== null,
+  });
+
+  const candidatosEdicao = useQuery({
+    queryKey: ['product-search', buscaEdicao],
+    queryFn: () => searchProducts(buscaEdicao),
+    enabled: buscaEdicao.trim().length >= 2,
   });
 
   const adicionar = useMutation({
@@ -72,10 +81,47 @@ export default function PantryScreen() {
     },
   });
 
+  const atualizar = useMutation({
+    mutationFn: (dados: {
+      itemId: string;
+      productId: string | null;
+      quantity: string | null;
+      unit: string | null;
+    }) =>
+      updatePantryItem(dados.itemId, {
+        product_id: dados.productId,
+        quantity: dados.quantity,
+        unit: dados.unit,
+      }),
+    onSuccess: () => {
+      setItemEditando(null);
+      recarregar();
+    },
+  });
+
   function comecarEscolha() {
     const descricao = texto.trim();
     if (descricao.length < 2) return;
     setEscolhendo(descricao);
+  }
+
+  function abrirEdicao(item: PantryItem) {
+    setItemEditando(item);
+    setQuantidade(item.quantity ? String(item.quantity) : '');
+    setUnidade(item.unit ?? 'g');
+    setProdutoEscolhido(item.product ? item.product.id : null);
+    setBuscaEdicao('');
+  }
+
+  function salvarEdicao() {
+    if (!itemEditando) return;
+    const qtdTrim = quantidade.trim();
+    atualizar.mutate({
+      itemId: itemEditando.id,
+      productId: produtoEscolhido ?? (itemEditando.product ? itemEditando.product.id : null),
+      quantity: qtdTrim ? qtdTrim : null,
+      unit: qtdTrim ? unidade : null,
+    });
   }
 
   const remover = useMutation({
@@ -197,6 +243,86 @@ export default function PantryScreen() {
               </View>
             ) : null}
 
+            {/* Painel de Medir ou Vincular Item Já Salvo */}
+            {itemEditando !== null ? (
+              <View style={styles.escolha}>
+                <Text style={styles.escolhaTitulo}>
+                  Medir ou vincular: "{itemEditando.raw_description}"
+                </Text>
+
+                {!itemEditando.product && !produtoEscolhido ? (
+                  <>
+                    <TextInput
+                      placeholder="Buscar produto no catálogo…"
+                      placeholderTextColor={colors.outline}
+                      style={styles.campo}
+                      value={buscaEdicao}
+                      onChangeText={setBuscaEdicao}
+                    />
+                    {candidatosEdicao.data?.map((sugestao: ProductSuggestion) => (
+                      <Pressable
+                        key={sugestao.product.id}
+                        accessibilityRole="button"
+                        onPress={() => setProdutoEscolhido(sugestao.product.id)}
+                        style={styles.candidato}
+                      >
+                        <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : null}
+
+                <View style={styles.campoLinha}>
+                  <TextInput
+                    placeholder="Quantidade"
+                    placeholderTextColor={colors.outline}
+                    keyboardType="numeric"
+                    style={[styles.campo, { flex: 1 }]}
+                    value={quantidade}
+                    onChangeText={setQuantidade}
+                  />
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    {UNIDADES.map((u) => (
+                      <Pressable
+                        key={u}
+                        onPress={() => setUnidade(u)}
+                        style={[
+                          styles.chipUnidade,
+                          unidade === u && styles.chipUnidadeAtivo,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipUnidadeTexto,
+                            unidade === u && styles.chipUnidadeTextoAtivo,
+                          ]}
+                        >
+                          {u}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.escolhaAcoes}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={salvarEdicao}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Salvar medição</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setItemEditando(null)}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
             {adicionar.isError ? (
               <ErrorNotice
                 message={
@@ -222,6 +348,7 @@ export default function PantryScreen() {
                 <ChipDaDespensa
                   key={item.id}
                   item={item}
+                  onPress={() => abrirEdicao(item)}
                   onRemove={() => remover.mutate(item.id)}
                 />
               ))}
@@ -250,13 +377,26 @@ export default function PantryScreen() {
   );
 }
 
-function ChipDaDespensa({ item, onRemove }: { item: PantryItem; onRemove: () => void }) {
+function ChipDaDespensa({
+  item,
+  onPress,
+  onRemove,
+}: {
+  item: PantryItem;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
   const vinculado = item.product !== null;
   const quantidade =
     item.quantity && item.unit ? formatQuantity(item.quantity, item.unit) : null;
 
   return (
-    <View style={[styles.chipItem, !vinculado && styles.chipItemSolto]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Item ${item.raw_description}`}
+      onPress={onPress}
+      style={[styles.chipItem, !vinculado && styles.chipItemSolto]}
+    >
       <View style={[styles.ponto, vinculado ? styles.pontoVinculado : styles.pontoSolto]} />
       <Text style={styles.chipItemTexto} numberOfLines={1}>
         {item.raw_description}
@@ -270,7 +410,7 @@ function ChipDaDespensa({ item, onRemove }: { item: PantryItem; onRemove: () => 
       >
         <Text style={styles.chipItemRemover}>✕</Text>
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
@@ -382,6 +522,18 @@ const styles = StyleSheet.create({
   acaoSecundaria: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
   acaoSecundariaTexto: { ...typography.labelLg, color: colors.primary },
 
+  chipUnidade: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceContainerLowest,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipUnidadeAtivo: { backgroundColor: colors.primaryContainer },
+  chipUnidadeTexto: { ...typography.labelSm, color: colors.onSurface },
+  chipUnidadeTextoAtivo: { color: colors.onPrimary, fontWeight: 'bold' },
+
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chipItem: {
     flexDirection: 'row',
@@ -393,7 +545,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     maxWidth: '100%',
   },
-  // Contorno tracejado marca o item que ainda não abate da compra.
   chipItemSolto: { borderWidth: 1, borderStyle: 'dashed', borderColor: colors.outlineVariant },
   ponto: { width: 6, height: 6, borderRadius: radius.full },
   pontoVinculado: { backgroundColor: colors.primaryContainer },

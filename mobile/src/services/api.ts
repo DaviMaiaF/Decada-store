@@ -209,6 +209,15 @@ export const addPantryItem = (item: {
   unit?: string | null;
 }) => request<PantryItem>('/pantry', { method: 'POST', body: item });
 
+export const updatePantryItem = (
+  itemId: string,
+  item: {
+    product_id?: string | null;
+    quantity?: string | null;
+    unit?: string | null;
+  },
+) => request<PantryItem>(`/pantry/${itemId}`, { method: 'PATCH', body: item });
+
 export const removePantryItem = (itemId: string) =>
   request<void>(`/pantry/${itemId}`, { method: 'DELETE' });
 
