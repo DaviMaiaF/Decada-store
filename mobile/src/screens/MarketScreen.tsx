@@ -10,8 +10,8 @@
  * onde ela pode se perder.
  */
 
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
@@ -22,7 +22,8 @@ import {
   setItemPurchased,
 } from '../services/api';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { readRegion, saveRegion } from '../services/session';
+import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { ShoppingList, ShoppingListItem } from '../types/api';
 
 /** Rótulo de cada corredor. As chaves são as categorias do catálogo. */
@@ -48,11 +49,6 @@ export default function MarketScreen({
     enabled: listId !== null,
   });
 
-  const geracao = useMutation({
-    mutationFn: () => generateShoppingList(planId!, 'DF', 'Brasília'),
-    onSuccess: (resultado) => onGenerated(resultado.shopping_list.id),
-  });
-
   if (listId === null) {
     return (
       <ScrollView contentContainerStyle={styles.conteudo}>
@@ -62,26 +58,7 @@ export default function MarketScreen({
             Envie o plano da sua nutricionista na aba Dieta para gerar sua lista.
           </Body>
         ) : (
-          <>
-            <Body muted>
-              Gere a lista com os itens que você confirmou. O que já estiver na sua
-              despensa é descontado automaticamente.
-            </Body>
-            {geracao.isError ? (
-              <ErrorNotice
-                message={
-                  geracao.error instanceof ApiError
-                    ? geracao.error.message
-                    : 'não foi possível gerar a lista'
-                }
-              />
-            ) : null}
-            <Button
-              label="Gerar lista de compras"
-              onPress={() => geracao.mutate()}
-              loading={geracao.isPending}
-            />
-          </>
+          <FormularioRegiaoEGeracao planId={planId} onGenerated={onGenerated} />
         )}
       </ScrollView>
     );
@@ -100,18 +77,103 @@ export default function MarketScreen({
   return <ListaCarregada lista={lista.data} />;
 }
 
+function FormularioRegiaoEGeracao({
+  planId,
+  onGenerated,
+}: {
+  planId: string;
+  onGenerated: (listId: string) => void;
+}) {
+  const [stateCode, setStateCode] = useState('DF');
+  const [city, setCity] = useState('Brasília');
+
+  useEffect(() => {
+    let ativo = true;
+    readRegion().then((regiao) => {
+      if (ativo && regiao) {
+        setStateCode(regiao.stateCode);
+        setCity(regiao.city);
+      }
+    });
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  const geracao = useMutation({
+    mutationFn: async () => {
+      const ufLimpa = stateCode.trim().toUpperCase() || 'DF';
+      const cidadeLimpa = city.trim() || 'Brasília';
+      await saveRegion({ stateCode: ufLimpa, city: cidadeLimpa });
+      return generateShoppingList(planId, ufLimpa, cidadeLimpa);
+    },
+    onSuccess: (resultado) => onGenerated(resultado.shopping_list.id),
+  });
+
+  return (
+    <>
+      <Body muted>
+        Gere a lista com os itens que você confirmou. O que já estiver na sua
+        despensa é descontado automaticamente.
+      </Body>
+
+      <Card style={styles.cardRegiao}>
+        <SectionTitle>Região dos preços</SectionTitle>
+        <Body muted>
+          A estimativa de preços do mercado é calculada com base na sua localização.
+        </Body>
+
+        <View style={styles.linhaCamposRegiao}>
+          <View style={styles.campoUfContainer}>
+            <Text style={styles.rotuloCampo}>UF</Text>
+            <TextInput
+              accessibilityLabel="Estado"
+              placeholder="UF"
+              placeholderTextColor={colors.outline}
+              autoCapitalize="characters"
+              maxLength={2}
+              style={styles.campoTexto}
+              value={stateCode}
+              onChangeText={setStateCode}
+            />
+          </View>
+
+          <View style={styles.campoCidadeContainer}>
+            <Text style={styles.rotuloCampo}>Cidade</Text>
+            <TextInput
+              accessibilityLabel="Cidade"
+              placeholder="Cidade"
+              placeholderTextColor={colors.outline}
+              style={styles.campoTexto}
+              value={city}
+              onChangeText={setCity}
+            />
+          </View>
+        </View>
+      </Card>
+
+      {geracao.isError ? (
+        <ErrorNotice
+          message={
+            geracao.error instanceof ApiError
+              ? geracao.error.message
+              : 'não foi possível gerar a lista'
+          }
+        />
+      ) : null}
+      <Button
+        label="Gerar lista de compras"
+        onPress={() => geracao.mutate()}
+        loading={geracao.isPending}
+      />
+    </>
+  );
+}
+
 function ListaCarregada({ lista }: { lista: ShoppingList }) {
   const cliente = useQueryClient();
   const chave = ['shopping-list', lista.id];
 
-  /**
-   * Marcar item é otimista de propósito.
-   *
-   * Quem usa isto está de pé no corredor do mercado, com a rede do celular
-   * oscilando. Esperar a resposta para riscar a linha faria o toque parecer
-   * perdido. Se a chamada falhar, a lista volta ao que era e a mensagem de
-   * erro aparece.
-   */
   const marcacao = useMutation({
     mutationFn: ({ itemId, comprado }: { itemId: string; comprado: boolean }) =>
       setItemPurchased(lista.id, itemId, comprado),
@@ -149,8 +211,6 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
 
   const aComprar = lista.items.filter((item) => !item.dispensed_by_pantry);
   const dispensados = lista.items.filter((item) => item.dispensed_by_pantry);
-  // Só conta entre o que há para comprar: item que a despensa dispensou aceita
-  // marcação no servidor, mas não faz parte do trajeto pelo mercado.
   const comprados = aComprar.filter((item) => item.purchased).length;
   const progresso = aComprar.length === 0 ? 0 : (comprados / aComprar.length) * 100;
 
@@ -222,7 +282,6 @@ function ItemDaLista({ item, onToggle }: { item: ShoppingListItem; onToggle: () 
         <Text style={styles.itemPreco}>{formatMoney(item.estimated_cost)}</Text>
       </View>
 
-      {/* Preço nunca anda sozinho: data, origem e tamanho da amostra junto. */}
       <Text style={styles.procedencia}>
         {describeConfidence(item.price_confidence, item.price_reference_date)}
         {item.price_origin ? ` · ${describeOrigin(item.price_origin)}` : ''}
@@ -256,6 +315,20 @@ function ItemDaLista({ item, onToggle }: { item: ShoppingListItem; onToggle: () 
 const styles = StyleSheet.create({
   conteudo: { padding: spacing.margin, gap: spacing.md, paddingBottom: spacing.xl3 },
   titulo: { ...typography.headlineLg, color: colors.primary },
+
+  cardRegiao: { gap: spacing.xs },
+  linhaCamposRegiao: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  campoUfContainer: { width: 72, gap: 4 },
+  campoCidadeContainer: { flex: 1, gap: 4 },
+  rotuloCampo: { ...typography.labelSm, color: colors.onSurfaceVariant },
+  campoTexto: {
+    minHeight: MIN_TOUCH_HEIGHT,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    ...typography.bodyMd,
+    color: colors.onSurface,
+  },
 
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },

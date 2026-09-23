@@ -10,6 +10,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
+import * as session from '../../services/session';
 import type { ShoppingList, ShoppingListItem } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
@@ -19,8 +20,17 @@ jest.mock('../../services/api', () => ({
   setItemPurchased: jest.fn(),
 }));
 
+jest.mock('../../services/session', () => ({
+  ...jest.requireActual('../../services/session'),
+  readRegion: jest.fn(),
+  saveRegion: jest.fn(),
+}));
+
 const lerLista = api.readShoppingList as jest.Mock;
+const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
+const lerRegiao = session.readRegion as jest.Mock;
+const salvarRegiao = session.saveRegion as jest.Mock;
 
 const HA_TRES_DIAS = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -85,25 +95,17 @@ async function montar(dados: ShoppingList) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // `gcTime` das mutações é 5 minutos por padrão, e cada mutação que roda deixa
-  // esse temporizador de pé — o suficiente para o Jest não encerrar sozinho.
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
-});
-
-// Sem isto o cache do React Query deixa temporizadores abertos e o Jest não
-// encerra sozinho ao fim da suíte.
-afterEach(() => {
-  cliente.clear();
-  cliente.unmount();
+  lerRegiao.mockResolvedValue({ stateCode: 'DF', city: 'Brasília' });
+  salvarRegiao.mockResolvedValue(undefined);
 });
 
 it('mostra o total estimado e a região', async () => {
   await montar(lista([item({ id: 'a' })]));
 
   expect(await screen.findByText('R$ 174,20')).toBeTruthy();
-  // Média de preço é sempre regional: a tela precisa dizer de onde ela é.
   expect(screen.getByText('Brasília · DF')).toBeTruthy();
 });
 
@@ -124,7 +126,6 @@ it('agrupa os itens pelos corredores do mercado', async () => {
 it('nenhum preço aparece sem data, origem e amostra', async () => {
   await montar(lista([item({ id: 'a' })]));
 
-  // Decisão 1 do projeto, no último lugar onde ela pode se perder.
   expect(
     await screen.findByText('coletado há 3 dias · dado fictício de desenvolvimento · 6 coleta(s)'),
   ).toBeTruthy();
@@ -153,7 +154,6 @@ it('avisa quando não há preço na região', async () => {
     ]),
   );
 
-  // Ausência de preço não pode virar R$ 0,00.
   expect(await screen.findByText('—')).toBeTruthy();
   expect(screen.getByText('sem preço coletado nesta região')).toBeTruthy();
 });
@@ -178,7 +178,6 @@ it('mantém na lista o item que a despensa cobriu por inteiro', async () => {
     ]),
   );
 
-  // Sumir da tela esconderia uma decisão que o app tomou pelo usuário.
   expect(await screen.findByText('Peito de frango sem pele')).toBeTruthy();
   expect(screen.getByText('não precisa comprar')).toBeTruthy();
   expect(screen.getByText('1,2 kg já em casa')).toBeTruthy();
@@ -193,11 +192,6 @@ it('marca produto fictício do seed', async () => {
   expect(await screen.findByText('dado fictício de desenvolvimento')).toBeTruthy();
 });
 
-
-// --------------------------------------------------------------------------
-// item comprado
-// --------------------------------------------------------------------------
-
 it('conta os comprados pelo que veio do servidor, não pelo toque', async () => {
   await montar(
     lista([
@@ -206,7 +200,6 @@ it('conta os comprados pelo que veio do servidor, não pelo toque', async () => 
     ]),
   );
 
-  // Marcado numa sessão anterior: sair da tela e voltar não perde o progresso.
   expect(await screen.findByText('1 de 2 itens comprados')).toBeTruthy();
 });
 
@@ -229,18 +222,14 @@ it('desmarcar o item também avisa o servidor', async () => {
 });
 
 it('risca o item na hora, sem esperar a resposta do servidor', async () => {
-  // Quem usa isto está no corredor do mercado: o toque não pode parecer perdido.
   let responder: (valor: ShoppingListItem) => void = () => {};
   marcarItem.mockReturnValue(new Promise<ShoppingListItem>((ok) => (responder = ok)));
   await montar(lista([item({ id: 'a' })]));
 
   await fireEvent.press(await screen.findByText('Já comprei'));
 
-  // O servidor ainda não respondeu e o item já conta como comprado.
   expect(await screen.findByText('1 de 1 itens comprados')).toBeTruthy();
 
-  // Encerrar a promessa antes do fim do teste: mutação pendente no teardown
-  // deixa o Jest com um handle aberto e a atualização cai fora do `act`.
   responder(item({ id: 'a', purchased: true }));
   await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
 });
@@ -251,8 +240,35 @@ it('desfaz a marcação quando o servidor recusa', async () => {
 
   await fireEvent.press(await screen.findByText('Já comprei'));
 
-  // Contar como comprado algo que não foi salvo faria a pessoa sair do
-  // mercado sem o item.
   expect(await screen.findByText('não foi possível salvar o item marcado')).toBeTruthy();
   expect(screen.getByText('0 de 1 itens comprados')).toBeTruthy();
+});
+
+it('permite escolher a região e gera a lista com os dados informados', async () => {
+  gerarLista.mockResolvedValue({
+    shopping_list: lista([item({ id: 'a' })]),
+  });
+
+  const onGenerated = jest.fn();
+
+  await render(
+    <QueryClientProvider client={cliente}>
+      <MarketScreen planId="plano-1" listId={null} onGenerated={onGenerated} />
+    </QueryClientProvider>,
+  );
+
+  const inputUf = await screen.findByLabelText('Estado');
+  const inputCidade = screen.getByLabelText('Cidade');
+
+  fireEvent.changeText(inputUf, 'SP');
+  fireEvent.changeText(inputCidade, 'São Paulo');
+
+  const botaoGerar = screen.getByText('Gerar lista de compras');
+  fireEvent.press(botaoGerar);
+
+  await waitFor(() => {
+    expect(salvarRegiao).toHaveBeenCalledWith({ stateCode: 'SP', city: 'São Paulo' });
+    expect(gerarLista).toHaveBeenCalledWith('plano-1', 'SP', 'São Paulo');
+    expect(onGenerated).toHaveBeenCalledWith('lista-1');
+  });
 });
