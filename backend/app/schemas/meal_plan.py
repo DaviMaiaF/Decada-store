@@ -34,6 +34,24 @@ class MealPlanOut(ApiModel):
     items: list[PlanItemOut]
 
 
+class MealPlanSummaryOut(ApiModel):
+    """Plano na listagem, sem os itens.
+
+    Os itens ficam de fora de propósito: a listagem existe para o app
+    reencontrar o plano na partida, e trazer a prescrição inteira de cada plano
+    só para isso seria carregar dado sensível de saúde que a tela não mostra.
+    As duas contagens bastam para a tela dizer onde a pessoa parou.
+    """
+
+    id: uuid.UUID
+    title: str | None = None
+    nutritionist_name: str | None = None
+    consent_at: datetime
+    created_at: datetime
+    item_count: int
+    confirmed_count: int
+
+
 class DiscardedLineOut(ApiModel):
     """Linha do PDF que não virou item, e por quê."""
 

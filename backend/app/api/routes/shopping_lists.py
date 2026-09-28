@@ -15,10 +15,28 @@ from app.schemas.shopping_list import (
     PurchaseIn,
     ShoppingListItemOut,
     ShoppingListOut,
+    ShoppingListSummaryOut,
 )
 from app.services.shopping import generate_shopping_list
 
 router = APIRouter(tags=["listas de compras"])
+
+
+def _get_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> MealPlan:
+    """Plano do usuário, com os itens, ou 404.
+
+    Plano de outra pessoa também devolve 404: dizer "existe, mas não é seu" já
+    vazaria a informação de que aquela pessoa tem um plano alimentar.
+    """
+    plan = session.scalars(
+        select(MealPlan)
+        .where(MealPlan.id == plan_id, MealPlan.user_id == user.id)
+        .options(selectinload(MealPlan.items))
+    ).first()
+
+    if plan is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "plano alimentar não encontrado")
+    return plan
 
 
 @router.post(
@@ -41,14 +59,7 @@ def create_shopping_list(
     Gerar de novo cria outra lista: o histórico de listas de um plano é
     proposital.
     """
-    plan = session.scalars(
-        select(MealPlan)
-        .where(MealPlan.id == plan_id, MealPlan.user_id == user.id)
-        .options(selectinload(MealPlan.items))
-    ).first()
-
-    if plan is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "plano alimentar não encontrado")
+    plan = _get_plan(session, user, plan_id)
 
     result = generate_shopping_list(session, plan, payload.state_code.upper(), payload.city)
     session.commit()
@@ -63,6 +74,33 @@ def create_shopping_list(
         lowest_confidence=result.cost.lowest_confidence,
         pantry_savings=result.cost.pantry_savings,
     )
+
+
+@router.get(
+    "/meal-plans/{plan_id}/shopping-lists",
+    response_model=list[ShoppingListSummaryOut],
+)
+def read_shopping_lists(
+    session: DbSession, user: CurrentUser, plan_id: uuid.UUID
+) -> list[ShoppingList]:
+    """Listas já geradas para o plano, da mais recente à mais antiga.
+
+    Gerar de novo cria outra lista, e é este histórico que o app percorre para
+    reabrir na última: sem isto, fechar o app perdia a lista do mercado mesmo
+    com ela salva no banco.
+
+    Plano sem lista nenhuma devolve 200 com lista vazia.
+    """
+    _get_plan(session, user, plan_id)
+
+    return session.scalars(
+        select(ShoppingList)
+        .where(ShoppingList.meal_plan_id == plan_id)
+        # `created_at` é o horário da transação no Postgres e empata quando duas
+        # listas nascem na mesma; `calculated_at` é carimbado em Python a cada
+        # geração, e desempata.
+        .order_by(ShoppingList.created_at.desc(), ShoppingList.calculated_at.desc())
+    ).all()
 
 
 @router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
