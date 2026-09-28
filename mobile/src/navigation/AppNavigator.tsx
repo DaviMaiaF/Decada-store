@@ -17,6 +17,12 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import {
+  IconeDespensa,
+  IconeDieta,
+  IconeEconomia,
+  IconeMercado,
+} from '../components/TabIcons';
 import ConfirmationScreen from '../screens/ConfirmationScreen';
 import EconomyScreen from '../screens/EconomyScreen';
 import MarketScreen from '../screens/MarketScreen';
@@ -80,7 +86,13 @@ export default function AppNavigator() {
           tabBarLabelStyle: typography.labelSm,
         }}
       >
-        <Tab.Screen name="Dieta" options={{ title: 'Dieta' }}>
+        <Tab.Screen
+          name="Dieta"
+          options={{
+            title: 'Dieta',
+            tabBarIcon: ({ color, size }) => <IconeDieta color={color} size={size} />,
+          }}
+        >
           {() =>
             etapa === 'upload' || planId === null ? (
               <UploadScreen
@@ -106,7 +118,13 @@ export default function AppNavigator() {
           }
         </Tab.Screen>
 
-        <Tab.Screen name="Mercado" options={{ title: 'Mercado' }}>
+        <Tab.Screen
+          name="Mercado"
+          options={{
+            title: 'Mercado',
+            tabBarIcon: ({ color, size }) => <IconeMercado color={color} size={size} />,
+          }}
+        >
           {() => (
             <MarketScreen planId={planId} listId={listId} onGenerated={setListaDaSessao} />
           )}
@@ -115,10 +133,19 @@ export default function AppNavigator() {
         <Tab.Screen
           name="Despensa"
           component={PantryScreen}
-          options={{ title: 'Despensa' }}
+          options={{
+            title: 'Despensa',
+            tabBarIcon: ({ color, size }) => <IconeDespensa color={color} size={size} />,
+          }}
         />
 
-        <Tab.Screen name="Economia" options={{ title: 'Economia' }}>
+        <Tab.Screen
+          name="Economia"
+          options={{
+            title: 'Economia',
+            tabBarIcon: ({ color, size }) => <IconeEconomia color={color} size={size} />,
+          }}
+        >
           {() => <EconomyScreen listId={listId} />}
         </Tab.Screen>
       </Tab.Navigator>
