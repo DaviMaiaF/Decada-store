@@ -195,6 +195,16 @@ describe('despensa', () => {
 });
 
 describe('vincular e medir item já salvo', () => {
+  it('conta que o item é tocável, porque o chip não parece um botão', async () => {
+    lerDespensa.mockResolvedValue([naDespensa({ id: '10', raw_description: 'aveia' })]);
+
+    await montar();
+
+    expect(
+      await screen.findByText('Toque em um item para vincular o produto ou medir.'),
+    ).toBeTruthy();
+  });
+
   async function abrir(item: PantryItem) {
     lerDespensa.mockResolvedValue([item]);
     atualizar.mockResolvedValue(item);

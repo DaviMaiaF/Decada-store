@@ -505,6 +505,10 @@ export default function PantryScreen() {
               </Body>
             ) : null}
 
+            {itens.length > 0 ? (
+              <Body muted>Toque em um item para vincular o produto ou medir.</Body>
+            ) : null}
+
             <View style={styles.chips}>
               {itens.map((item) => (
                 <ChipDaDespensa
@@ -614,6 +618,7 @@ function ChipDaDespensa({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Item ${item.raw_description}`}
+      accessibilityHint="Abre o produto e a quantidade deste item"
       onPress={onPress}
       style={[styles.chipItem, !vinculado && styles.chipItemSolto]}
     >

@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
@@ -43,13 +43,18 @@ export default function MarketScreen({
   listId: string | null;
   onGenerated: (listId: string) => void;
 }) {
+  // Depois de gerada, a lista tomava a tela para sempre e a região virava
+  // definitiva — inclusive para quem lia o aviso de região sem preço, que manda
+  // justamente gerar em outra cidade. Conselho sem caminho não é conselho.
+  const [trocandoRegiao, setTrocandoRegiao] = useState(false);
+
   const lista = useQuery({
     queryKey: ['shopping-list', listId],
     queryFn: () => readShoppingList(listId!),
     enabled: listId !== null,
   });
 
-  if (listId === null) {
+  if (listId === null || trocandoRegiao) {
     return (
       <ScrollView contentContainerStyle={styles.conteudo}>
         <Text style={styles.titulo}>Lista de Mercado</Text>
@@ -58,7 +63,14 @@ export default function MarketScreen({
             Envie o plano da sua nutricionista na aba Dieta para gerar sua lista.
           </Body>
         ) : (
-          <FormularioRegiaoEGeracao planId={planId} onGenerated={onGenerated} />
+          <FormularioRegiaoEGeracao
+            planId={planId}
+            onGenerated={(novaLista) => {
+              setTrocandoRegiao(false);
+              onGenerated(novaLista);
+            }}
+            onCancel={trocandoRegiao ? () => setTrocandoRegiao(false) : undefined}
+          />
         )}
       </ScrollView>
     );
@@ -74,15 +86,20 @@ export default function MarketScreen({
     );
   }
 
-  return <ListaCarregada lista={lista.data} />;
+  return (
+    <ListaCarregada lista={lista.data} onTrocarRegiao={() => setTrocandoRegiao(true)} />
+  );
 }
 
 function FormularioRegiaoEGeracao({
   planId,
   onGenerated,
+  onCancel,
 }: {
   planId: string;
   onGenerated: (listId: string) => void;
+  /** Só existe quando se está trocando a região de uma lista que já existe. */
+  onCancel?: () => void;
 }) {
   const [stateCode, setStateCode] = useState('DF');
   const [city, setCity] = useState('Brasília');
@@ -166,11 +183,20 @@ function FormularioRegiaoEGeracao({
         onPress={() => geracao.mutate()}
         loading={geracao.isPending}
       />
+      {onCancel ? (
+        <Button label="Manter a lista atual" variant="ghost" onPress={onCancel} />
+      ) : null}
     </>
   );
 }
 
-function ListaCarregada({ lista }: { lista: ShoppingList }) {
+function ListaCarregada({
+  lista,
+  onTrocarRegiao,
+}: {
+  lista: ShoppingList;
+  onTrocarRegiao: () => void;
+}) {
   const cliente = useQueryClient();
   const chave = ['shopping-list', lista.id];
 
@@ -239,6 +265,14 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
         <Text style={styles.resumoRegiao}>
           {lista.city} · {lista.state_code}
         </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Gerar em outra região"
+          onPress={onTrocarRegiao}
+          style={styles.trocarRegiao}
+        >
+          <Text style={styles.trocarRegiaoTexto}>Gerar em outra região</Text>
+        </Pressable>
         <View style={styles.progresso}>
           <ProgressBar percent={progresso} />
           <Text style={styles.progressoTexto}>
@@ -253,8 +287,8 @@ function ListaCarregada({ lista }: { lista: ShoppingList }) {
           <Body muted>
             A lista está certa, mas o total não: a média de preço é sempre da sua
             região, e ninguém ainda escaneou nota fiscal em {lista.city} · {lista.state_code}.
-            Gere a lista em outra cidade ou escaneie o QR Code das suas compras para
-            começar a formar o preço daqui.
+            Toque em "Gerar em outra região" no resumo acima, ou escaneie o QR Code das
+            suas compras para começar a formar o preço daqui.
           </Body>
         </Card>
       ) : null}
@@ -361,6 +395,8 @@ const styles = StyleSheet.create({
   avisoRegiao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },
+  trocarRegiao: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
+  trocarRegiaoTexto: { ...typography.labelLg, color: colors.onPrimary },
   total: { ...typography.currency, color: colors.onPrimary },
   resumoRegiao: { ...typography.bodySm, color: colors.onPrimaryContainer },
   progresso: { gap: spacing.xs2, marginTop: spacing.xs },

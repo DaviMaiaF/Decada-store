@@ -305,6 +305,26 @@ it('desfaz a marcação quando o servidor recusa', async () => {
   expect(screen.getByText('0 de 1 itens comprados')).toBeTruthy();
 });
 
+it('dá caminho para gerar a lista em outra região', async () => {
+  await montar(lista([item({ id: 'a' })]));
+
+  // O aviso de região sem preço manda gerar em outra cidade; sem este caminho,
+  // uma lista gerada trancava a região para sempre.
+  await fireEvent.press(await screen.findByLabelText('Gerar em outra região'));
+
+  expect(await screen.findByLabelText('Estado')).toBeTruthy();
+});
+
+it('desistir da troca devolve a lista que já existia', async () => {
+  await montar(lista([item({ id: 'a' })]));
+
+  await fireEvent.press(await screen.findByLabelText('Gerar em outra região'));
+  await fireEvent.press(await screen.findByText('Manter a lista atual'));
+
+  expect(await screen.findByText('R$ 174,20')).toBeTruthy();
+  expect(gerarLista).not.toHaveBeenCalled();
+});
+
 it('permite escolher a região e gera a lista com os dados informados', async () => {
   gerarLista.mockResolvedValue({
     shopping_list: lista([item({ id: 'a' })]),

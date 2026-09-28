@@ -72,8 +72,11 @@ export default function ConfirmationScreen({
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       ListFooterComponent={
         <View style={styles.rodape}>
+          {/* A lista é gerada na aba Mercado, depois de escolher a região. Este
+              botão leva até lá, e chamá-lo de "gerar" prometia o que ele não faz
+              — havia dois botões com esse mesmo nome, em telas diferentes. */}
           <Button
-            label="Gerar lista de compras"
+            label="Ir para o mercado"
             onPress={() => onReady(planId)}
             disabled={confirmados === 0}
           />
@@ -91,12 +94,19 @@ function ItemDoPlano({ planId, item }: { planId: string; item: PlanItem }) {
   const [aberto, setAberto] = useState(false);
   const cliente = useQueryClient();
 
+  const confirmado = item.status === 'confirmado';
+
+  // Busca assim que o item aparece, e não só quando a pessoa abre. São 120
+  // produtos comparados por item, o que parecia caro — medido, dá 15 ms por
+  // item, e o custo real era outro: confirmar um plano de 15 itens pedia três
+  // toques em cada um. Item já confirmado não busca nada.
   const candidatos = useQuery({
     queryKey: ['candidates', planId, item.id],
     queryFn: () => readCandidates(planId, item.id),
-    // Só busca quando a pessoa abre: são 120 produtos comparados por item.
-    enabled: aberto,
+    enabled: !confirmado,
   });
+
+  const sugestao = candidatos.data?.[0] ?? null;
 
   const confirmacao = useMutation({
     mutationFn: ({ productId, score }: { productId: string; score: string | null }) =>
@@ -106,8 +116,6 @@ function ItemDoPlano({ planId, item }: { planId: string; item: PlanItem }) {
       cliente.invalidateQueries({ queryKey: ['meal-plan', planId] });
     },
   });
-
-  const confirmado = item.status === 'confirmado';
 
   return (
     <Card>
@@ -130,12 +138,51 @@ function ItemDoPlano({ planId, item }: { planId: string; item: PlanItem }) {
         />
       </View>
 
+      {!confirmado && sugestao !== null && !aberto ? (
+        <View style={styles.sugestao}>
+          <View style={styles.candidatoTexto}>
+            <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
+            <Text style={styles.candidatoDetalhe}>
+              {sugestao.product.brand ?? 'sem marca'} ·{' '}
+              {Math.round(Number(sugestao.score) * 100)}% de semelhança
+            </Text>
+          </View>
+          {!sugestao.unit_compatible ? <Chip label="unidade diferente" tone="danger" /> : null}
+        </View>
+      ) : null}
+
       {!confirmado ? (
-        <Button
-          label={aberto ? 'Fechar sugestões' : 'Ver sugestões'}
-          variant="ghost"
-          onPress={() => setAberto((estava) => !estava)}
-        />
+        <View style={styles.acoes}>
+          {sugestao !== null && !aberto ? (
+            <Button
+              label="Confirmar"
+              onPress={() =>
+                confirmacao.mutate({
+                  productId: sugestao.product.id,
+                  score: sugestao.score,
+                })
+              }
+              loading={confirmacao.isPending}
+            />
+          ) : null}
+          <Button
+            label={aberto ? 'Fechar opções' : 'Ver outras opções'}
+            variant="ghost"
+            onPress={() => setAberto((estava) => !estava)}
+          />
+        </View>
+      ) : null}
+
+      {!confirmado && candidatos.isPending ? (
+        <Body muted>Procurando o produto no catálogo…</Body>
+      ) : null}
+
+      {!confirmado && !candidatos.isPending && sugestao === null && !aberto ? (
+        <Body muted>Nenhum produto do catálogo se parece com este item.</Body>
+      ) : null}
+
+      {!confirmado && confirmacao.isError && !aberto ? (
+        <ErrorNotice message="não foi possível confirmar este produto" />
       ) : null}
 
       {aberto ? (
@@ -192,6 +239,14 @@ const styles = StyleSheet.create({
   itemTexto: { ...typography.bodyMd, color: colors.onSurface },
   itemQuantidade: { ...typography.labelSm, color: colors.onSurfaceVariant },
 
+  sugestao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  acoes: { gap: spacing.xs2 },
   candidatos: { gap: spacing.xs, marginTop: spacing.xs },
   candidato: {
     flexDirection: 'row',
