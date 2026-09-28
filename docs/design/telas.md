@@ -10,8 +10,8 @@ Legenda:
 - ⛔ **fora do MVP** — documentado, fica para depois
 
 > **As rotas existem desde a etapa 9.** Onde este documento diz ✅, há regra de
-> negócio em `app/services/` e rota HTTP que a expõe. A lista de rotas está no
-> [README](../../README.md#rotas). Falta o app mobile que as consome.
+> negócio em `app/services/` e rota HTTP que a expõe, e o app já a consome. A lista
+> de rotas está no [README](../../README.md#rotas).
 >
 > A autenticação existe e o app tem tela de login, que **nenhum protótipo previu** —
 > nenhuma das quatro telas mostra como a pessoa entra no aplicativo. Ela foi montada
@@ -37,6 +37,7 @@ Legenda:
 | `services/pdf.py` | texto de PDF pesquisável; recusa arquivo digitalizado |
 | `GET /products/search` | produtos parecidos com um texto livre, para o cadastro da despensa |
 | `services/import_plan.py` | PDF → plano alimentar, com consentimento e relatório do descarte |
+| `GET /meal-plans` · `GET /meal-plans/{id}/shopping-lists` | o que o usuário já tem, sem os itens: é como o app reabre onde parou |
 
 ---
 
@@ -56,12 +57,18 @@ Legenda:
 | "Custo semanal estimado R$ 168,50" | ✅ | `pricing.price_shopping_list` — mas veja as divergências abaixo |
 | Confirmar e gerar lista | ✅ | `shopping.generate_shopping_list` (etapa 6) |
 
-**Falta um passo de consentimento na tela.** `import_plan_from_pdf` exige `consent_at`
-como argumento obrigatório e sem valor padrão: desde a etapa 8 não existe caminho de
-código que grave um plano sem registrar quando a pessoa aceitou o termo (decisão 5, LGPD).
-A versão do termo vem de `CONSENT_VERSION`. O protótipo, porém, vai direto do upload para
-o resultado — a tela precisa de um aceite antes de enviar o arquivo, senão não há o que
-passar para a função.
+**O consentimento é um passo da tela.** `import_plan_from_pdf` exige `consent_at` como
+argumento obrigatório e sem valor padrão: desde a etapa 8 não existe caminho de código que
+grave um plano sem registrar quando a pessoa aceitou o termo (decisão 5, LGPD). A versão do
+termo vem de `CONSENT_VERSION`. O protótipo ia direto do upload para o resultado; a tela
+ganhou o aceite antes do envio, e o botão de enviar só libera com ele marcado.
+
+**O plano é reencontrado ao reabrir.** Os ids do plano e da lista viviam no estado da tela:
+recarregar a página mandava a pessoa de volta para o envio de um PDF cujo plano já estava
+no banco. A partida consulta `GET /meal-plans`, e havendo plano a aba Dieta abre na
+confirmação, com "Enviar outro plano" como saída. A verdade fica no servidor, e não no
+aparelho: guardar o id localmente não sobreviveria à troca de aparelho e deixaria um
+ponteiro para dado sensível de saúde no dispositivo, contra a minimização da decisão 5.
 
 **O relatório do descarte ganhou lugar na tela.** O import devolve as linhas que ignorou
 e o motivo ("cabeçalho de refeição", "número de página", "texto de orientação"). O
@@ -107,6 +114,8 @@ de item.
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | 🔨 | Exige `plan_item_id` nulo em `ShoppingListItem`; a rota ainda não existe |
+| Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
+| Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Exportar para WhatsApp | ⛔ | |
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
@@ -119,6 +128,12 @@ o item volta a aparecer como não comprado.
 Item que a despensa dispensou também aceita marcação. O servidor guarda o fato e
 a tela é que decide não oferecer o botão; a contagem do progresso conta só entre
 os itens que havia para comprar.
+
+**Região sem coleta não é lista errada.** O catálogo de desenvolvimento só tem preço em
+Brasília e Taguatinga. Pedir a lista em outra cidade devolve os itens certos com preço
+nulo, e o total em R$ 0,00 — dizer "sem preço" item a item não explica a causa. Quando
+*nenhum* item tem preço, a tela nomeia a região e oferece as duas saídas honestas: gerar
+em outra cidade, ou escanear a NFC-e para começar a formar o preço dali.
 
 O mapa de rótulos, para não inventar categoria nova no banco:
 
@@ -136,8 +151,9 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | A tela mostra | Backend | Observação |
 |---|---|---|
 | Lista do que tem em casa | ✅ | Tela pronta: chips com remoção |
-| Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e salva |
-| Quantidade do que se tem em casa | 🔨 | A tela envia só descrição e produto. **Sem quantidade a compra não é abatida** e a aba Economia fica em zero |
+| Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
+| Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
+| Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | 🔨 | **Fora da beta.** Depende da rota de item avulso, que não existe |
@@ -154,6 +170,17 @@ quantos itens estão assim.
 
 O protótipo mostrava o cadastro num toque só. Ele não previa que um item sem produto
 não faz nada: nem desconta da lista, nem conta para as receitas.
+
+**Quantidade sem produto também não abate**, e a tela avisa quantos itens estão nesse
+meio-termo — vinculados, mas sem medida. Quem cadastrou às pressas tem caminho de volta:
+tocar no chip reabre produto e quantidade do item já salvo.
+
+**A unidade não é livre.** Cada produto é vendido em uma grandeza (`Product.base_unit`), e
+"500 ml" de um produto vendido por quilo produziria o pior item possível: aparece na
+despensa, a pessoa acha que descontou, e `available_quantity` o conta como não medido
+porque a conversão não existe. A tela oferece só as unidades compatíveis, e o servidor
+recusa o resto com 422 (`pantry.ensure_measurable`) — na criação, na edição, e também
+quando só o produto muda e a medida antiga fica em outra grandeza.
 
 **O que conta como disponível.** A porcentagem soma duas fontes: a despensa e a lista
 de compras corrente. "100% disponível" quer dizer que a receita não exige nenhuma ida
@@ -196,24 +223,27 @@ poupou".
 
 ## Divergências entre o protótipo e as decisões do projeto
 
-Estas cinco precisam ser resolvidas na implementação — o protótipo, como está, contraria
-decisões já tomadas.
+Eram cinco pontos em que o protótipo contrariava decisões já tomadas. **Todos foram
+resolvidos**; o registro fica porque a razão de cada um continua valendo para a próxima
+tela que alguém desenhar.
 
-**1. Preço aparece sem data e sem origem.** As telas mostram "Est. R$ 5,50" e "R$ 174,20"
-soltos. A decisão 1 exige que todo preço carregue data da coleta e origem, e que preço com
-mais de 30 dias seja exibido como estimativa. O `pricing.py` já devolve tudo isso
-(`price_reference_date`, `price_origin`, `price_confidence`); a tela é que precisa mostrar
-— ao menos um selo de confiança na lista e data + origem no detalhe do item.
+**1. Preço aparece sem data e sem origem.** ~~"Est. R$ 5,50" e "R$ 174,20" soltos~~ —
+**resolvida.** A decisão 1 exige que todo preço carregue data da coleta e origem, e que
+preço com mais de 30 dias seja exibido como estimativa. Cada item da lista traz agora a
+linha de procedência — confiança, data, origem e tamanho da amostra —, e o teste
+"nenhum preço aparece sem data, origem e amostra" a sustenta.
 
-**2. Região fixa.** A tela de upload diz "baseado na feira e mercados locais de São Paulo".
-A decisão 2 é média **por região**, e a região tem que vir do usuário — o catálogo de
-desenvolvimento é do DF. O texto da tela não pode ser fixo.
+**2. Região fixa.** ~~"baseado na feira e mercados locais de São Paulo"~~ — **resolvida.**
+A decisão 2 é média **por região**, e a região passou a vir do usuário: a tela pede UF e
+cidade antes de gerar a lista e as lembra entre sessões. O catálogo de desenvolvimento é
+do DF, e é por isso que existe o aviso de região sem coleta descrito na seção 3.
 
-**3. O app opinando sobre a dieta.** A tela de Mercado sugere "substituir morango fresco
-por banana ou mamão" como dica de economia. Isso é o app alterando uma prescrição, o que
-a decisão 4 proíbe. A tela de Dieta faz certo: lista "opções autorizadas pela Nutri
-Camila". Regra: **substituição só existe se veio da nutricionista.** Economia se mostra
-comparando preços do mesmo item, nunca trocando o alimento prescrito.
+**3. O app opinando sobre a dieta.** ~~"substituir morango fresco por banana ou mamão"~~ —
+**resolvida por omissão deliberada: a dica não foi construída.** Seria o app alterando uma
+prescrição, o que a decisão 4 proíbe. A tela de Dieta faz certo: lista "opções autorizadas
+pela Nutri Camila". Regra que continua valendo: **substituição só existe se veio da
+nutricionista.** Economia se mostra comparando preços do mesmo item, nunca trocando o
+alimento prescrito.
 
 **4. Números de economia sem base.** ~~"Evitou desperdício de R$ 14,00" e "+R$ 42"~~ —
 **resolvida definindo a conta, não omitindo o número.** A economia da despensa tem base:
@@ -223,16 +253,19 @@ seção 5 e testada em `tests/test_pricing.py`.
 O que continua de fora é o **desperdício evitado**, que exigiria saber o que foi consumido
 antes de vencer — e `PantryItem` não guarda validade. Esse número segue sem aparecer.
 
-**5. Consentimento ausente no upload.** Descrito na seção 1. O backend já não permite
-gravar plano sem consentimento; a tela é que ainda não tem o passo de aceite.
+**5. Consentimento ausente no upload.** ~~O protótipo ia do upload direto ao resultado~~ —
+**resolvida.** O backend nunca permitiu gravar plano sem consentimento, e agora a tela
+tem o aceite: o botão de enviar só libera com ele marcado. Descrito na seção 1.
 
 ---
 
 ## Resumo do que entra no MVP
 
-**Entra:** despensa (`PantryItem`) e o desconto dela na lista de compras; import de plano
-por PDF com texto; agrupamento por corredor; marcar item como comprado; receitas com
-percentual de disponibilidade; aba Economia com o que a despensa poupou.
+**Entra:** despensa (`PantryItem`) com quantidade, o desconto dela na lista de compras e a
+correção do item já salvo; import de plano por PDF com texto, com aceite na tela; o plano e
+a lista reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso
+quando ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas
+com percentual de disponibilidade; aba Economia com o que a despensa poupou.
 
 **Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR de foto,
 projeção mensal, métricas de desperdício, dicas de substituição geradas pelo app, validade
