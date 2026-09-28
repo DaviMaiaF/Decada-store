@@ -15,12 +15,14 @@ import type {
   GeneratedList,
   ImportResult,
   MealPlan,
+  MealPlanSummary,
   PantryItem,
   PlanItem,
   ProductSuggestion,
   RecipeAvailability,
   ShoppingList,
   ShoppingListItem,
+  ShoppingListSummary,
   Token,
 } from '../types/api';
 
@@ -164,6 +166,9 @@ export async function importMealPlan(
   return corpo as ImportResult;
 }
 
+/** Planos do usuário, do mais recente ao mais antigo. */
+export const readMealPlans = () => request<MealPlanSummary[]>('/meal-plans');
+
 export const readMealPlan = (planId: string) => request<MealPlan>(`/meal-plans/${planId}`);
 
 export const readCandidates = (planId: string, itemId: string) =>
@@ -187,6 +192,10 @@ export const generateShoppingList = (planId: string, stateCode: string, city: st
     method: 'POST',
     body: { state_code: stateCode, city },
   });
+
+/** Listas já geradas para o plano, da mais recente à mais antiga. */
+export const readShoppingLists = (planId: string) =>
+  request<ShoppingListSummary[]>(`/meal-plans/${planId}/shopping-lists`);
 
 export const readShoppingList = (listId: string) =>
   request<ShoppingList>(`/shopping-lists/${listId}`);

@@ -118,6 +118,46 @@ def test_plano_de_outra_pessoa_devolve_404(client, marina, outra_pessoa):
     assert resposta.status_code == 404
 
 
+def test_lista_os_planos_do_mais_recente_ao_mais_antigo(client, marina):
+    importar_plano(client, marina, ["100 g de arroz integral"])
+    importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
+
+    corpo = client.get("/meal-plans", headers=_headers(marina)).json()
+
+    assert len(corpo) == 2
+    # O mais recente primeiro: é o que o app abre ao ser reaberto.
+    assert corpo[0]["consent_at"] > corpo[1]["consent_at"]
+
+
+def test_a_listagem_conta_os_itens_e_os_confirmados(client, marina, db_session):
+    plano_confirmado(client, marina, db_session)
+
+    plano = client.get("/meal-plans", headers=_headers(marina)).json()[0]
+
+    assert plano["item_count"] == 1
+    assert plano["confirmed_count"] == 1
+    # Sem os itens de propósito: a listagem não carrega a prescrição inteira.
+    assert "items" not in plano
+
+
+def test_a_listagem_nao_mostra_plano_de_outra_pessoa(client, marina, outra_pessoa):
+    importar_plano(client, marina)
+
+    assert client.get("/meal-plans", headers=_headers(outra_pessoa)).json() == []
+
+
+def test_quem_nao_tem_plano_recebe_lista_vazia_e_nao_erro(client, outra_pessoa):
+    resposta = client.get("/meal-plans", headers=_headers(outra_pessoa))
+
+    # Não ter plano é o estado normal de quem acabou de se cadastrar.
+    assert resposta.status_code == 200
+    assert resposta.json() == []
+
+
+def test_a_listagem_de_planos_exige_autenticacao(client):
+    assert client.get("/meal-plans").status_code == 401
+
+
 # --------------------------------------------------------------------------
 # casamento e confirmação
 # --------------------------------------------------------------------------
@@ -255,6 +295,43 @@ def test_lista_de_outra_pessoa_devolve_404(client, marina, outra_pessoa, db_sess
         client.get(f"/shopping-lists/{lista_id}", headers=_headers(outra_pessoa)).status_code
         == 404
     )
+
+
+def test_lista_as_listas_do_plano_da_mais_recente_a_mais_antiga(client, marina, db_session):
+    plano_id, _ = plano_confirmado(client, marina, db_session)
+    for cidade in ("Brasília", "Taguatinga"):
+        client.post(
+            f"/meal-plans/{plano_id}/shopping-lists",
+            headers=_headers(marina),
+            json={"state_code": "DF", "city": cidade},
+        )
+
+    corpo = client.get(f"/meal-plans/{plano_id}/shopping-lists", headers=_headers(marina)).json()
+
+    # Gerar de novo não substitui: o histórico fica, e a mais recente vem antes.
+    assert len(corpo) == 2
+    assert corpo[0]["city"] == "Taguatinga"
+    # Sem os itens de propósito: eles vêm por GET /shopping-lists/{id}.
+    assert "items" not in corpo[0]
+
+
+def test_plano_sem_lista_gerada_devolve_lista_vazia(client, marina, db_session):
+    plano_id, _ = plano_confirmado(client, marina, db_session)
+
+    resposta = client.get(f"/meal-plans/{plano_id}/shopping-lists", headers=_headers(marina))
+
+    assert resposta.status_code == 200
+    assert resposta.json() == []
+
+
+def test_nao_da_para_listar_as_listas_de_plano_alheio(client, marina, outra_pessoa, db_session):
+    plano_id, _ = plano_confirmado(client, marina, db_session)
+
+    resposta = client.get(
+        f"/meal-plans/{plano_id}/shopping-lists", headers=_headers(outra_pessoa)
+    )
+
+    assert resposta.status_code == 404
 
 
 def test_a_economia_da_despensa_volta_na_lista(client, marina, db_session):

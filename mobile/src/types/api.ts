@@ -47,6 +47,17 @@ export interface MealPlan {
   items: PlanItem[];
 }
 
+/** Plano na listagem: sem os itens, que vêm por `readMealPlan`. */
+export interface MealPlanSummary {
+  id: string;
+  title: string | null;
+  nutritionist_name: string | null;
+  consent_at: string;
+  created_at: string;
+  item_count: number;
+  confirmed_count: number;
+}
+
 export interface DiscardedLine {
   text: string;
   reason: string;
@@ -100,6 +111,17 @@ export interface ShoppingList {
   estimated_total: string | null;
   calculated_at: string | null;
   items: ShoppingListItem[];
+}
+
+/** Lista na listagem: sem os itens, que vêm por `readShoppingList`. */
+export interface ShoppingListSummary {
+  id: string;
+  meal_plan_id: string;
+  state_code: string;
+  city: string;
+  estimated_total: string | null;
+  calculated_at: string | null;
+  created_at: string;
 }
 
 export interface GeneratedList {

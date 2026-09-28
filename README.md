@@ -134,13 +134,16 @@ trocá-la invalida todos os tokens já emitidos.
 | `GET` | `/auth/me` | A conta de quem está autenticado |
 | `DELETE` | `/auth/me` | Apaga a conta e todos os dados pessoais (LGPD) |
 | `POST` | `/meal-plans` | Importa o plano do PDF (multipart: `file` + `consent_accepted`) |
+| `GET` | `/meal-plans` | Planos do usuário, do mais recente ao mais antigo, sem os itens |
 | `GET` | `/meal-plans/{id}` | Plano com seus itens |
 | `GET` | `/meal-plans/{id}/items/{item_id}/candidates` | Produtos candidatos para o item |
 | `POST` | `/meal-plans/{id}/items/{item_id}/confirmation` | Confirma o produto escolhido |
 | `POST` | `/meal-plans/{id}/shopping-lists` | Gera a lista de compras para uma região |
+| `GET` | `/meal-plans/{id}/shopping-lists` | Listas já geradas para o plano, da mais recente à mais antiga |
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
 | `PATCH` | `/shopping-lists/{id}/items/{item_id}` | Marca ou desmarca o item como comprado |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
+| `PATCH` | `/pantry/{id}` | Vincula o produto ou mede um item já salvo |
 | `DELETE` | `/pantry/{id}` | Remove item da despensa |
 | `GET` | `/pantry/{id}/candidates` | Produtos parecidos com um item já salvo |
 | `GET` | `/products/search` | Produtos parecidos com um texto livre (`?q=`) |

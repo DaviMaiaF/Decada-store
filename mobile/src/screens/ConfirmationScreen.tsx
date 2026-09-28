@@ -18,9 +18,13 @@ import type { PlanItem } from '../types/api';
 export default function ConfirmationScreen({
   planId,
   onReady,
+  onNewPlan,
 }: {
   planId: string;
   onReady: (planId: string) => void;
+  /** Volta ao envio de PDF. Esta tela é a casa da aba Dieta desde que o plano
+   * passou a ser reencontrado na partida, então precisa ter porta de saída. */
+  onNewPlan: () => void;
 }) {
   const plano = useQuery({
     queryKey: ['meal-plan', planId],
@@ -76,6 +80,7 @@ export default function ConfirmationScreen({
           {confirmados === 0 ? (
             <Body muted>Confirme ao menos um item para gerar a lista.</Body>
           ) : null}
+          <Button label="Enviar outro plano" variant="ghost" onPress={onNewPlan} />
         </View>
       }
     />

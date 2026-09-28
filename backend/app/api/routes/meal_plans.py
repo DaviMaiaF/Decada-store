@@ -16,6 +16,7 @@ from app.schemas.meal_plan import (
     ConfirmationIn,
     ImportResultOut,
     MealPlanOut,
+    MealPlanSummaryOut,
     PlanItemOut,
 )
 from app.services.import_plan import import_plan_from_pdf
@@ -85,6 +86,43 @@ def import_meal_plan(
     )
     session.commit()
     return ImportResultOut.model_validate(result)
+
+
+@router.get("", response_model=list[MealPlanSummaryOut])
+def read_meal_plans(session: DbSession, user: CurrentUser) -> list[MealPlanSummaryOut]:
+    """Planos do usuário, do mais recente ao mais antigo.
+
+    É por aqui que o app reencontra o plano depois de ser fechado. Sem esta
+    rota o id vivia só na memória da tela, e recarregar mandava a pessoa de
+    volta para o upload de um plano que já estava no banco.
+
+    Quem ainda não importou nada recebe 200 com lista vazia: não ter plano não
+    é erro.
+    """
+    plans = session.scalars(
+        select(MealPlan)
+        .where(MealPlan.user_id == user.id)
+        .options(selectinload(MealPlan.items))
+        # `created_at` vem do banco, e no Postgres `now()` é o horário da
+        # transação: dois planos importados na mesma empatariam. O aceite é
+        # carimbado em Python a cada import, e desempata.
+        .order_by(MealPlan.created_at.desc(), MealPlan.consent_at.desc())
+    ).all()
+
+    return [
+        MealPlanSummaryOut(
+            id=plan.id,
+            title=plan.title,
+            nutritionist_name=plan.nutritionist_name,
+            consent_at=plan.consent_at,
+            created_at=plan.created_at,
+            item_count=len(plan.items),
+            confirmed_count=sum(
+                1 for item in plan.items if item.status is PlanItemStatus.CONFIRMADO
+            ),
+        )
+        for plan in plans
+    ]
 
 
 @router.get("/{plan_id}", response_model=MealPlanOut)

@@ -67,6 +67,22 @@ class ShoppingListOut(ApiModel):
     items: list[ShoppingListItemOut]
 
 
+class ShoppingListSummaryOut(ApiModel):
+    """Lista de compras na listagem, sem os itens.
+
+    Mesma razão da listagem de planos: serve para o app reencontrar a lista
+    depois de ser fechado, e os itens vêm depois, por `GET /shopping-lists/{id}`.
+    """
+
+    id: uuid.UUID
+    meal_plan_id: uuid.UUID
+    state_code: str
+    city: str
+    estimated_total: Decimal | None = None
+    calculated_at: datetime | None = None
+    created_at: datetime
+
+
 class GeneratedListOut(ApiModel):
     """A lista recém-gerada e o resumo do que aconteceu com o plano."""
 
