@@ -8,8 +8,13 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.models import PantryItem, Product
-from app.schemas.pantry import PantryItemIn, PantryItemOut, ProductSuggestionOut
-from app.services.pantry import suggest_products, user_pantry
+from app.schemas.pantry import (
+    PantryItemIn,
+    PantryItemOut,
+    PantryItemUpdate,
+    ProductSuggestionOut,
+)
+from app.services.pantry import ensure_measurable, suggest_products, user_pantry
 from app.services.text import normalize_text
 
 router = APIRouter(prefix="/pantry", tags=["despensa"])
@@ -27,6 +32,17 @@ def _get_item(session: DbSession, user: CurrentUser, item_id: uuid.UUID) -> Pant
     return item
 
 
+def _get_product(session: DbSession, product_id: uuid.UUID | None) -> Product | None:
+    """O produto informado, ou 404 se ele não existe. Nulo é item sem vínculo."""
+    if product_id is None:
+        return None
+
+    product = session.get(Product, product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "produto não encontrado")
+    return product
+
+
 @router.get("", response_model=list[PantryItemOut])
 def read_pantry(session: DbSession, user: CurrentUser) -> list[PantryItem]:
     """A despensa do usuário, do item mais recente ao mais antigo."""
@@ -42,8 +58,7 @@ def add_pantry_item(
     Aceita item só com texto: enquanto não houver produto do catálogo
     confirmado, o item aparece na despensa mas não abate nada da compra.
     """
-    if payload.product_id is not None and session.get(Product, payload.product_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "produto não encontrado")
+    ensure_measurable(_get_product(session, payload.product_id), payload.unit)
 
     item = PantryItem(
         user_id=user.id,
@@ -57,6 +72,35 @@ def add_pantry_item(
     session.commit()
     session.refresh(item)
     return item
+
+
+@router.patch("/{item_id}", response_model=PantryItemOut)
+def update_pantry_item(
+    session: DbSession,
+    user: CurrentUser,
+    item_id: uuid.UUID,
+    payload: PantryItemUpdate,
+) -> PantryItem:
+    """Vincula o produto ou informa a medição de um item que já está na despensa.
+
+    É o caminho de volta para o item cadastrado pela metade. Só os campos
+    enviados mudam, então mandar `product_id` sozinho preserva a medição — e
+    `null` nos dois campos de medida é como se apaga uma medição que havia.
+    """
+    item = _get_item(session, user, item_id)
+    data = payload.model_dump(exclude_unset=True)
+
+    # A validação é sobre o item como ele vai ficar, não sobre o que veio no
+    # corpo: trocar só o produto pode deixar a medição antiga em outra grandeza.
+    product = _get_product(session, data.get("product_id", item.product_id))
+    ensure_measurable(product, data.get("unit", item.unit))
+
+    for field, value in data.items():
+        setattr(item, field, value)
+
+    session.commit()
+    # Recarrega junto com o produto: a resposta devolve o vínculo, não só o id.
+    return _get_item(session, user, item_id)
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

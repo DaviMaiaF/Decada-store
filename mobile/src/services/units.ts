@@ -22,7 +22,7 @@ export function unitOptions(baseUnit: BaseUnit): MeasurementUnit[] {
 }
 
 /** "500.000" -> "500"; "1.500" -> "1,5". Decimal como se digita em português. */
-function paraCampo(valor: string): string {
+export function amountToField(valor: string): string {
   return String(Number(valor)).replace('.', ',');
 }
 
@@ -44,7 +44,7 @@ export function suggestedAmount(product: Product): {
     opcoes.includes(product.package_unit);
 
   if (embalagem) {
-    return { quantity: paraCampo(product.package_size!), unit: product.package_unit! };
+    return { quantity: amountToField(product.package_size!), unit: product.package_unit! };
   }
   return { quantity: '', unit: opcoes[0] };
 }

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.models import PantryItem, Product
 from app.models.enums import BaseUnit, MeasurementUnit
 from app.services.matching import ScoredProduct, rank_products
-from app.services.units import IncompatibleUnitError, to_base_quantity
+from app.services.units import IncompatibleUnitError, base_unit_of, to_base_quantity
 
 # Mesma precisão das colunas de quantidade do banco, Numeric(12, 3).
 _QUANTITY_PRECISION = Decimal("0.001")
@@ -52,6 +52,26 @@ class PantryCoverage:
 
 def _quantize(quantity: Decimal) -> Decimal:
     return quantity.quantize(_QUANTITY_PRECISION, ROUND_HALF_UP)
+
+
+def ensure_measurable(product: Product | None, unit: MeasurementUnit | None) -> None:
+    """A unidade da medição tem de ser da grandeza em que o produto é vendido.
+
+    Guardar "500 ml" de um produto vendido por quilo é aceito pelo banco e produz
+    o pior item possível: ele aparece na despensa, a pessoa acha que descontou da
+    compra, e `available_quantity` o conta como não medido porque a conversão não
+    existe. Recusar na entrada é mais honesto que abater nada em silêncio.
+
+    Item sem produto não tem grandeza com que comparar, e aí não há o que validar.
+    """
+    if product is None or unit is None:
+        return
+
+    if base_unit_of(unit) is not product.base_unit:
+        raise IncompatibleUnitError(
+            f"{product.name} é vendido em {product.base_unit.value};"
+            f" {unit.value} não é da mesma grandeza"
+        )
 
 
 def available_quantity(

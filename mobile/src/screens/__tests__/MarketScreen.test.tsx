@@ -10,6 +10,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
+import * as session from '../../services/session';
 import type { ShoppingList, ShoppingListItem } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
@@ -19,8 +20,17 @@ jest.mock('../../services/api', () => ({
   setItemPurchased: jest.fn(),
 }));
 
+jest.mock('../../services/session', () => ({
+  ...jest.requireActual('../../services/session'),
+  readRegion: jest.fn(),
+  saveRegion: jest.fn(),
+}));
+
 const lerLista = api.readShoppingList as jest.Mock;
+const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
+const lerRegiao = session.readRegion as jest.Mock;
+const salvarRegiao = session.saveRegion as jest.Mock;
 
 const HA_TRES_DIAS = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -90,6 +100,8 @@ beforeEach(() => {
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
+  lerRegiao.mockResolvedValue({ stateCode: 'DF', city: 'Brasília' });
+  salvarRegiao.mockResolvedValue(undefined);
 });
 
 // Sem isto o cache do React Query deixa temporizadores abertos e o Jest não
@@ -158,6 +170,43 @@ it('avisa quando não há preço na região', async () => {
   expect(screen.getByText('sem preço coletado nesta região')).toBeTruthy();
 });
 
+it('explica a região quando nenhum item tem preço', async () => {
+  const semPreco = {
+    estimated_cost: null,
+    price_confidence: null,
+    price_reference_date: null,
+    price_origin: null,
+    price_sample_size: null,
+  } as const;
+
+  await montar(
+    lista([item({ id: 'a', ...semPreco }), item({ id: 'b', ...semPreco })]),
+  );
+
+  // Item por item o app já diz "sem preço"; o que faltava era a causa: a região
+  // escolhida não tem coleta, e é por isso que o total dá R$ 0,00.
+  expect(await screen.findByText('Ainda não temos preços em Brasília')).toBeTruthy();
+});
+
+it('não explica a região quando algum item tem preço', async () => {
+  await montar(
+    lista([
+      item({ id: 'a' }),
+      item({
+        id: 'b',
+        estimated_cost: null,
+        price_confidence: null,
+        price_reference_date: null,
+        price_origin: null,
+        price_sample_size: null,
+      }),
+    ]),
+  );
+
+  await screen.findByText('R$ 174,20');
+  expect(screen.queryByText(/Ainda não temos preços/)).toBeNull();
+});
+
 it('mostra quanto veio da despensa', async () => {
   await montar(lista([item({ id: 'a', quantity: '0.700', quantity_from_pantry: '0.500' })]));
 
@@ -192,7 +241,6 @@ it('marca produto fictício do seed', async () => {
 
   expect(await screen.findByText('dado fictício de desenvolvimento')).toBeTruthy();
 });
-
 
 // --------------------------------------------------------------------------
 // item comprado
@@ -255,4 +303,34 @@ it('desfaz a marcação quando o servidor recusa', async () => {
   // mercado sem o item.
   expect(await screen.findByText('não foi possível salvar o item marcado')).toBeTruthy();
   expect(screen.getByText('0 de 1 itens comprados')).toBeTruthy();
+});
+
+it('permite escolher a região e gera a lista com os dados informados', async () => {
+  gerarLista.mockResolvedValue({
+    shopping_list: lista([item({ id: 'a' })]),
+  });
+
+  const onGenerated = jest.fn();
+
+  await render(
+    <QueryClientProvider client={cliente}>
+      <MarketScreen planId="plano-1" listId={null} onGenerated={onGenerated} />
+    </QueryClientProvider>,
+  );
+
+  const inputUf = await screen.findByLabelText('Estado');
+  const inputCidade = screen.getByLabelText('Cidade');
+
+  // `await` em cada evento: sem isso as chamadas de act() se sobrepõem e o
+  // React reclama no console, do mesmo jeito que no resto desta suíte.
+  await fireEvent.changeText(inputUf, 'SP');
+  await fireEvent.changeText(inputCidade, 'São Paulo');
+
+  await fireEvent.press(screen.getByText('Gerar lista de compras'));
+
+  await waitFor(() => {
+    expect(salvarRegiao).toHaveBeenCalledWith({ stateCode: 'SP', city: 'São Paulo' });
+    expect(gerarLista).toHaveBeenCalledWith('plano-1', 'SP', 'São Paulo');
+    expect(onGenerated).toHaveBeenCalledWith('lista-1');
+  });
 });

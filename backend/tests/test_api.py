@@ -490,6 +490,134 @@ def test_sugere_produto_para_o_item_digitado(client, marina):
     assert resposta.json()[0]["product"]["name"] == "Aveia em flocos"
 
 
+def _produto(db_session, nome: str) -> Product:
+    return db_session.scalars(select(Product).where(Product.name == nome)).one()
+
+
+def test_atualizar_item_da_despensa_vincula_e_mede(client, marina, db_session):
+    # O item nasce só com texto: é assim que ele fica quando o catálogo não é
+    # consultado na hora, e é isto que o PATCH existe para consertar.
+    item_id = client.post(
+        "/pantry", headers=_headers(marina), json={"raw_description": "azeite extravirgem"}
+    ).json()["id"]
+
+    azeite = _produto(db_session, "Azeite de oliva extravirgem")
+
+    resposta = client.patch(
+        f"/pantry/{item_id}",
+        headers=_headers(marina),
+        json={"product_id": str(azeite.id), "quantity": "500", "unit": "ml"},
+    )
+
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["id"] == item_id
+    assert corpo["product"]["id"] == str(azeite.id)
+    # A escala da coluna é de três casas: a API devolve o que ela guardou.
+    assert corpo["quantity"] == "500.000"
+    assert corpo["unit"] == "ml"
+
+
+def test_atualizar_item_da_despensa_apaga_a_medicao(client, marina, db_session):
+    aveia = _produto(db_session, "Aveia em flocos")
+    item_id = client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "aveia",
+            "product_id": str(aveia.id),
+            "quantity": "300",
+            "unit": "g",
+        },
+    ).json()["id"]
+
+    # Nulo nos dois campos é "não sei mais quanto tenho", e apagar é o certo:
+    # manter a medição antiga faria o app descontar uma quantidade que não existe.
+    resposta = client.patch(
+        f"/pantry/{item_id}",
+        headers=_headers(marina),
+        json={"product_id": str(aveia.id), "quantity": None, "unit": None},
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json()["quantity"] is None
+    assert resposta.json()["unit"] is None
+
+
+def test_nao_da_para_medir_item_em_grandeza_que_o_produto_nao_usa(client, marina, db_session):
+    aveia = _produto(db_session, "Aveia em flocos")
+    item_id = client.post(
+        "/pantry", headers=_headers(marina), json={"raw_description": "aveia"}
+    ).json()["id"]
+
+    # Aveia é vendida por quilo. Aceitar "500 ml" gravaria item que aparece na
+    # despensa e nunca abate nada, porque a conversão não existe.
+    resposta = client.patch(
+        f"/pantry/{item_id}",
+        headers=_headers(marina),
+        json={"product_id": str(aveia.id), "quantity": "500", "unit": "ml"},
+    )
+
+    assert resposta.status_code == 422
+
+
+def test_nao_da_para_criar_item_em_grandeza_que_o_produto_nao_usa(client, marina, db_session):
+    aveia = _produto(db_session, "Aveia em flocos")
+
+    resposta = client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "aveia",
+            "product_id": str(aveia.id),
+            "quantity": "500",
+            "unit": "ml",
+        },
+    )
+
+    assert resposta.status_code == 422
+
+
+def test_trocar_o_produto_nao_deixa_a_medicao_antiga_em_outra_grandeza(
+    client, marina, db_session
+):
+    azeite = _produto(db_session, "Azeite de oliva extravirgem")
+    aveia = _produto(db_session, "Aveia em flocos")
+    item_id = client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "azeite",
+            "product_id": str(azeite.id),
+            "quantity": "500",
+            "unit": "ml",
+        },
+    ).json()["id"]
+
+    # Só o produto muda, e a medição em ml fica para trás — a validação é sobre
+    # o item como ele vai ficar, não sobre o que veio no corpo.
+    resposta = client.patch(
+        f"/pantry/{item_id}", headers=_headers(marina), json={"product_id": str(aveia.id)}
+    )
+
+    assert resposta.status_code == 422
+
+
+def test_nao_da_para_atualizar_item_da_despensa_alheia(client, marina, outra_pessoa, db_session):
+    item_id = client.post(
+        "/pantry", headers=_headers(marina), json={"raw_description": "azeite"}
+    ).json()["id"]
+    ovos = _produto(db_session, "Ovos de galinha")
+
+    resposta = client.patch(
+        f"/pantry/{item_id}",
+        headers=_headers(outra_pessoa),
+        json={"product_id": str(ovos.id), "quantity": "1", "unit": "unidade"},
+    )
+
+    assert resposta.status_code == 404
+
+
 # --------------------------------------------------------------------------
 # receitas
 # --------------------------------------------------------------------------

@@ -12,6 +12,9 @@
  * A quantidade continua opcional: "tenho azeite" é informação válida sem número,
  * e guardar só como texto continua possível para o que não existe no catálogo.
  * Nos dois casos a tela avisa o que aquele item deixa de fazer.
+ *
+ * O que ficou pela metade não fica preso assim: tocar em um item já salvo abre o
+ * mesmo par produto + quantidade, e é por ali que o item solto passa a abater.
  */
 
 import { useState } from 'react';
@@ -34,9 +37,10 @@ import {
   readRecipeSuggestions,
   removePantryItem,
   searchProducts,
+  updatePantryItem,
 } from '../services/api';
 import { formatQuantity } from '../services/format';
-import { parseDecimal, suggestedAmount, unitOptions } from '../services/units';
+import { amountToField, parseDecimal, suggestedAmount, unitOptions } from '../services/units';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type {
   MeasurementUnit,
@@ -57,6 +61,13 @@ export default function PantryScreen() {
   );
   const [quantidade, setQuantidade] = useState('');
   const [unidade, setUnidade] = useState<MeasurementUnit>('unidade');
+  // Item já salvo em edição, com estado próprio: os dois painéis nunca estão
+  // abertos ao mesmo tempo, mas compartilhar os campos deixaria um sujar o outro.
+  const [editando, setEditando] = useState<PantryItem | null>(null);
+  const [buscaEdicao, setBuscaEdicao] = useState('');
+  const [produtoEdicao, setProdutoEdicao] = useState<Product | null>(null);
+  const [quantidadeEdicao, setQuantidadeEdicao] = useState('');
+  const [unidadeEdicao, setUnidadeEdicao] = useState<MeasurementUnit>('unidade');
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
 
@@ -75,6 +86,12 @@ export default function PantryScreen() {
     queryKey: ['product-search', escolhendo],
     queryFn: () => searchProducts(escolhendo!),
     enabled: escolhendo !== null,
+  });
+
+  const candidatosEdicao = useQuery({
+    queryKey: ['product-search', buscaEdicao],
+    queryFn: () => searchProducts(buscaEdicao),
+    enabled: buscaEdicao.trim().length >= 2,
   });
 
   const adicionar = useMutation({
@@ -126,6 +143,70 @@ export default function PantryScreen() {
     });
   }
 
+  const atualizar = useMutation({
+    mutationFn: ({
+      itemId,
+      produtoId,
+      medida,
+    }: {
+      itemId: string;
+      produtoId: string | null;
+      medida: { quantidade: string; unidade: MeasurementUnit } | null;
+    }) =>
+      updatePantryItem(itemId, {
+        product_id: produtoId,
+        // Aqui os dois campos vão sempre, inclusive nulos: nulo nos dois é como
+        // se diz "não sei mais a quantidade" e apaga a medição que havia.
+        quantity: medida === null ? null : medida.quantidade,
+        unit: medida === null ? null : medida.unidade,
+      }),
+    onSuccess: () => {
+      setEditando(null);
+      recarregar();
+    },
+  });
+
+  /** Tocar no item abre o mesmo par produto + quantidade, já preenchido. */
+  function abrirEdicao(item: PantryItem) {
+    setEditando(item);
+    setProdutoEdicao(item.product);
+    setBuscaEdicao('');
+    setEscolhendo(null);
+    setMedindo(null);
+
+    if (item.product !== null && item.quantity !== null && item.unit !== null) {
+      setQuantidadeEdicao(amountToField(item.quantity));
+      setUnidadeEdicao(item.unit);
+      return;
+    }
+    const sugestao =
+      item.product === null
+        ? { quantity: '', unit: 'unidade' as MeasurementUnit }
+        : suggestedAmount(item.product);
+    setQuantidadeEdicao(sugestao.quantity);
+    setUnidadeEdicao(sugestao.unit);
+  }
+
+  /** Produto escolhido na edição: a unidade passa a ser a da grandeza dele. */
+  function escolherProdutoEdicao(produto: Product) {
+    const sugestao = suggestedAmount(produto);
+    setProdutoEdicao(produto);
+    setQuantidadeEdicao(sugestao.quantity);
+    setUnidadeEdicao(sugestao.unit);
+  }
+
+  function salvarEdicao() {
+    if (editando === null) return;
+    // Campo vazio é "não sei a quantidade", e apaga a medição. Texto que não é
+    // número não chega aqui: o botão fica inativo antes disso.
+    const numero = quantidadeEdicao.trim() === '' ? null : parseDecimal(quantidadeEdicao);
+    atualizar.mutate({
+      itemId: editando.id,
+      produtoId: produtoEdicao === null ? null : produtoEdicao.id,
+      medida: numero === null ? null : { quantidade: numero, unidade: unidadeEdicao },
+    });
+  }
+
   const remover = useMutation({
     mutationFn: (itemId: string) => removePantryItem(itemId),
     onSuccess: recarregar,
@@ -138,6 +219,10 @@ export default function PantryScreen() {
   const semQuantidade = itens.filter(
     (item) => item.product !== null && (item.quantity === null || item.unit === null),
   ).length;
+  // Campo vazio é intenção ("não sei"); texto que não é número é erro de digitação,
+  // e gravar nulo por causa dele apagaria a medição sem a pessoa pedir.
+  const medidaEdicaoInvalida =
+    quantidadeEdicao.trim() !== '' && parseDecimal(quantidadeEdicao) === null;
 
   return (
     <FlatList
@@ -305,6 +390,101 @@ export default function PantryScreen() {
               </View>
             ) : null}
 
+            {editando !== null ? (
+              <View style={styles.escolha}>
+                <Text style={styles.escolhaTitulo}>
+                  Medir ou vincular: "{editando.raw_description}"
+                </Text>
+
+                {produtoEdicao === null ? (
+                  <>
+                    <Body muted>
+                      Primeiro diga qual produto é este item. A quantidade só desconta
+                      depois que existe um produto para descontar.
+                    </Body>
+                    <TextInput
+                      accessibilityLabel="Buscar produto"
+                      placeholder="Buscar produto no catálogo…"
+                      placeholderTextColor={colors.outline}
+                      style={styles.campo}
+                      value={buscaEdicao}
+                      onChangeText={setBuscaEdicao}
+                    />
+                    {candidatosEdicao.data?.map((sugestao: ProductSuggestion) => (
+                      <Pressable
+                        key={sugestao.product.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Usar ${sugestao.product.name}`}
+                        onPress={() => escolherProdutoEdicao(sugestao.product)}
+                        style={styles.candidato}
+                      >
+                        <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
+                        <Text style={styles.candidatoDetalhe}>
+                          {Math.round(Number(sugestao.score) * 100)}% de semelhança
+                        </Text>
+                      </Pressable>
+                    ))}
+                    {candidatosEdicao.data?.length === 0 ? (
+                      <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <Body muted>
+                      {produtoEdicao.name} · deixe a quantidade em branco se não souber
+                      quanto tem.
+                    </Body>
+                    <View style={styles.medidaLinha}>
+                      <TextInput
+                        accessibilityLabel="Quantidade"
+                        placeholder="Quantidade"
+                        placeholderTextColor={colors.outline}
+                        style={[styles.campo, styles.campoQuantidade]}
+                        value={quantidadeEdicao}
+                        onChangeText={setQuantidadeEdicao}
+                        keyboardType="decimal-pad"
+                        returnKeyType="done"
+                      />
+                      <SeletorDeUnidade
+                        produto={produtoEdicao}
+                        escolhida={unidadeEdicao}
+                        onEscolher={setUnidadeEdicao}
+                      />
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.escolhaAcoes}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Salvar medição"
+                    disabled={medidaEdicaoInvalida || atualizar.isPending}
+                    onPress={salvarEdicao}
+                    style={[styles.acaoSecundaria, medidaEdicaoInvalida && styles.botaoInativo]}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Salvar medição</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setEditando(null)}
+                    style={styles.acaoSecundaria}
+                  >
+                    <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+
+            {atualizar.isError ? (
+              <ErrorNotice
+                message={
+                  atualizar.error instanceof ApiError
+                    ? atualizar.error.message
+                    : 'não foi possível salvar a medição'
+                }
+              />
+            ) : null}
+
             {adicionar.isError ? (
               <ErrorNotice
                 message={
@@ -330,6 +510,7 @@ export default function PantryScreen() {
                 <ChipDaDespensa
                   key={item.id}
                   item={item}
+                  onPress={() => abrirEdicao(item)}
                   onRemove={() => remover.mutate(item.id)}
                 />
               ))}
@@ -410,13 +591,32 @@ function SeletorDeUnidade({
   );
 }
 
-function ChipDaDespensa({ item, onRemove }: { item: PantryItem; onRemove: () => void }) {
+/**
+ * O chip é o botão de corrigir o item, não só de ver.
+ *
+ * Quem cadastrou às pressas — sem produto ou sem quantidade — precisa de um
+ * caminho de volta, e o próprio chip já marca visualmente o que está incompleto.
+ */
+function ChipDaDespensa({
+  item,
+  onPress,
+  onRemove,
+}: {
+  item: PantryItem;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
   const vinculado = item.product !== null;
   const quantidade =
     item.quantity && item.unit ? formatQuantity(item.quantity, item.unit) : null;
 
   return (
-    <View style={[styles.chipItem, !vinculado && styles.chipItemSolto]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Item ${item.raw_description}`}
+      onPress={onPress}
+      style={[styles.chipItem, !vinculado && styles.chipItemSolto]}
+    >
       <View style={[styles.ponto, vinculado ? styles.pontoVinculado : styles.pontoSolto]} />
       <Text style={styles.chipItemTexto} numberOfLines={1}>
         {item.raw_description}
@@ -430,7 +630,7 @@ function ChipDaDespensa({ item, onRemove }: { item: PantryItem; onRemove: () => 
       >
         <Text style={styles.chipItemRemover}>✕</Text>
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 

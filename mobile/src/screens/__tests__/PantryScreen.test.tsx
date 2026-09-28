@@ -16,6 +16,7 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readPantry: jest.fn(),
   addPantryItem: jest.fn(),
+  updatePantryItem: jest.fn(),
   removePantryItem: jest.fn(),
   readRecipeSuggestions: jest.fn(),
   searchProducts: jest.fn(),
@@ -23,6 +24,7 @@ jest.mock('../../services/api', () => ({
 
 const lerDespensa = api.readPantry as jest.Mock;
 const adicionar = api.addPantryItem as jest.Mock;
+const atualizar = api.updatePantryItem as jest.Mock;
 const remover = api.removePantryItem as jest.Mock;
 const lerReceitas = api.readRecipeSuggestions as jest.Mock;
 const buscarProdutos = api.searchProducts as jest.Mock;
@@ -189,6 +191,115 @@ describe('despensa', () => {
     await montar();
 
     expect(await screen.findByText(/Sua despensa está vazia/)).toBeTruthy();
+  });
+});
+
+describe('vincular e medir item já salvo', () => {
+  async function abrir(item: PantryItem) {
+    lerDespensa.mockResolvedValue([item]);
+    atualizar.mockResolvedValue(item);
+    await montar();
+    await fireEvent.press(await screen.findByLabelText(`Item ${item.raw_description}`));
+  }
+
+  it('abre a edição ao tocar no item e permite salvar a medição', async () => {
+    await abrir(
+      naDespensa({
+        id: '10',
+        raw_description: 'aveia',
+        product: produto('Aveia em flocos'),
+      }),
+    );
+
+    expect(await screen.findByText('Medir ou vincular: "aveia"')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('Quantidade'), '500');
+    await fireEvent.press(screen.getByLabelText('Salvar medição'));
+
+    await waitFor(() =>
+      expect(atualizar).toHaveBeenCalledWith('10', {
+        product_id: 'produto-Aveia em flocos',
+        quantity: '500',
+        unit: 'g',
+      }),
+    );
+  });
+
+  it('já vem com a quantidade que estava salva', async () => {
+    await abrir(
+      naDespensa({
+        id: '10',
+        raw_description: 'aveia',
+        product: produto('Aveia em flocos'),
+        quantity: '0.300',
+        unit: 'kg',
+      }),
+    );
+
+    expect((await screen.findByLabelText('Quantidade')).props.value).toBe('0,3');
+  });
+
+  it('pede o produto antes da quantidade quando o item é só texto', async () => {
+    await abrir(naDespensa({ id: '10', raw_description: 'canela' }));
+
+    // Quantidade sem produto não abate nada: medir antes de vincular seria
+    // oferecer um campo que não muda a conta.
+    expect(screen.queryByLabelText('Quantidade')).toBeNull();
+    expect(await screen.findByLabelText('Buscar produto')).toBeTruthy();
+  });
+
+  it('ao vincular, oferece só as unidades da grandeza do produto escolhido', async () => {
+    buscarProdutos.mockResolvedValue([
+      { product: produto('Leite integral', { base_unit: 'l' }), score: '0.900' },
+    ]);
+    await abrir(naDespensa({ id: '10', raw_description: 'leite' }));
+
+    await fireEvent.changeText(screen.getByLabelText('Buscar produto'), 'leite');
+    await fireEvent.press(await screen.findByLabelText('Usar Leite integral'));
+
+    expect(screen.getByLabelText('Unidade ml')).toBeTruthy();
+    expect(screen.queryByLabelText('Unidade g')).toBeNull();
+  });
+
+  it('campo vazio apaga a medição em vez de manter a antiga', async () => {
+    await abrir(
+      naDespensa({
+        id: '10',
+        raw_description: 'aveia',
+        product: produto('Aveia em flocos'),
+        quantity: '0.300',
+        unit: 'kg',
+      }),
+    );
+
+    await fireEvent.changeText(screen.getByLabelText('Quantidade'), '');
+    await fireEvent.press(screen.getByLabelText('Salvar medição'));
+
+    await waitFor(() =>
+      expect(atualizar).toHaveBeenCalledWith('10', {
+        product_id: 'produto-Aveia em flocos',
+        quantity: null,
+        unit: null,
+      }),
+    );
+  });
+
+  it('não salva quantidade que não é número', async () => {
+    await abrir(
+      naDespensa({
+        id: '10',
+        raw_description: 'aveia',
+        product: produto('Aveia em flocos'),
+        quantity: '0.300',
+        unit: 'kg',
+      }),
+    );
+
+    // Erro de digitação não pode virar apagamento silencioso da medição.
+    await fireEvent.changeText(screen.getByLabelText('Quantidade'), 'meio quilo');
+    await fireEvent.press(screen.getByLabelText('Salvar medição'));
+
+    expect(atualizar).not.toHaveBeenCalled();
   });
 });
 
