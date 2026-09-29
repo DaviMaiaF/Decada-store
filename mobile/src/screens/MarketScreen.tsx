@@ -22,6 +22,7 @@ import {
   setItemPurchased,
 } from '../services/api';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
+import { simulatedSavings, simulatedTotal } from '../services/simulation';
 import { readRegion, saveRegion } from '../services/session';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { ShoppingList, ShoppingListItem } from '../types/api';
@@ -255,6 +256,21 @@ function ListaCarregada({
   const semPrecoNaRegiao =
     aComprar.length > 0 && aComprar.every((item) => item.estimated_cost === null);
 
+  // Simulação: "e se eu não levar isto?". Vive só na tela — nada é enviado, a
+  // lista salva não muda e a prescrição menos ainda (decisão 8). Por isso é um
+  // estado local, e não uma mutação.
+  const [foraDaSimulacao, setForaDaSimulacao] = useState<string[]>([]);
+  const excluidos = new Set(foraDaSimulacao);
+  const simulando = foraDaSimulacao.length > 0;
+  const totalSimulado = simulatedTotal(aComprar, excluidos);
+  const economiaSimulada = simulatedSavings(aComprar, excluidos);
+
+  function alternarSimulacao(itemId: string) {
+    setForaDaSimulacao((fora) =>
+      fora.includes(itemId) ? fora.filter((id) => id !== itemId) : [...fora, itemId],
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <Text style={styles.titulo}>Lista de Mercado</Text>
@@ -280,6 +296,27 @@ function ListaCarregada({
           </Text>
         </View>
       </Card>
+
+      {simulando ? (
+        <Card style={styles.simulacao}>
+          <SectionTitle>Simulando a compra</SectionTitle>
+          <Text style={styles.totalSimulado}>{formatMoney(totalSimulado)}</Text>
+          <Body muted>
+            {foraDaSimulacao.length === 1
+              ? `1 item fora da simulação · ${formatMoney(economiaSimulada)} a menos`
+              : `${foraDaSimulacao.length} itens fora da simulação · ${formatMoney(economiaSimulada)} a menos`}
+          </Body>
+          <Body muted>
+            É só uma conta nesta tela. Sua lista continua inteira, e o plano da sua
+            nutricionista não muda.
+          </Body>
+          <Button
+            label="Limpar simulação"
+            variant="ghost"
+            onPress={() => setForaDaSimulacao([])}
+          />
+        </Card>
+      ) : null}
 
       {semPrecoNaRegiao ? (
         <Card style={styles.avisoRegiao}>
@@ -313,6 +350,8 @@ function ListaCarregada({
             <ItemDaLista
               key={item.id}
               item={item}
+              foraDaSimulacao={excluidos.has(item.id)}
+              onSimular={() => alternarSimulacao(item.id)}
               onToggle={() =>
                 marcacao.mutate({ itemId: item.id, comprado: !item.purchased })
               }
@@ -324,12 +363,28 @@ function ListaCarregada({
   );
 }
 
-function ItemDaLista({ item, onToggle }: { item: ShoppingListItem; onToggle: () => void }) {
+function ItemDaLista({
+  item,
+  foraDaSimulacao,
+  onSimular,
+  onToggle,
+}: {
+  item: ShoppingListItem;
+  foraDaSimulacao: boolean;
+  onSimular: () => void;
+  onToggle: () => void;
+}) {
   const dispensado = item.dispensed_by_pantry;
   const comprado = item.purchased;
 
   return (
-    <Card style={[styles.item, comprado && styles.itemComprado]}>
+    <Card
+      style={[
+        styles.item,
+        comprado && styles.itemComprado,
+        foraDaSimulacao && styles.itemForaDaSimulacao,
+      ]}
+    >
       <View style={styles.itemTopo}>
         <View style={styles.itemTexto}>
           <Text style={[styles.itemNome, comprado && styles.riscado]}>{item.product.name}</Text>
@@ -364,11 +419,20 @@ function ItemDaLista({ item, onToggle }: { item: ShoppingListItem; onToggle: () 
       {dispensado ? (
         <Chip label="não precisa comprar" tone="success" />
       ) : (
-        <Button
-          label={comprado ? 'Desmarcar' : 'Já comprei'}
-          variant="ghost"
-          onPress={onToggle}
-        />
+        <>
+          <Button
+            label={comprado ? 'Desmarcar' : 'Já comprei'}
+            variant="ghost"
+            onPress={onToggle}
+          />
+          {/* Tirar da simulação não é o mesmo que marcar como comprado: aquilo
+              o servidor guarda, isto não sai desta tela. */}
+          <Button
+            label={foraDaSimulacao ? 'Devolver à simulação' : 'Simular sem este item'}
+            variant="ghost"
+            onPress={onSimular}
+          />
+        </>
       )}
     </Card>
   );
@@ -393,6 +457,8 @@ const styles = StyleSheet.create({
   },
 
   avisoRegiao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+  simulacao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+  totalSimulado: { ...typography.currency, color: colors.primary },
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },
   trocarRegiao: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
@@ -406,6 +472,9 @@ const styles = StyleSheet.create({
 
   corredor: { gap: spacing.xs },
   item: { gap: spacing.xs2 },
+  // Quem está fora da simulação continua na lista, só desbotado: sumir daria a
+  // impressão de que o item saiu da compra de verdade.
+  itemForaDaSimulacao: { opacity: 0.55 },
   itemComprado: { opacity: 0.5 },
   itemTopo: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   itemTexto: { flex: 1 },

@@ -207,6 +207,81 @@ it('não explica a região quando algum item tem preço', async () => {
   expect(screen.queryByText(/Ainda não temos preços/)).toBeNull();
 });
 
+describe('simulação de cenário', () => {
+  it('tirar um item da simulação recalcula o total na tela', async () => {
+    // Três itens para o total simulado não coincidir com o preço de nenhum
+    // deles: 5,32 + 0,10 = 5,42, que só pode ter vindo da soma.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '12.31' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+        item({ id: 'c', estimated_cost: '0.10' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
+
+    expect(await screen.findByText('R$ 5,42')).toBeTruthy();
+    expect(screen.getByText('1 item fora da simulação · R$ 12,31 a menos')).toBeTruthy();
+  });
+
+  it('simular não mexe na lista salva nem manda nada ao servidor', async () => {
+    await montar(lista([item({ id: 'a', estimated_cost: '12.31' })]));
+
+    await fireEvent.press(await screen.findByText('Simular sem este item'));
+
+    // Decisão 8: o app não altera a prescrição. A simulação é uma conta de tela.
+    expect(marcarItem).not.toHaveBeenCalled();
+    expect(screen.getByText('R$ 174,20')).toBeTruthy();
+  });
+
+  it('devolver o item desfaz a simulação', async () => {
+    await montar(lista([item({ id: 'a', estimated_cost: '12.31' })]));
+
+    await fireEvent.press(await screen.findByText('Simular sem este item'));
+    await fireEvent.press(await screen.findByText('Devolver à simulação'));
+
+    expect(screen.queryByText('Simulando a compra')).toBeNull();
+  });
+
+  it('limpar devolve todos de uma vez', async () => {
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '12.31' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    const botoes = await screen.findAllByText('Simular sem este item');
+    await fireEvent.press(botoes[0]);
+    await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
+
+    expect(screen.getByText('2 itens fora da simulação · R$ 17,63 a menos')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Limpar simulação'));
+
+    expect(screen.queryByText('Simulando a compra')).toBeNull();
+  });
+
+  it('item dispensado pela despensa não entra na simulação', async () => {
+    await montar(
+      lista([
+        item({
+          id: 'a',
+          dispensed_by_pantry: true,
+          quantity: '0.000',
+          quantity_from_pantry: '1.200',
+          estimated_cost: '0.00',
+        }),
+      ]),
+    );
+
+    // Ele não faz parte do trajeto pelo mercado; simular sem ele não diz nada.
+    await screen.findByText('não precisa comprar');
+    expect(screen.queryByText('Simular sem este item')).toBeNull();
+  });
+});
+
 it('mostra quanto veio da despensa', async () => {
   await montar(lista([item({ id: 'a', quantity: '0.700', quantity_from_pantry: '0.500' })]));
 

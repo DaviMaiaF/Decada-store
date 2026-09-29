@@ -54,6 +54,15 @@ function listaSalva(over: Partial<ShoppingListSummary> = {}): ShoppingListSummar
   };
 }
 
+const itemDoPlano = {
+  position: 1,
+  raw_description: '50 g de aveia em flocos',
+  quantity: '50.000',
+  unit: 'g' as const,
+  product_id: null,
+  match_score: null,
+};
+
 let cliente: QueryClient;
 
 async function montar() {
@@ -95,6 +104,44 @@ beforeEach(() => {
 afterEach(() => {
   cliente.clear();
   cliente.unmount();
+});
+
+describe('trilha da jornada', () => {
+  it('sem plano, a etapa atual é enviar', async () => {
+    await montar();
+
+    expect(await screen.findByLabelText('Etapa 1 de 4: Enviar')).toBeTruthy();
+  });
+
+  it('com plano, a etapa atual passa a ser confirmar', async () => {
+    lerPlanos.mockResolvedValue([planoSalvo()]);
+
+    await montar();
+
+    // Quem abria o Mercado antes de confirmar via uma tela vazia sem entender
+    // que o problema era a etapa anterior.
+    expect(await screen.findByLabelText('Etapa 2 de 4: Confirmar')).toBeTruthy();
+  });
+
+  it('mostra o quanto falta da etapa em andamento', async () => {
+    lerPlanos.mockResolvedValue([planoSalvo()]);
+    lerPlano.mockResolvedValue({
+      id: 'plano-1',
+      title: null,
+      nutritionist_name: null,
+      consent_at: '2026-09-27T10:00:00Z',
+      consent_version: 'v1',
+      created_at: '2026-09-27T10:00:00Z',
+      items: [
+        { ...itemDoPlano, id: 'i1', status: 'confirmado' as const },
+        { ...itemDoPlano, id: 'i2', status: 'pendente' as const },
+      ],
+    });
+
+    await montar();
+
+    expect(await screen.findByText('1/2')).toBeTruthy();
+  });
 });
 
 it('quem não tem plano começa no envio do PDF', async () => {

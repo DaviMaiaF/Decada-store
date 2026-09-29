@@ -16,6 +16,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   IconeDespensa,
@@ -28,7 +29,13 @@ import EconomyScreen from '../screens/EconomyScreen';
 import MarketScreen from '../screens/MarketScreen';
 import PantryScreen from '../screens/PantryScreen';
 import UploadScreen from '../screens/UploadScreen';
-import { readMealPlans, readShoppingLists } from '../services/api';
+import { Trilha } from '../components/Trilha';
+import {
+  readMealPlan,
+  readMealPlans,
+  readShoppingList,
+  readShoppingLists,
+} from '../services/api';
 import { colors, typography } from '../theme/tokens';
 
 type Abas = {
@@ -61,6 +68,43 @@ export default function AppNavigator() {
   });
   const listId = listaDaSessao ?? listas.data?.[0]?.id ?? null;
 
+  // As duas consultas abaixo compartilham a chave com as telas que já as fazem,
+  // então o React Query serve as duas do mesmo cache: a trilha não custa
+  // requisição extra, e acompanha cada confirmação e cada item marcado.
+  const plano = useQuery({
+    queryKey: ['meal-plan', planId],
+    queryFn: () => readMealPlan(planId!),
+    enabled: planId !== null,
+  });
+
+  const lista = useQuery({
+    queryKey: ['shopping-list', listId],
+    queryFn: () => readShoppingList(listId!),
+    enabled: listId !== null,
+  });
+
+  const itensDoPlano = plano.data?.items ?? [];
+  const confirmados = itensDoPlano.filter((item) => item.status === 'confirmado').length;
+
+  // Item que a despensa dispensou não faz parte do trajeto pelo mercado.
+  const aComprar = (lista.data?.items ?? []).filter((item) => !item.dispensed_by_pantry);
+  const comprados = aComprar.filter((item) => item.purchased).length;
+
+  const etapas = [
+    { rotulo: 'Enviar', cumprida: planId !== null },
+    {
+      rotulo: 'Confirmar',
+      cumprida: itensDoPlano.length > 0 && confirmados === itensDoPlano.length,
+      detalhe: itensDoPlano.length > 0 ? `${confirmados}/${itensDoPlano.length}` : undefined,
+    },
+    { rotulo: 'Região', cumprida: listId !== null },
+    {
+      rotulo: 'Comprar',
+      cumprida: aComprar.length > 0 && comprados === aComprar.length,
+      detalhe: aComprar.length > 0 ? `${comprados}/${aComprar.length}` : undefined,
+    },
+  ];
+
   const etapa: Etapa = etapaEscolhida ?? (planId === null ? 'upload' : 'confirmacao');
 
   // Esperar aqui evita a tela piscar no upload antes de saber que há plano.
@@ -76,10 +120,15 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer ref={navegacao}>
+      {/* A trilha fica no lugar do cabeçalho, que só repetia o nome da aba —
+          cada tela já abre com o próprio título. */}
+      <SafeAreaView edges={['top']} style={styles.topo}>
+        <Trilha etapas={etapas} />
+      </SafeAreaView>
+
       <Tab.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTitleStyle: { ...typography.headlineSm, color: colors.primary },
+          headerShown: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.outlineVariant },
           tabBarActiveTintColor: colors.primaryContainer,
           tabBarInactiveTintColor: colors.onSurfaceVariant,
@@ -154,6 +203,7 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  topo: { backgroundColor: colors.surface },
   carregando: {
     flex: 1,
     backgroundColor: colors.surface,
