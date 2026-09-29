@@ -116,7 +116,8 @@ de item.
 | Adicionar item avulso | 🔨 | Exige `plan_item_id` nulo em `ShoppingListItem`; a rota ainda não existe |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
-| Simular a compra sem um item | ✅ | Conta local em `services/simulation.ts`; não envia nada e não altera a lista |
+| Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
+| Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Exportar para WhatsApp | ⛔ | |
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
@@ -140,11 +141,19 @@ A soma é feita em centavos, com inteiros. Somar `Number("5.32") + Number("12.31
 ponto flutuante acumula erro e produz casas que não existem, justamente no número que a
 pessoa usa para decidir a compra.
 
-**O que a simulação ainda não faz é mexer na quantidade.** Dobrar um item não é dobrar o
-preço: produto embalado sobe de pacote em pacote, e essa conta é do
-[`_quantity_to_charge`](../../backend/app/services/pricing.py), no servidor. Fazer isso na
-tela seria copiar regra de negócio para um lugar onde ela não tem teste. Se entrar, entra
-como rota de simulação que reaproveita o `pricing`.
+**Mexer na quantidade é pergunta para o servidor.** Dobrar um item não é dobrar o preço:
+produto embalado sobe de pacote em pacote, e essa conta é do
+[`quantity_to_charge`](../../backend/app/services/pricing.py). Fazê-la na tela seria copiar
+regra de negócio para um lugar onde ela não tem teste, então a tela pergunta a
+`POST /shopping-lists/{id}/simulation` e recebe o custo de cada item de volta. A soma
+continua sendo do cliente: somar não é regra de negócio, arredondar embalagem é.
+
+O preço usado é **o que a lista congelou**. Consultar de novo faria a simulação misturar
+duas mudanças — a quantidade que a pessoa mexeu e a coleta que chegou no meio — e a
+comparação deixaria de responder à pergunta feita.
+
+**A diferença tem sinal.** Simular quantidade maior encarece a compra, e a tela diz "a
+mais"; chamar isso de economia seria mentir para quem está decidindo o que levar.
 
 **Região sem coleta não é lista errada.** O catálogo de desenvolvimento só tem preço em
 Brasília e Taguatinga. Pedir a lista em outra cidade devolve os itens certos com preço
@@ -231,7 +240,7 @@ a caixa de 1 L do mesmo jeito, e não poupou nada. A conta é
 > o que custaria a quantidade prescrita inteira **−** o que de fato se compra
 
 respeitando o arredondamento para embalagem fechada do
-[`_quantity_to_charge`](../../backend/app/services/pricing.py). Para item a granel dá a
+[`quantity_to_charge`](../../backend/app/services/pricing.py). Para item a granel dá a
 proporção; para embalado que não reduziu o número de pacotes dá zero, que é a verdade.
 Item sem preço fica com economia **nula**, não zero — nulo é "não sei", zero é "não
 poupou".

@@ -36,12 +36,12 @@ export function simulatedTotal(items: ItemSimulavel[], excluded: Set<string>): s
   return (centavos / 100).toFixed(2);
 }
 
-/** Quanto a simulação tira da compra, em relação a levar tudo. */
-export function simulatedSavings(items: ItemSimulavel[], excluded: Set<string>): string {
-  const tudo = items.reduce((soma, item) => soma + paraCentavos(item.estimated_cost), 0);
-  const escolhido = items
-    .filter((item) => !excluded.has(item.id))
-    .reduce((soma, item) => soma + paraCentavos(item.estimated_cost), 0);
-
-  return ((tudo - escolhido) / 100).toFixed(2);
+/**
+ * Diferença entre o cenário simulado e a lista como ela está salva.
+ *
+ * Com sinal: simular quantidade maior deixa a compra **mais cara**, e chamar
+ * isso de economia seria mentir. Negativo é menos, positivo é mais.
+ */
+export function simulatedDifference(simulado: string, original: string): string {
+  return ((paraCentavos(simulado) - paraCentavos(original)) / 100).toFixed(2);
 }

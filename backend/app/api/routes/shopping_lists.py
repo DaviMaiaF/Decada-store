@@ -16,8 +16,11 @@ from app.schemas.shopping_list import (
     ShoppingListItemOut,
     ShoppingListOut,
     ShoppingListSummaryOut,
+    SimulatedItemOut,
+    SimulationIn,
 )
 from app.services.shopping import generate_shopping_list
+from app.services.simulation import simulate_item
 
 router = APIRouter(tags=["listas de compras"])
 
@@ -173,3 +176,46 @@ def set_item_purchased(
     session.commit()
     session.refresh(item)
     return item
+
+
+@router.post("/shopping-lists/{list_id}/simulation", response_model=list[SimulatedItemOut])
+def simulate_shopping_list(
+    session: DbSession,
+    user: CurrentUser,
+    list_id: uuid.UUID,
+    payload: SimulationIn,
+) -> list[SimulatedItemOut]:
+    """Quanto custaria a lista com outras quantidades. **Não grava nada.**
+
+    A conta mora aqui, e não na tela, porque produto embalado sobe de pacote em
+    pacote: multiplicar preço por quantidade — que é o que uma tela faria — sai
+    errado para tudo que vem embalado.
+
+    O preço usado é o que a lista congelou. Consultar de novo faria a simulação
+    misturar a quantidade que a pessoa mexeu com a coleta que chegou no meio.
+    """
+    itens = {
+        item.id: item
+        for item in session.scalars(
+            select(ShoppingListItem)
+            .join(ShoppingList)
+            .join(MealPlan)
+            .where(
+                ShoppingListItem.shopping_list_id == list_id,
+                MealPlan.user_id == user.id,
+            )
+            .options(selectinload(ShoppingListItem.product))
+        ).all()
+    }
+
+    simulados = []
+    for pedido in payload.items:
+        item = itens.get(pedido.item_id)
+        # Item de outra pessoa e item que não é desta lista respondem igual.
+        if item is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "item não encontrado nesta lista")
+
+        simulado = simulate_item(item, pedido.quantity)
+        simulados.append(SimulatedItemOut.model_validate(simulado))
+
+    return simulados

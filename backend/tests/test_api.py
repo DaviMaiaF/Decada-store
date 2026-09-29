@@ -695,6 +695,92 @@ def test_nao_da_para_atualizar_item_da_despensa_alheia(client, marina, outra_pes
     assert resposta.status_code == 404
 
 
+def _lista_para_simular(client, user, db_session):
+    """Uma lista de aveia — vendida em pacote de 500 g, que é o caso interessante.
+
+    Nome distinto do `_lista_gerada` acima de propósito: são dois ajudantes com
+    retornos diferentes, e reaproveitar o nome apagaria o outro em silêncio.
+    """
+    plano_id, _ = plano_confirmado(client, user, db_session, produto_nome="Aveia em flocos")
+    corpo = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(user),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()
+    return corpo["shopping_list"]
+
+
+def test_simula_outra_quantidade_sem_gravar_nada(client, marina, db_session):
+    lista = _lista_para_simular(client, marina, db_session)
+    item = lista["items"][0]
+
+    resposta = client.post(
+        f"/shopping-lists/{lista['id']}/simulation",
+        headers=_headers(marina),
+        json={"items": [{"item_id": item["id"], "quantity": "5.000"}]},
+    )
+
+    assert resposta.status_code == 200
+    simulado = resposta.json()[0]
+    assert simulado["item_id"] == item["id"]
+    assert Decimal(simulado["estimated_cost"]) > Decimal(item["estimated_cost"])
+
+    # A lista salva não mudou: simular é uma pergunta, não uma alteração.
+    depois = client.get(f"/shopping-lists/{lista['id']}", headers=_headers(marina)).json()
+    assert depois["items"][0]["quantity"] == item["quantity"]
+    assert depois["items"][0]["estimated_cost"] == item["estimated_cost"]
+    assert depois["estimated_total"] == lista["estimated_total"]
+
+
+def test_a_simulacao_respeita_a_embalagem_fechada(client, marina, db_session):
+    # Aveia vem em pacote de 500 g: 600 g e 1 kg custam o mesmo, dois pacotes.
+    lista = _lista_para_simular(client, marina, db_session)
+    item = lista["items"][0]
+
+    resposta = client.post(
+        f"/shopping-lists/{lista['id']}/simulation",
+        headers=_headers(marina),
+        json={
+            "items": [
+                {"item_id": item["id"], "quantity": "0.600"},
+                {"item_id": item["id"], "quantity": "1.000"},
+            ]
+        },
+    )
+
+    seiscentos, mil = resposta.json()
+    assert seiscentos["packages_needed"] == 2
+    assert mil["packages_needed"] == 2
+    assert seiscentos["estimated_cost"] == mil["estimated_cost"]
+
+
+def test_nao_da_para_simular_lista_alheia(client, marina, outra_pessoa, db_session):
+    lista = _lista_para_simular(client, marina, db_session)
+    item = lista["items"][0]
+
+    resposta = client.post(
+        f"/shopping-lists/{lista['id']}/simulation",
+        headers=_headers(outra_pessoa),
+        json={"items": [{"item_id": item["id"], "quantity": "1.000"}]},
+    )
+
+    assert resposta.status_code == 404
+
+
+def test_quantidade_zero_ou_negativa_e_recusada(client, marina, db_session):
+    lista = _lista_para_simular(client, marina, db_session)
+    item = lista["items"][0]
+
+    # Tirar o item da compra é decisão da tela, não quantidade zero no servidor.
+    for quantidade in ("0", "-1"):
+        resposta = client.post(
+            f"/shopping-lists/{lista['id']}/simulation",
+            headers=_headers(marina),
+            json={"items": [{"item_id": item["id"], "quantity": quantidade}]},
+        )
+        assert resposta.status_code == 422
+
+
 # --------------------------------------------------------------------------
 # receitas
 # --------------------------------------------------------------------------

@@ -5,7 +5,7 @@
  * a "simplifique" de volta para ponto flutuante.
  */
 
-import { simulatedSavings, simulatedTotal } from '../simulation';
+import { simulatedDifference, simulatedTotal } from '../simulation';
 
 const itens = [
   { id: 'a', estimated_cost: '12.31' },
@@ -41,7 +41,17 @@ it('a soma não acumula erro de ponto flutuante', () => {
   expect(simulatedTotal(centavos, new Set())).toBe('0.30');
 });
 
-it('a economia da simulação é o que ficou de fora', () => {
-  expect(simulatedSavings(itens, new Set(['a']))).toBe('12.31');
-  expect(simulatedSavings(itens, new Set())).toBe('0.00');
+it('tirar item deixa a diferença negativa', () => {
+  const semA = simulatedTotal(itens, new Set(['a']));
+
+  expect(simulatedDifference(semA, '17.73')).toBe('-12.31');
+});
+
+it('quantidade maior deixa a diferença positiva, e não vira economia', () => {
+  // Simular mais leite encarece a compra. Chamar isso de economia seria mentir.
+  expect(simulatedDifference('22.94', '17.63')).toBe('5.31');
+});
+
+it('cenário igual ao original dá zero', () => {
+  expect(simulatedDifference('17.73', '17.73')).toBe('0.00');
 });

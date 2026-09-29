@@ -67,6 +67,33 @@ class ShoppingListOut(ApiModel):
     items: list[ShoppingListItemOut]
 
 
+class SimulationItemIn(BaseModel):
+    """Uma quantidade hipotética para um item da lista."""
+
+    item_id: uuid.UUID
+    quantity: Decimal = Field(gt=0)
+
+
+class SimulationIn(BaseModel):
+    """O cenário inteiro que se quer simular.
+
+    Só os itens que mudaram precisam vir: o que não está aqui continua como está
+    na lista salva.
+    """
+
+    items: list[SimulationItemIn] = Field(min_length=1, max_length=200)
+
+
+class SimulatedItemOut(ApiModel):
+    """O item sob a quantidade hipotética. Nada disso foi gravado."""
+
+    item_id: uuid.UUID
+    quantity: Decimal
+    quantity_charged: Decimal
+    packages_needed: int | None = None
+    estimated_cost: Decimal | None = None
+
+
 class ShoppingListSummaryOut(ApiModel):
     """Lista de compras na listagem, sem os itens.
 

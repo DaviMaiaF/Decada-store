@@ -165,12 +165,15 @@ def product_price(
     return aggregate_prices(samples, product.base_unit, reference=reference)
 
 
-def _quantity_to_charge(quantity_in_base: Decimal, product: Product) -> tuple[Decimal, int | None]:
+def quantity_to_charge(quantity_in_base: Decimal, product: Product) -> tuple[Decimal, int | None]:
     """Quanto de fato se leva do mercado.
 
     Produto embalado cobra a embalagem fechada: quem precisa de 300 g de um
     queijo vendido em pacote de 500 g paga o pacote inteiro. A granel, cobra-se
     a quantidade pedida.
+
+    Deixou de ser privada quando a simulação passou a precisar dela: é esta
+    função que impede a tela de fingir que dobrar a quantidade dobra o preço.
     """
     if product.package_size is None or product.package_unit is None:
         return quantity_in_base, None
@@ -209,7 +212,7 @@ def _pantry_savings(
 
     # Não levanta: a conversão de `item.quantity`, na mesma unidade, já passou.
     da_despensa = to_base_quantity(item.quantity_from_pantry, item.unit, item.product.base_unit)
-    quantidade_cheia, _ = _quantity_to_charge(quantity_in_base + da_despensa, item.product)
+    quantidade_cheia, _ = quantity_to_charge(quantity_in_base + da_despensa, item.product)
     custo_cheio = (unit_price * quantidade_cheia).quantize(_MONEY, ROUND_HALF_UP)
 
     return custo_cheio - cost
@@ -258,7 +261,7 @@ def price_shopping_list(
             without_price += 1
             continue
 
-        quantity_charged, packages_needed = _quantity_to_charge(quantity_in_base, item.product)
+        quantity_charged, packages_needed = quantity_to_charge(quantity_in_base, item.product)
         cost = (aggregate.average * quantity_charged).quantize(_MONEY, ROUND_HALF_UP)
 
         item.packages_needed = packages_needed

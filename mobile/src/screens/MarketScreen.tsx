@@ -20,12 +20,14 @@ import {
   generateShoppingList,
   readShoppingList,
   setItemPurchased,
+  simulateShoppingList,
 } from '../services/api';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
-import { simulatedSavings, simulatedTotal } from '../services/simulation';
+import { simulatedDifference, simulatedTotal } from '../services/simulation';
 import { readRegion, saveRegion } from '../services/session';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import type { ShoppingList, ShoppingListItem } from '../types/api';
+import { parseDecimal } from '../services/units';
+import type { ShoppingList, ShoppingListItem, SimulatedItem } from '../types/api';
 
 /** Rótulo de cada corredor. As chaves são as categorias do catálogo. */
 const CORREDORES: Record<string, string> = {
@@ -260,15 +262,41 @@ function ListaCarregada({
   // lista salva não muda e a prescrição menos ainda (decisão 8). Por isso é um
   // estado local, e não uma mutação.
   const [foraDaSimulacao, setForaDaSimulacao] = useState<string[]>([]);
+  // Resultado que veio do servidor para cada item cuja quantidade foi mexida.
+  const [porQuantidade, setPorQuantidade] = useState<Record<string, SimulatedItem>>({});
   const excluidos = new Set(foraDaSimulacao);
-  const simulando = foraDaSimulacao.length > 0;
-  const totalSimulado = simulatedTotal(aComprar, excluidos);
-  const economiaSimulada = simulatedSavings(aComprar, excluidos);
+
+  const simulacao = useMutation({
+    mutationFn: ({ itemId, quantidade }: { itemId: string; quantidade: string }) =>
+      simulateShoppingList(lista.id, [{ item_id: itemId, quantity: quantidade }]),
+    onSuccess: (resultado) =>
+      setPorQuantidade((atual) => ({ ...atual, [resultado[0].item_id]: resultado[0] })),
+  });
+
+  // Cada item vale o que a simulação disse, ou o que a lista salva diz. A soma
+  // continua sendo a daqui — o que veio do servidor foi o custo de cada item,
+  // que é onde mora a regra da embalagem fechada.
+  const itensSimulados = aComprar.map((item) => ({
+    id: item.id,
+    estimated_cost: porQuantidade[item.id]?.estimated_cost ?? item.estimated_cost,
+  }));
+
+  const simulando = foraDaSimulacao.length > 0 || Object.keys(porQuantidade).length > 0;
+  const totalSimulado = simulatedTotal(itensSimulados, excluidos);
+  // A comparação é contra a lista como ela está salva, não contra a própria
+  // simulação: simular quantidade maior encarece, e dizer "a menos" seria falso.
+  const totalOriginal = simulatedTotal(aComprar, new Set());
+  const diferenca = simulatedDifference(totalSimulado, totalOriginal);
 
   function alternarSimulacao(itemId: string) {
     setForaDaSimulacao((fora) =>
       fora.includes(itemId) ? fora.filter((id) => id !== itemId) : [...fora, itemId],
     );
+  }
+
+  function limparSimulacao() {
+    setForaDaSimulacao([]);
+    setPorQuantidade({});
   }
 
   return (
@@ -301,20 +329,12 @@ function ListaCarregada({
         <Card style={styles.simulacao}>
           <SectionTitle>Simulando a compra</SectionTitle>
           <Text style={styles.totalSimulado}>{formatMoney(totalSimulado)}</Text>
-          <Body muted>
-            {foraDaSimulacao.length === 1
-              ? `1 item fora da simulação · ${formatMoney(economiaSimulada)} a menos`
-              : `${foraDaSimulacao.length} itens fora da simulação · ${formatMoney(economiaSimulada)} a menos`}
-          </Body>
+          <Body muted>{descreverSimulacao(foraDaSimulacao.length, diferenca)}</Body>
           <Body muted>
             É só uma conta nesta tela. Sua lista continua inteira, e o plano da sua
             nutricionista não muda.
           </Body>
-          <Button
-            label="Limpar simulação"
-            variant="ghost"
-            onPress={() => setForaDaSimulacao([])}
-          />
+          <Button label="Limpar simulação" variant="ghost" onPress={limparSimulacao} />
         </Card>
       ) : null}
 
@@ -351,7 +371,12 @@ function ListaCarregada({
               key={item.id}
               item={item}
               foraDaSimulacao={excluidos.has(item.id)}
+              simulado={porQuantidade[item.id] ?? null}
+              calculando={simulacao.isPending}
               onSimular={() => alternarSimulacao(item.id)}
+              onSimularQuantidade={(quantidade) =>
+                simulacao.mutate({ itemId: item.id, quantidade })
+              }
               onToggle={() =>
                 marcacao.mutate({ itemId: item.id, comprado: !item.purchased })
               }
@@ -363,19 +388,41 @@ function ListaCarregada({
   );
 }
 
+/** "2 itens fora da simulação · R$ 17,63 a menos", com o sinal certo. */
+function descreverSimulacao(fora: number, diferenca: string): string {
+  const centavos = Math.round(Number(diferenca) * 100);
+  const valor =
+    centavos === 0
+      ? 'mesmo custo'
+      : `${formatMoney(Math.abs(centavos / 100).toFixed(2))} a ${centavos < 0 ? 'menos' : 'mais'}`;
+
+  if (fora === 0) return `Só mudando quantidades · ${valor}`;
+  if (fora === 1) return `1 item fora da simulação · ${valor}`;
+  return `${fora} itens fora da simulação · ${valor}`;
+}
+
 function ItemDaLista({
   item,
   foraDaSimulacao,
+  simulado,
+  calculando,
   onSimular,
+  onSimularQuantidade,
   onToggle,
 }: {
   item: ShoppingListItem;
   foraDaSimulacao: boolean;
+  simulado: SimulatedItem | null;
+  calculando: boolean;
   onSimular: () => void;
+  onSimularQuantidade: (quantidade: string) => void;
   onToggle: () => void;
 }) {
   const dispensado = item.dispensed_by_pantry;
   const comprado = item.purchased;
+  const [campoAberto, setCampoAberto] = useState(false);
+  const [quantidade, setQuantidade] = useState('');
+  const numero = parseDecimal(quantidade);
 
   return (
     <Card
@@ -395,8 +442,28 @@ function ItemDaLista({
             {item.packages_needed ? ` · ${item.packages_needed} embalagem(ns)` : ''}
           </Text>
         </View>
-        <Text style={styles.itemPreco}>{formatMoney(item.estimated_cost)}</Text>
+        <View>
+          <Text style={[styles.itemPreco, simulado !== null && styles.precoSubstituido]}>
+            {formatMoney(item.estimated_cost)}
+          </Text>
+          {simulado !== null ? (
+            <Text style={styles.itemPrecoSimulado}>
+              {formatMoney(simulado.estimated_cost)}
+            </Text>
+          ) : null}
+        </View>
       </View>
+
+      {simulado !== null ? (
+        <Chip
+          label={
+            simulado.packages_needed
+              ? `simulando ${simulado.quantity} ${item.unit} · ${simulado.packages_needed} embalagem(ns)`
+              : `simulando ${simulado.quantity} ${item.unit}`
+          }
+          tone="neutral"
+        />
+      ) : null}
 
       {/* Preço nunca anda sozinho: data, origem e tamanho da amostra junto. */}
       <Text style={styles.procedencia}>
@@ -432,6 +499,34 @@ function ItemDaLista({
             variant="ghost"
             onPress={onSimular}
           />
+
+          {campoAberto ? (
+            <View style={styles.campoSimulacao}>
+              <TextInput
+                accessibilityLabel={`Quantidade simulada de ${item.product.name}`}
+                placeholder={`Quantidade em ${item.unit}`}
+                placeholderTextColor={colors.outline}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                style={styles.campoTexto}
+                value={quantidade}
+                onChangeText={setQuantidade}
+                onSubmitEditing={() => numero !== null && onSimularQuantidade(numero)}
+              />
+              <Button
+                label={calculando ? 'Calculando…' : 'Ver quanto fica'}
+                variant="ghost"
+                disabled={numero === null || calculando}
+                onPress={() => numero !== null && onSimularQuantidade(numero)}
+              />
+            </View>
+          ) : (
+            <Button
+              label="Simular outra quantidade"
+              variant="ghost"
+              onPress={() => setCampoAberto(true)}
+            />
+          )}
         </>
       )}
     </Card>
@@ -482,5 +577,9 @@ const styles = StyleSheet.create({
   riscado: { textDecorationLine: 'line-through' },
   itemQuantidade: { ...typography.labelSm, color: colors.onSurfaceVariant },
   itemPreco: { ...typography.labelLg, color: colors.primary },
+  // O preço real continua à vista, riscado: a simulação não o substitui.
+  precoSubstituido: { textDecorationLine: 'line-through', color: colors.onSurfaceVariant },
+  itemPrecoSimulado: { ...typography.labelLg, color: colors.primary },
+  campoSimulacao: { gap: spacing.xs2 },
   procedencia: { ...typography.labelSm, color: colors.onSurfaceVariant },
 });

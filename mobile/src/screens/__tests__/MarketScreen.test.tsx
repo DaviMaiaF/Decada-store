@@ -18,6 +18,7 @@ jest.mock('../../services/api', () => ({
   readShoppingList: jest.fn(),
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
+  simulateShoppingList: jest.fn(),
 }));
 
 jest.mock('../../services/session', () => ({
@@ -29,6 +30,7 @@ jest.mock('../../services/session', () => ({
 const lerLista = api.readShoppingList as jest.Mock;
 const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
+const simular = api.simulateShoppingList as jest.Mock;
 const lerRegiao = session.readRegion as jest.Mock;
 const salvarRegiao = session.saveRegion as jest.Mock;
 
@@ -261,6 +263,116 @@ describe('simulação de cenário', () => {
     await fireEvent.press(screen.getByText('Limpar simulação'));
 
     expect(screen.queryByText('Simulando a compra')).toBeNull();
+  });
+
+  it('mudar a quantidade pergunta ao servidor e mostra o novo custo', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    // Dois itens para o total simulado (36,92) não coincidir com o custo
+    // simulado do item (31,60) e a asserção saber do que está falando.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    // A conta da embalagem é do servidor: a tela não multiplica preço por
+    // quantidade, porque produto embalado sobe de pacote em pacote.
+    await waitFor(() =>
+      expect(simular).toHaveBeenCalledWith('lista-1', [{ item_id: 'a', quantity: '1' }]),
+    );
+    expect(await screen.findByText('R$ 31,60')).toBeTruthy();
+    expect(screen.getByText('simulando 1.000 kg · 2 embalagem(ns)')).toBeTruthy();
+  });
+
+  it('o preço real continua à vista ao lado do simulado', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    // Dois itens para o total simulado (36,92) não coincidir com o custo
+    // simulado do item (31,60) e a asserção saber do que está falando.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    await screen.findByText('R$ 31,60');
+    // Substituir o número esconderia de que ponto a comparação parte.
+    expect(screen.getByText('R$ 15,80')).toBeTruthy();
+  });
+
+  it('quantidade maior diz "a mais", e não economia', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    // 36,92 contra 21,12: a compra ficou mais cara, e chamar isso de economia
+    // seria mentir para quem está decidindo o que levar.
+    expect(
+      await screen.findByText('Só mudando quantidades · R$ 15,80 a mais'),
+    ).toBeTruthy();
+  });
+
+  it('quantidade que não é número não vai ao servidor', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Simular outra quantidade'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantidade simulada de Peito de frango sem pele'),
+      'meio quilo',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    expect(simular).not.toHaveBeenCalled();
   });
 
   it('item dispensado pela despensa não entra na simulação', async () => {
