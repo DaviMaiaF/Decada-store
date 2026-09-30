@@ -8,6 +8,10 @@
  * Todo preço aparece com data e origem. Preço com mais de 30 dias é mostrado
  * como estimativa — é a decisão nº 1 do projeto, e a tela é o último lugar
  * onde ela pode se perder.
+ *
+ * A lista aceita item avulso: o que a receita pede e o que acabou em casa. Ele
+ * muda a compra, nunca a prescrição — e por isso só ele tem botão de sair.
+ * Item que veio do plano fica: para vê-lo fora da conta existe a simulação.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -15,10 +19,14 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import {
   ApiError,
+  addExtraItem,
   generateShoppingList,
   readShoppingList,
+  removeShoppingListItem,
+  searchProducts,
   setItemPurchased,
   simulateShoppingList,
 } from '../services/api';
@@ -26,8 +34,15 @@ import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from 
 import { simulatedDifference, simulatedTotal } from '../services/simulation';
 import { readRegion, saveRegion } from '../services/session';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import { parseDecimal } from '../services/units';
-import type { ShoppingList, ShoppingListItem, SimulatedItem } from '../types/api';
+import { parseDecimal, suggestedAmount } from '../services/units';
+import type {
+  MeasurementUnit,
+  Product,
+  ProductSuggestion,
+  ShoppingList,
+  ShoppingListItem,
+  SimulatedItem,
+} from '../types/api';
 
 /** Rótulo de cada corredor. As chaves são as categorias do catálogo. */
 const CORREDORES: Record<string, string> = {
@@ -237,6 +252,21 @@ function ListaCarregada({
     onSettled: () => cliente.invalidateQueries({ queryKey: chave }),
   });
 
+  /**
+   * Tirar da lista só vale para o item avulso.
+   *
+   * Não é otimista como a marcação: remover é destrutivo, e a linha some da
+   * tela só quando o servidor confirmou que sumiu do banco.
+   */
+  const remocao = useMutation({
+    mutationFn: (itemId: string) => removeShoppingListItem(lista.id, itemId),
+    onSuccess: () => {
+      cliente.invalidateQueries({ queryKey: chave });
+      // Um ingrediente a menos na compra muda a disponibilidade das receitas.
+      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+    },
+  });
+
   const porCorredor = useMemo(() => {
     const grupos = new Map<string, ShoppingListItem[]>();
     for (const item of lista.items) {
@@ -371,6 +401,8 @@ function ListaCarregada({
               key={item.id}
               item={item}
               foraDaSimulacao={excluidos.has(item.id)}
+              removendo={remocao.isPending}
+              onRemover={() => remocao.mutate(item.id)}
               simulado={porQuantidade[item.id] ?? null}
               calculando={simulacao.isPending}
               onSimular={() => alternarSimulacao(item.id)}
@@ -384,7 +416,165 @@ function ListaCarregada({
           ))}
         </View>
       ))}
+
+      {remocao.isError ? (
+        <ErrorNotice
+          message={
+            remocao.error instanceof ApiError
+              ? remocao.error.message
+              : 'não foi possível tirar o item da lista'
+          }
+        />
+      ) : null}
+
+      <AcrescentarItem listId={lista.id} />
     </ScrollView>
+  );
+}
+
+/**
+ * Acrescentar à compra um produto que o plano não pediu.
+ *
+ * Mesmos dois passos do cadastro da despensa — escolher o produto do catálogo e
+ * dizer quanto —, pela mesma razão: item sem produto não tem preço, e
+ * quantidade em grandeza que o produto não usa não vira compra nenhuma.
+ */
+function AcrescentarItem({ listId }: { listId: string }) {
+  const cliente = useQueryClient();
+  const [texto, setTexto] = useState('');
+  // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
+  const [escolhendo, setEscolhendo] = useState<string | null>(null);
+  const [produto, setProduto] = useState<Product | null>(null);
+  const [quantidade, setQuantidade] = useState('');
+  const [unidade, setUnidade] = useState<MeasurementUnit>('unidade');
+
+  const candidatos = useQuery({
+    queryKey: ['product-search', escolhendo],
+    queryFn: () => searchProducts(escolhendo!),
+    enabled: escolhendo !== null,
+  });
+
+  const acrescentar = useMutation({
+    mutationFn: ({ produtoId, medida }: { produtoId: string; medida: string }) =>
+      addExtraItem(listId, { product_id: produtoId, quantity: medida, unit: unidade }),
+    onSuccess: () => {
+      fechar();
+      cliente.invalidateQueries({ queryKey: ['shopping-list', listId] });
+      // O que entra na compra conta para a disponibilidade das receitas.
+      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+    },
+  });
+
+  function fechar() {
+    setTexto('');
+    setEscolhendo(null);
+    setProduto(null);
+  }
+
+  /** Produto escolhido: falta dizer quanto levar. A embalagem é o palpite. */
+  function escolherProduto(escolhido: Product) {
+    const sugestao = suggestedAmount(escolhido);
+    setQuantidade(sugestao.quantity);
+    setUnidade(sugestao.unit);
+    setProduto(escolhido);
+    setEscolhendo(null);
+  }
+
+  const numero = parseDecimal(quantidade);
+
+  return (
+    <Card style={styles.acrescentar}>
+      <SectionTitle>Acrescentar à compra</SectionTitle>
+      <Body muted>
+        O que uma receita pede, ou o que acabou em casa. Isto muda a sua lista de
+        compras — o plano da sua nutricionista continua o mesmo.
+      </Body>
+
+      {produto === null ? (
+        <>
+          <View style={styles.acrescentarLinha}>
+            <TextInput
+              accessibilityLabel="Acrescentar produto à compra"
+              placeholder="Ex: chia, azeite, café…"
+              placeholderTextColor={colors.outline}
+              style={[styles.campoTexto, styles.acrescentarCampo]}
+              value={texto}
+              onChangeText={setTexto}
+              onSubmitEditing={() => texto.trim().length >= 2 && setEscolhendo(texto.trim())}
+              returnKeyType="done"
+            />
+            <Button
+              label="Buscar"
+              variant="secondary"
+              disabled={texto.trim().length < 2}
+              onPress={() => setEscolhendo(texto.trim())}
+            />
+          </View>
+
+          {candidatos.isPending && escolhendo !== null ? (
+            <Body muted>Buscando no catálogo…</Body>
+          ) : null}
+          {candidatos.isError ? (
+            <ErrorNotice message="não foi possível buscar no catálogo" />
+          ) : null}
+
+          {candidatos.data?.map((sugestao: ProductSuggestion) => (
+            <Pressable
+              key={sugestao.product.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Acrescentar ${sugestao.product.name}`}
+              onPress={() => escolherProduto(sugestao.product)}
+              style={styles.candidato}
+            >
+              <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
+              <Text style={styles.candidatoDetalhe}>
+                {Math.round(Number(sugestao.score) * 100)}% de semelhança
+              </Text>
+            </Pressable>
+          ))}
+
+          {escolhendo !== null && candidatos.data?.length === 0 ? (
+            <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Body muted>Quanto de {produto.name} você quer levar?</Body>
+          <View style={styles.acrescentarLinha}>
+            <TextInput
+              accessibilityLabel="Quantidade a acrescentar"
+              placeholder="0"
+              placeholderTextColor={colors.outline}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              style={[styles.campoTexto, styles.acrescentarCampo]}
+              value={quantidade}
+              onChangeText={setQuantidade}
+            />
+            <SeletorDeUnidade produto={produto} escolhida={unidade} onEscolher={setUnidade} />
+          </View>
+          <Button
+            label="Acrescentar à lista"
+            disabled={numero === null}
+            loading={acrescentar.isPending}
+            onPress={() =>
+              numero !== null && acrescentar.mutate({ produtoId: produto.id, medida: numero })
+            }
+          />
+          <Button label="Cancelar" variant="ghost" onPress={fechar} />
+        </>
+      )}
+
+      {acrescentar.isError ? (
+        <ErrorNotice
+          message={
+            acrescentar.error instanceof ApiError
+              ? acrescentar.error.message
+              : 'não foi possível acrescentar o item'
+          }
+        />
+      ) : null}
+    </Card>
   );
 }
 
@@ -406,17 +596,21 @@ function ItemDaLista({
   foraDaSimulacao,
   simulado,
   calculando,
+  removendo,
   onSimular,
   onSimularQuantidade,
   onToggle,
+  onRemover,
 }: {
   item: ShoppingListItem;
   foraDaSimulacao: boolean;
   simulado: SimulatedItem | null;
   calculando: boolean;
+  removendo: boolean;
   onSimular: () => void;
   onSimularQuantidade: (quantidade: string) => void;
   onToggle: () => void;
+  onRemover: () => void;
 }) {
   const dispensado = item.dispensed_by_pantry;
   const comprado = item.purchased;
@@ -471,6 +665,10 @@ function ItemDaLista({
         {item.price_origin ? ` · ${describeOrigin(item.price_origin)}` : ''}
         {item.price_sample_size ? ` · ${item.price_sample_size} coleta(s)` : ''}
       </Text>
+
+      {/* Quem olha a lista no mercado precisa saber o que a nutricionista
+          pediu e o que foi a própria pessoa que acrescentou. */}
+      {item.is_extra ? <Chip label="fora da prescrição" tone="neutral" /> : null}
 
       {item.product.is_fictitious ? (
         <Chip label="dado fictício de desenvolvimento" tone="warning" />
@@ -527,6 +725,18 @@ function ItemDaLista({
               onPress={() => setCampoAberto(true)}
             />
           )}
+
+          {/* Por último, e só no avulso: tirar daqui um alimento prescrito
+              seria o app decidindo a dieta — para vê-lo fora da conta existe
+              a simulação, logo acima. */}
+          {item.is_extra ? (
+            <Button
+              label="Tirar da lista"
+              variant="ghost"
+              loading={removendo}
+              onPress={onRemover}
+            />
+          ) : null}
         </>
       )}
     </Card>
@@ -564,6 +774,13 @@ const styles = StyleSheet.create({
   progressoTexto: { ...typography.labelSm, color: colors.onPrimaryContainer },
 
   sincronizacao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+
+  acrescentar: { gap: spacing.xs2 },
+  acrescentarLinha: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  acrescentarCampo: { flex: 1 },
+  candidato: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
+  candidatoNome: { ...typography.labelLg, color: colors.onSurface },
+  candidatoDetalhe: { ...typography.labelSm, color: colors.onSurfaceVariant },
 
   corredor: { gap: spacing.xs },
   item: { gap: spacing.xs2 },

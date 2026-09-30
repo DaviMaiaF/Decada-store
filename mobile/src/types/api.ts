@@ -101,6 +101,14 @@ export interface ShoppingListItem {
   purchased_at: string | null;
   /** O que a despensa poupou neste item. Nulo quando não há preço. */
   pantry_savings: string | null;
+  /**
+   * Item que a pessoa acrescentou, e não veio do plano alimentar.
+   *
+   * É o que diz à tela que este pode sair da lista: item prescrito, não —
+   * o app compara o preço do que a nutricionista pediu, nunca decide que
+   * a pessoa não deve levar um alimento.
+   */
+  is_extra: boolean;
 }
 
 export interface ShoppingList {

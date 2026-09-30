@@ -8,8 +8,9 @@ os ingredientes da lista.
 Projeto acadêmico — Engenharia de Software, UCB.
 
 > **Status:** beta. Backend completo e app mobile com login, envio da prescrição em
-> PDF, confirmação dos produtos, lista de compras, despensa com quantidade, sugestão
-> de receitas e a aba Economia. NFC-e continua fora do MVP.
+> PDF, confirmação dos produtos, lista de compras — com item avulso para o que a
+> receita pede e o que acabou em casa —, despensa com quantidade, sugestão de
+> receitas e a aba Economia. NFC-e continua fora do MVP.
 
 ## Design
 
@@ -21,10 +22,9 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
-| Vincular item já salvo ao catálogo | Só dá para escolher o produto e a quantidade na hora de adicionar; não há como vincular nem medir depois |
-| Região escolhida pelo usuário | `MarketScreen` gera a lista com `'DF', 'Brasília'` fixo no código, e a média de preço é sempre regional |
-| Leitura de NFC-e por QR Code | Fora do MVP |
-| Item avulso na lista de compras | Rota pronta; falta o botão no Mercado e o "+ ingrediente" da receita |
+| Leitura de NFC-e por QR Code | Fora do MVP — hoje todo preço do catálogo vem do seed fictício |
+| Nome e CRN da nutricionista | Não são lidos do PDF, e o CRN não tem campo no modelo |
+| Refeições com horário e status | Depende de um modelo `Meal`, fora do MVP. Ver [`docs/design/telas.md`](docs/design/telas.md) |
 
 ## Stack
 

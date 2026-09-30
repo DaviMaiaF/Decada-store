@@ -16,6 +16,7 @@ import type {
   ImportResult,
   MealPlan,
   MealPlanSummary,
+  MeasurementUnit,
   PantryItem,
   PlanItem,
   ProductSuggestion,
@@ -215,6 +216,22 @@ export const simulateShoppingList = (
     method: 'POST',
     body: { items },
   });
+
+/**
+ * Acrescenta à compra um produto que o plano não pediu.
+ *
+ * O ingrediente que falta para a receita e o que acabou em casa. A prescrição
+ * não muda — muda a lista de compras, que é outra coisa. Produto que já está
+ * na lista devolve 409 em vez de entrar duas vezes.
+ */
+export const addExtraItem = (
+  listId: string,
+  item: { product_id: string; quantity: string; unit: MeasurementUnit },
+) => request<ShoppingListItem>(`/shopping-lists/${listId}/items`, { method: 'POST', body: item });
+
+/** Tira o item avulso da lista. Item vindo da prescrição recebe 422. */
+export const removeShoppingListItem = (listId: string, itemId: string) =>
+  request<void>(`/shopping-lists/${listId}/items/${itemId}`, { method: 'DELETE' });
 
 /** Marca ou desmarca um item, dentro do mercado. */
 export const setItemPurchased = (listId: string, itemId: string, purchased: boolean) =>

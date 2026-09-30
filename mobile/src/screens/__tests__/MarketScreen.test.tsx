@@ -19,6 +19,9 @@ jest.mock('../../services/api', () => ({
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
   simulateShoppingList: jest.fn(),
+  addExtraItem: jest.fn(),
+  removeShoppingListItem: jest.fn(),
+  searchProducts: jest.fn(),
 }));
 
 jest.mock('../../services/session', () => ({
@@ -31,6 +34,9 @@ const lerLista = api.readShoppingList as jest.Mock;
 const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
 const simular = api.simulateShoppingList as jest.Mock;
+const acrescentar = api.addExtraItem as jest.Mock;
+const removerItem = api.removeShoppingListItem as jest.Mock;
+const buscarProdutos = api.searchProducts as jest.Mock;
 const lerRegiao = session.readRegion as jest.Mock;
 const salvarRegiao = session.saveRegion as jest.Mock;
 
@@ -67,6 +73,7 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
     purchased: false,
     purchased_at: null,
     pantry_savings: '0.00',
+    is_extra: false,
     ...over,
   };
 }
@@ -539,5 +546,115 @@ it('permite escolher a região e gera a lista com os dados informados', async ()
     expect(salvarRegiao).toHaveBeenCalledWith({ stateCode: 'SP', city: 'São Paulo' });
     expect(gerarLista).toHaveBeenCalledWith('plano-1', 'SP', 'São Paulo');
     expect(onGenerated).toHaveBeenCalledWith('lista-1');
+  });
+});
+
+
+describe('item avulso', () => {
+  const chia = produto('Chia sementes', 'mercearia');
+
+  it('se identifica como fora da prescrição', async () => {
+    await montar(lista([item({ id: 'a' }), item({ id: 'b', product: chia, is_extra: true })]));
+
+    expect(await screen.findByText('fora da prescrição')).toBeTruthy();
+  });
+
+  it('só o avulso pode sair da lista', async () => {
+    // Tirar daqui um alimento prescrito seria o app decidindo a dieta.
+    await montar(lista([item({ id: 'a' }), item({ id: 'b', product: chia, is_extra: true })]));
+
+    await screen.findByText('Chia sementes');
+    expect(screen.getAllByText('Tirar da lista')).toHaveLength(1);
+  });
+
+  it('tirar da lista avisa o servidor', async () => {
+    removerItem.mockResolvedValue(undefined);
+    await montar(lista([item({ id: 'b', product: chia, is_extra: true })]));
+
+    await fireEvent.press(await screen.findByText('Tirar da lista'));
+
+    await waitFor(() => expect(removerItem).toHaveBeenCalledWith('lista-1', 'b'));
+  });
+
+  it('a recusa de remover um item prescrito aparece na tela', async () => {
+    // A tela não oferece o botão, mas se o servidor recusar por outro caminho
+    // a pessoa precisa ver o motivo em vez de um item que não some.
+    removerItem.mockRejectedValue(
+      new api.ApiError(422, 'este item veio da prescrição e não pode sair da lista'),
+    );
+    await montar(lista([item({ id: 'b', product: chia, is_extra: true })]));
+
+    await fireEvent.press(await screen.findByText('Tirar da lista'));
+
+    expect(
+      await screen.findByText('este item veio da prescrição e não pode sair da lista'),
+    ).toBeTruthy();
+  });
+});
+
+describe('acrescentar à compra', () => {
+  const chia = produto('Chia sementes', 'mercearia');
+
+  async function escolherChia() {
+    buscarProdutos.mockResolvedValue([{ product: chia, score: '0.91' }]);
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.changeText(
+      await screen.findByLabelText('Acrescentar produto à compra'),
+      'chia',
+    );
+    await fireEvent.press(screen.getByText('Buscar'));
+    await fireEvent.press(await screen.findByLabelText('Acrescentar Chia sementes'));
+  }
+
+  it('escolhe o produto do catálogo e manda a quantidade', async () => {
+    acrescentar.mockResolvedValue({});
+    await escolherChia();
+
+    await fireEvent.changeText(screen.getByLabelText('Quantidade a acrescentar'), '250');
+    await fireEvent.press(screen.getByText('Acrescentar à lista'));
+
+    // Produto vendido por quilo e sem embalagem declarada abre em grama, como
+    // na despensa: a unidade oferecida é sempre da grandeza em que ele é vendido.
+    await waitFor(() =>
+      expect(acrescentar).toHaveBeenCalledWith('lista-1', {
+        product_id: 'produto-Chia sementes',
+        quantity: '250',
+        unit: 'g',
+      }),
+    );
+  });
+
+  it('quantidade que não é número não vai ao servidor', async () => {
+    await escolherChia();
+
+    await fireEvent.changeText(screen.getByLabelText('Quantidade a acrescentar'), 'bastante');
+    await fireEvent.press(screen.getByText('Acrescentar à lista'));
+
+    expect(acrescentar).not.toHaveBeenCalled();
+  });
+
+  it('produto repetido devolve o motivo do servidor', async () => {
+    acrescentar.mockRejectedValue(
+      new api.ApiError(409, 'Chia sementes já está nesta lista de compras'),
+    );
+    await escolherChia();
+
+    await fireEvent.changeText(screen.getByLabelText('Quantidade a acrescentar'), '250');
+    await fireEvent.press(screen.getByText('Acrescentar à lista'));
+
+    expect(
+      await screen.findByText('Chia sementes já está nesta lista de compras'),
+    ).toBeTruthy();
+  });
+
+  it('diz que a compra muda, e o plano não', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    expect(
+      await screen.findByText(
+        'O que uma receita pede, ou o que acabou em casa. Isto muda a sua lista de compras — o plano da sua nutricionista continua o mesmo.',
+      ),
+    ).toBeTruthy();
   });
 });

@@ -114,7 +114,7 @@ de item.
 | "8 itens dispensados da compra" | ✅ | Item dispensado fica na lista com quantidade zero (`dispensed_by_pantry`) |
 | Previsão mensal ~ R$ 690,00 | ⛔ | Projeção; a base semanal existe |
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
-| Adicionar item avulso | 🔨 | `POST /shopping-lists/{id}/items` já existe e a despensa abate nele; falta o botão na tela |
+| Adicionar item avulso | ✅ | Busca no catálogo, quantidade na unidade do produto, e o item entra no corredor dele |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
@@ -143,6 +143,13 @@ A despensa abate o avulso como abate qualquer item: ter chia em casa não deixa 
 verdade porque o pedido partiu do usuário. O que garante que o mesmo estoque não seja
 abatido duas vezes é o produto entrar na lista uma vez só — pedir um produto que já
 está lá responde 409 em vez de criar uma segunda linha.
+
+Na tela, acrescentar tem os mesmos dois passos do cadastro da despensa — escolher o
+produto do catálogo e dizer quanto —, e pela mesma razão: item sem produto não tem preço,
+e quantidade em grandeza que o produto não usa não vira compra nenhuma. O item avulso
+aparece no corredor dele, marcado como **fora da prescrição**, e é o único com "Tirar da
+lista" — que fica por último no cartão, depois das ações de simular, porque remover é a
+única ali que não se desfaz sozinha.
 
 Acrescentar um item **não reprecifica a lista**. Só o item novo recebe preço; o que a
 geração congelou continua congelado, e `calculated_at` não se move, porque ele diz
@@ -199,13 +206,22 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
-| "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade |
+| "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
-| "+ Chia" → lista de mercado | 🔨 | A rota de item avulso existe; falta a tela conhecer a lista corrente para chamá-la |
+| "+ Chia" → lista de mercado | ✅ | Um botão por ingrediente que falta, na quantidade que a receita pede |
 | Fotos das receitas | ⛔ | Não há campo de imagem em `Recipe` |
 | "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
 | Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
+
+**O que já está na lista não vira botão.** A receita pode acusar falta de um ingrediente
+que já está na compra — falta porque ela pede mais do que a lista traz, não porque ninguém
+o comprou. Oferecer "+ ovos" ali levaria direto ao 409, então a tela troca o botão por uma
+linha que diz o que está acontecendo: *"Ovos de galinha já está na sua lista, em quantidade
+menor do que esta receita pede."* O botão fica só para o que de fato pode entrar.
+
+Para saber disso a tela lê a lista corrente pela mesma chave de cache do Mercado, sem
+requisição nova — como a trilha já fazia.
 
 **Item da despensa sem produto do catálogo não abate da compra.** Por isso o cadastro
 pede a escolha do produto: digita, o app busca no catálogo por semelhança de nome e a

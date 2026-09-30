@@ -20,6 +20,8 @@ jest.mock('../../services/api', () => ({
   removePantryItem: jest.fn(),
   readRecipeSuggestions: jest.fn(),
   searchProducts: jest.fn(),
+  addExtraItem: jest.fn(),
+  readShoppingList: jest.fn(),
 }));
 
 const lerDespensa = api.readPantry as jest.Mock;
@@ -28,6 +30,8 @@ const atualizar = api.updatePantryItem as jest.Mock;
 const remover = api.removePantryItem as jest.Mock;
 const lerReceitas = api.readRecipeSuggestions as jest.Mock;
 const buscarProdutos = api.searchProducts as jest.Mock;
+const acrescentarNaLista = api.addExtraItem as jest.Mock;
+const lerLista = api.readShoppingList as jest.Mock;
 
 function produto(nome: string, over: Partial<Product> = {}): Product {
   return {
@@ -81,10 +85,11 @@ function disponibilidade(over: Partial<RecipeAvailability> = {}): RecipeAvailabi
 
 let cliente: QueryClient;
 
-async function montar() {
+/** Sem lista de compras por padrão: é o estado de quem ainda não gerou uma. */
+async function montar(listId: string | null = null) {
   await render(
     <QueryClientProvider client={cliente}>
-      <PantryScreen />
+      <PantryScreen listId={listId} />
     </QueryClientProvider>,
   );
 }
@@ -97,6 +102,15 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
   lerDespensa.mockResolvedValue([]);
+  lerLista.mockResolvedValue({
+    id: 'lista-1',
+    meal_plan_id: 'plano-1',
+    state_code: 'DF',
+    city: 'Brasília',
+    estimated_total: '0.00',
+    calculated_at: null,
+    items: [],
+  });
   lerReceitas.mockResolvedValue([]);
   buscarProdutos.mockResolvedValue([
     { product: produto('Aveia em flocos'), score: '0.930' },
@@ -374,6 +388,129 @@ describe('receitas', () => {
 
     expect(await screen.findByText('receita fictícia de desenvolvimento')).toBeTruthy();
   });
+
+  it('conta também o que está na lista de compras, quando há uma', async () => {
+    // "100% disponível" quer dizer que não falta ida ao mercado, e não que
+    // tudo já esteja em casa: o que será comprado conta junto.
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+
+    await montar('lista-1');
+
+    await screen.findByText('Panqueca de aveia e banana');
+    expect(lerReceitas).toHaveBeenCalledWith('lista-1');
+  });
+});
+
+describe('acrescentar o que falta à lista de compras', () => {
+  const faltando = disponibilidade({
+    percentage: 85,
+    complete: false,
+    required_available: 2,
+    missing: [{ product: produto('Chia sementes'), quantity: '10', unit: 'g', optional: false }],
+  });
+
+  it('manda o ingrediente à lista, na quantidade que a receita pede', async () => {
+    lerReceitas.mockResolvedValue([faltando]);
+    acrescentarNaLista.mockResolvedValue({});
+
+    await montar('lista-1');
+    await fireEvent.press(await screen.findByText('+ Chia sementes'));
+
+    await waitFor(() =>
+      expect(acrescentarNaLista).toHaveBeenCalledWith('lista-1', {
+        product_id: 'produto-Chia sementes',
+        quantity: '10',
+        unit: 'g',
+      }),
+    );
+  });
+
+  it('sem lista de compras, diz onde gerar uma em vez de sumir com o botão', async () => {
+    lerReceitas.mockResolvedValue([faltando]);
+
+    await montar();
+
+    expect(await screen.findByText('Falta: Chia sementes')).toBeTruthy();
+    expect(screen.queryByText('+ Chia sementes')).toBeNull();
+    expect(
+      screen.getByText('Gere sua lista de compras na aba Mercado para acrescentar o que falta.'),
+    ).toBeTruthy();
+  });
+
+  it('a recusa do servidor aparece na tela', async () => {
+    lerReceitas.mockResolvedValue([faltando]);
+    acrescentarNaLista.mockRejectedValue(
+      new api.ApiError(409, 'Chia sementes já está nesta lista de compras'),
+    );
+
+    await montar('lista-1');
+    await fireEvent.press(await screen.findByText('+ Chia sementes'));
+
+    expect(
+      await screen.findByText('Chia sementes já está nesta lista de compras'),
+    ).toBeTruthy();
+  });
+
+  it('o que já está na lista não vira botão, e a tela diz por quê', async () => {
+    // Falta por quantidade — a receita pede mais do que a lista traz. Oferecer
+    // o botão levaria à recusa do servidor, que não entra o mesmo produto duas vezes.
+    lerLista.mockResolvedValue({
+      id: 'lista-1',
+      meal_plan_id: 'plano-1',
+      state_code: 'DF',
+      city: 'Brasília',
+      estimated_total: '10.00',
+      calculated_at: null,
+      items: [{ product: produto('Chia sementes') }],
+    });
+    lerReceitas.mockResolvedValue([faltando]);
+
+    await montar('lista-1');
+
+    expect(
+      await screen.findByText(
+        /Chia sementes\s+já está na sua lista, em quantidade menor do que esta receita pede/,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('+ Chia sementes')).toBeNull();
+  });
+
+  it('dois ingredientes já na lista concordam no plural', async () => {
+    lerLista.mockResolvedValue({
+      id: 'lista-1',
+      meal_plan_id: 'plano-1',
+      state_code: 'DF',
+      city: 'Brasília',
+      estimated_total: '10.00',
+      calculated_at: null,
+      items: [{ product: produto('Chia sementes') }, { product: produto('Aveia em flocos') }],
+    });
+    lerReceitas.mockResolvedValue([
+      disponibilidade({
+        percentage: 50,
+        complete: false,
+        missing: [
+          { product: produto('Chia sementes'), quantity: '10', unit: 'g', optional: false },
+          { product: produto('Aveia em flocos'), quantity: '60', unit: 'g', optional: false },
+        ],
+      }),
+    ]);
+
+    await montar('lista-1');
+
+    expect(
+      await screen.findByText(/Chia sementes e Aveia em flocos\s+já estão na sua lista/),
+    ).toBeTruthy();
+  });
+
+  it('receita completa não oferece nada para acrescentar', async () => {
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+
+    await montar('lista-1');
+
+    await screen.findByText('Dá para fazer com o que você já tem.');
+    expect(screen.queryByText(/^\+ /)).toBeNull();
+  });
 });
 
 
@@ -448,7 +585,7 @@ describe('quantidade do item da despensa', () => {
   async function chegarNaQuantidade(candidato = 'Aveia em flocos') {
     await render(
       <QueryClientProvider client={cliente}>
-        <PantryScreen />
+        <PantryScreen listId={null} />
       </QueryClientProvider>,
     );
     await fireEvent.changeText(
