@@ -24,7 +24,7 @@ Dieta, Mercado, Despensa e Economia.
 | Vincular item já salvo ao catálogo | Só dá para escolher o produto e a quantidade na hora de adicionar; não há como vincular nem medir depois |
 | Região escolhida pelo usuário | `MarketScreen` gera a lista com `'DF', 'Brasília'` fixo no código, e a média de preço é sempre regional |
 | Leitura de NFC-e por QR Code | Fora do MVP |
-| Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
+| Item avulso na lista de compras | Rota pronta; falta o botão no Mercado e o "+ ingrediente" da receita |
 
 ## Stack
 
@@ -141,7 +141,9 @@ trocá-la invalida todos os tokens já emitidos.
 | `POST` | `/meal-plans/{id}/shopping-lists` | Gera a lista de compras para uma região |
 | `GET` | `/meal-plans/{id}/shopping-lists` | Listas já geradas para o plano, da mais recente à mais antiga |
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
+| `POST` | `/shopping-lists/{id}/items` | Acrescenta à compra um produto que o plano não pediu |
 | `PATCH` | `/shopping-lists/{id}/items/{item_id}` | Marca ou desmarca o item como comprado |
+| `DELETE` | `/shopping-lists/{id}/items/{item_id}` | Tira o item avulso da lista. Item prescrito responde 422 |
 | `POST` | `/shopping-lists/{id}/simulation` | Quanto custaria com outras quantidades. **Não grava nada** |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
 | `PATCH` | `/pantry/{id}` | Vincula o produto ou mede um item já salvo |

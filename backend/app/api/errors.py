@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
+from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
 from app.services.units import IncompatibleUnitError
 
 # Cada exceção do domínio e o código que ela merece.
@@ -23,6 +24,11 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (InvalidPdfError, status.HTTP_400_BAD_REQUEST),
     # Unidade de outra grandeza: o pedido não faz sentido no domínio.
     (IncompatibleUnitError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    # Produto repetido na lista: conflito com o que já está lá, não erro de
+    # formato. 409 é o que diz à tela para mostrar o item existente.
+    (ProductAlreadyInListError, status.HTTP_409_CONFLICT),
+    # Tirar da lista um item prescrito: o pedido é compreensível e recusado.
+    (PrescribedItemError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )

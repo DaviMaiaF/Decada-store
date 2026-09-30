@@ -32,6 +32,9 @@ class ShoppingListItemOut(ApiModel):
     unit: MeasurementUnit
     quantity_from_pantry: Decimal
     dispensed_by_pantry: bool
+    # Item que a pessoa acrescentou, e não veio do plano. É o que diz à tela
+    # que aquilo pode ser removido e que não é prescrição.
+    is_extra: bool = False
     packages_needed: int | None = None
     match_score: Decimal | None = None
 
@@ -49,6 +52,19 @@ class ShoppingListItemOut(ApiModel):
     # O que a despensa poupou neste item. Nulo quando não há preço; zero quando
     # o que havia em casa não chegou a tirar uma embalagem do carrinho.
     pantry_savings: Decimal | None = None
+
+
+class ExtraItemIn(BaseModel):
+    """Produto que a pessoa acrescenta à compra, fora da prescrição.
+
+    Quantidade e unidade são obrigatórias: sem elas não há o que precificar, e
+    inventar "uma embalagem" seria o servidor decidindo quanto alguém compra.
+    A tela já sabe sugerir a embalagem do produto, como faz na despensa.
+    """
+
+    product_id: uuid.UUID
+    quantity: Decimal = Field(gt=0)
+    unit: MeasurementUnit
 
 
 class PurchaseIn(BaseModel):

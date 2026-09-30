@@ -848,6 +848,148 @@ def test_sugestao_com_lista_de_compras_de_outra_pessoa_devolve_404(
 
 
 # --------------------------------------------------------------------------
+# item avulso na lista de compras
+# --------------------------------------------------------------------------
+
+def _produto(db_session, nome: str) -> Product:
+    return db_session.scalars(select(Product).where(Product.name == nome)).one()
+
+
+def _avulso(client, user, lista_id: str, produto: Product, quantidade="500", unidade="g"):
+    return client.post(
+        f"/shopping-lists/{lista_id}/items",
+        headers=_headers(user),
+        json={"product_id": str(produto.id), "quantity": quantidade, "unit": unidade},
+    )
+
+
+def test_acrescenta_item_avulso_a_lista(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    resposta = _avulso(client, marina, lista_id, _produto(db_session, "Aveia em flocos"))
+
+    assert resposta.status_code == 201
+    corpo = resposta.json()
+    assert corpo["is_extra"] is True
+    assert corpo["product"]["name"] == "Aveia em flocos"
+    assert Decimal(corpo["estimated_cost"]) > 0
+
+
+def test_o_avulso_aparece_na_lista_relida_e_no_total(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+
+    item = _avulso(client, marina, lista_id, _produto(db_session, "Aveia em flocos")).json()
+
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert len(depois["items"]) == len(antes["items"]) + 1
+    assert Decimal(depois["estimated_total"]) == Decimal(antes["estimated_total"]) + Decimal(
+        item["estimated_cost"]
+    )
+
+
+def test_o_item_do_plano_nao_se_confunde_com_o_avulso(client, marina, db_session):
+    """A tela precisa saber qual dos dois pode remover."""
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    _avulso(client, marina, lista_id, _produto(db_session, "Aveia em flocos"))
+
+    itens = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()["items"]
+
+    assert sorted(item["is_extra"] for item in itens) == [False, True]
+
+
+def test_produto_que_ja_esta_na_lista_devolve_409(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    frango = _produto(db_session, "Peito de frango sem pele")
+
+    resposta = _avulso(client, marina, lista_id, frango, quantidade="1", unidade="kg")
+
+    assert resposta.status_code == 409
+    assert "já está" in resposta.json()["detail"]
+
+
+def test_avulso_em_grandeza_incompativel_devolve_422(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    resposta = _avulso(
+        client, marina, lista_id, _produto(db_session, "Aveia em flocos"), unidade="ml"
+    )
+
+    assert resposta.status_code == 422
+
+
+def test_avulso_de_produto_inexistente_devolve_404(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    resposta = client.post(
+        f"/shopping-lists/{lista_id}/items",
+        headers=_headers(marina),
+        json={
+            "product_id": "00000000-0000-0000-0000-000000000000",
+            "quantity": "500",
+            "unit": "g",
+        },
+    )
+
+    assert resposta.status_code == 404
+
+
+def test_nao_da_para_acrescentar_item_em_lista_alheia(client, marina, outra_pessoa, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    resposta = _avulso(client, outra_pessoa, lista_id, _produto(db_session, "Aveia em flocos"))
+
+    # 404, nunca 403: dizer "existe, mas não é sua" já vazaria a existência.
+    assert resposta.status_code == 404
+
+
+def test_remove_o_item_avulso(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    item = _avulso(client, marina, lista_id, _produto(db_session, "Aveia em flocos")).json()
+
+    resposta = client.delete(
+        f"/shopping-lists/{lista_id}/items/{item['id']}", headers=_headers(marina)
+    )
+
+    assert resposta.status_code == 204
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert len(depois["items"]) == len(antes["items"])
+    assert Decimal(depois["estimated_total"]) == Decimal(antes["estimated_total"])
+
+
+def test_item_da_prescricao_nao_pode_ser_removido(client, marina, db_session):
+    """Decisão 8: quem quiser ver a compra sem ele tem a simulação."""
+    lista_id, item_id = _lista_gerada(client, marina, db_session)
+
+    resposta = client.delete(
+        f"/shopping-lists/{lista_id}/items/{item_id}", headers=_headers(marina)
+    )
+
+    assert resposta.status_code == 422
+    assert "prescrição" in resposta.json()["detail"]
+    itens = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()["items"]
+    assert len(itens) == 1
+
+
+def test_nao_da_para_remover_item_de_lista_alheia(client, marina, outra_pessoa, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+    item = _avulso(client, marina, lista_id, _produto(db_session, "Aveia em flocos")).json()
+
+    resposta = client.delete(
+        f"/shopping-lists/{lista_id}/items/{item['id']}", headers=_headers(outra_pessoa)
+    )
+
+    assert resposta.status_code == 404
+
+
+def test_acrescentar_item_exige_autenticacao(client, marina, db_session):
+    lista_id, _ = _lista_gerada(client, marina, db_session)
+
+    assert client.post(f"/shopping-lists/{lista_id}/items", json={}).status_code == 401
+
+
+# --------------------------------------------------------------------------
 # busca no catálogo
 # --------------------------------------------------------------------------
 
