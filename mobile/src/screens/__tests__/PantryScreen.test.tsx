@@ -195,12 +195,36 @@ describe('despensa', () => {
 });
 
 describe('vincular e medir item já salvo', () => {
+  it('conta que o item é tocável, porque o chip não parece um botão', async () => {
+    lerDespensa.mockResolvedValue([naDespensa({ id: '10', raw_description: 'aveia' })]);
+
+    await montar();
+
+    expect(
+      await screen.findByText('Toque em um item para vincular o produto ou medir.'),
+    ).toBeTruthy();
+  });
+
   async function abrir(item: PantryItem) {
     lerDespensa.mockResolvedValue([item]);
     atualizar.mockResolvedValue(item);
     await montar();
     await fireEvent.press(await screen.findByLabelText(`Item ${item.raw_description}`));
   }
+
+  it('remover o item não abre a edição junto', async () => {
+    // O ✕ era um botão dentro do botão do chip: além de HTML inválido na web,
+    // o toque de dentro disparava o de fora.
+    const item = naDespensa({ id: '10', raw_description: 'aveia' });
+    lerDespensa.mockResolvedValue([item]);
+    remover.mockResolvedValue(undefined);
+
+    await montar();
+    await fireEvent.press(await screen.findByLabelText('Remover aveia'));
+
+    await waitFor(() => expect(remover).toHaveBeenCalledWith('10'));
+    expect(screen.queryByText('Medir ou vincular: "aveia"')).toBeNull();
+  });
 
   it('abre a edição ao tocar no item e permite salvar a medição', async () => {
     await abrir(

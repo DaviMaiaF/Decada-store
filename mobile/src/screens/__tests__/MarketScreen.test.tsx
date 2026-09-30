@@ -18,6 +18,7 @@ jest.mock('../../services/api', () => ({
   readShoppingList: jest.fn(),
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
+  simulateShoppingList: jest.fn(),
 }));
 
 jest.mock('../../services/session', () => ({
@@ -29,6 +30,7 @@ jest.mock('../../services/session', () => ({
 const lerLista = api.readShoppingList as jest.Mock;
 const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
+const simular = api.simulateShoppingList as jest.Mock;
 const lerRegiao = session.readRegion as jest.Mock;
 const salvarRegiao = session.saveRegion as jest.Mock;
 
@@ -207,6 +209,191 @@ it('não explica a região quando algum item tem preço', async () => {
   expect(screen.queryByText(/Ainda não temos preços/)).toBeNull();
 });
 
+describe('simulação de cenário', () => {
+  it('tirar um item da simulação recalcula o total na tela', async () => {
+    // Três itens para o total simulado não coincidir com o preço de nenhum
+    // deles: 5,32 + 0,10 = 5,42, que só pode ter vindo da soma.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '12.31' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+        item({ id: 'c', estimated_cost: '0.10' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
+
+    expect(await screen.findByText('R$ 5,42')).toBeTruthy();
+    expect(screen.getByText('1 item fora da simulação · R$ 12,31 a menos')).toBeTruthy();
+  });
+
+  it('simular não mexe na lista salva nem manda nada ao servidor', async () => {
+    await montar(lista([item({ id: 'a', estimated_cost: '12.31' })]));
+
+    await fireEvent.press(await screen.findByText('Simular sem este item'));
+
+    // Decisão 8: o app não altera a prescrição. A simulação é uma conta de tela.
+    expect(marcarItem).not.toHaveBeenCalled();
+    expect(screen.getByText('R$ 174,20')).toBeTruthy();
+  });
+
+  it('devolver o item desfaz a simulação', async () => {
+    await montar(lista([item({ id: 'a', estimated_cost: '12.31' })]));
+
+    await fireEvent.press(await screen.findByText('Simular sem este item'));
+    await fireEvent.press(await screen.findByText('Devolver à simulação'));
+
+    expect(screen.queryByText('Simulando a compra')).toBeNull();
+  });
+
+  it('limpar devolve todos de uma vez', async () => {
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '12.31' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    const botoes = await screen.findAllByText('Simular sem este item');
+    await fireEvent.press(botoes[0]);
+    await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
+
+    expect(screen.getByText('2 itens fora da simulação · R$ 17,63 a menos')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Limpar simulação'));
+
+    expect(screen.queryByText('Simulando a compra')).toBeNull();
+  });
+
+  it('mudar a quantidade pergunta ao servidor e mostra o novo custo', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    // Dois itens para o total simulado (36,92) não coincidir com o custo
+    // simulado do item (31,60) e a asserção saber do que está falando.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    // A conta da embalagem é do servidor: a tela não multiplica preço por
+    // quantidade, porque produto embalado sobe de pacote em pacote.
+    await waitFor(() =>
+      expect(simular).toHaveBeenCalledWith('lista-1', [{ item_id: 'a', quantity: '1' }]),
+    );
+    expect(await screen.findByText('R$ 31,60')).toBeTruthy();
+    expect(screen.getByText('simulando 1.000 kg · 2 embalagem(ns)')).toBeTruthy();
+  });
+
+  it('o preço real continua à vista ao lado do simulado', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    // Dois itens para o total simulado (36,92) não coincidir com o custo
+    // simulado do item (31,60) e a asserção saber do que está falando.
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    await screen.findByText('R$ 31,60');
+    // Substituir o número esconderia de que ponto a comparação parte.
+    expect(screen.getByText('R$ 15,80')).toBeTruthy();
+  });
+
+  it('quantidade maior diz "a mais", e não economia', async () => {
+    simular.mockResolvedValue([
+      {
+        item_id: 'a',
+        quantity: '1.000',
+        quantity_charged: '1.000',
+        packages_needed: 2,
+        estimated_cost: '31.60',
+      },
+    ]);
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '15.80' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular outra quantidade'))[0]);
+    await fireEvent.changeText(
+      screen.getAllByLabelText('Quantidade simulada de Peito de frango sem pele')[0],
+      '1',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    // 36,92 contra 21,12: a compra ficou mais cara, e chamar isso de economia
+    // seria mentir para quem está decidindo o que levar.
+    expect(
+      await screen.findByText('Só mudando quantidades · R$ 15,80 a mais'),
+    ).toBeTruthy();
+  });
+
+  it('quantidade que não é número não vai ao servidor', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Simular outra quantidade'));
+    await fireEvent.changeText(
+      screen.getByLabelText('Quantidade simulada de Peito de frango sem pele'),
+      'meio quilo',
+    );
+    await fireEvent.press(screen.getByText('Ver quanto fica'));
+
+    expect(simular).not.toHaveBeenCalled();
+  });
+
+  it('item dispensado pela despensa não entra na simulação', async () => {
+    await montar(
+      lista([
+        item({
+          id: 'a',
+          dispensed_by_pantry: true,
+          quantity: '0.000',
+          quantity_from_pantry: '1.200',
+          estimated_cost: '0.00',
+        }),
+      ]),
+    );
+
+    // Ele não faz parte do trajeto pelo mercado; simular sem ele não diz nada.
+    await screen.findByText('não precisa comprar');
+    expect(screen.queryByText('Simular sem este item')).toBeNull();
+  });
+});
+
 it('mostra quanto veio da despensa', async () => {
   await montar(lista([item({ id: 'a', quantity: '0.700', quantity_from_pantry: '0.500' })]));
 
@@ -303,6 +490,26 @@ it('desfaz a marcação quando o servidor recusa', async () => {
   // mercado sem o item.
   expect(await screen.findByText('não foi possível salvar o item marcado')).toBeTruthy();
   expect(screen.getByText('0 de 1 itens comprados')).toBeTruthy();
+});
+
+it('dá caminho para gerar a lista em outra região', async () => {
+  await montar(lista([item({ id: 'a' })]));
+
+  // O aviso de região sem preço manda gerar em outra cidade; sem este caminho,
+  // uma lista gerada trancava a região para sempre.
+  await fireEvent.press(await screen.findByLabelText('Gerar em outra região'));
+
+  expect(await screen.findByLabelText('Estado')).toBeTruthy();
+});
+
+it('desistir da troca devolve a lista que já existia', async () => {
+  await montar(lista([item({ id: 'a' })]));
+
+  await fireEvent.press(await screen.findByLabelText('Gerar em outra região'));
+  await fireEvent.press(await screen.findByText('Manter a lista atual'));
+
+  expect(await screen.findByText('R$ 174,20')).toBeTruthy();
+  expect(gerarLista).not.toHaveBeenCalled();
 });
 
 it('permite escolher a região e gera a lista com os dados informados', async () => {

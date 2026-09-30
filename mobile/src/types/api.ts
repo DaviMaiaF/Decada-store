@@ -113,6 +113,15 @@ export interface ShoppingList {
   items: ShoppingListItem[];
 }
 
+/** Um item da lista sob uma quantidade hipotética. Nada disso foi gravado. */
+export interface SimulatedItem {
+  item_id: string;
+  quantity: string;
+  quantity_charged: string;
+  packages_needed: number | null;
+  estimated_cost: string | null;
+}
+
 /** Lista na listagem: sem os itens, que vêm por `readShoppingList`. */
 export interface ShoppingListSummary {
   id: string;

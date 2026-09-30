@@ -23,6 +23,7 @@ import type {
   ShoppingList,
   ShoppingListItem,
   ShoppingListSummary,
+  SimulatedItem,
   Token,
 } from '../types/api';
 
@@ -199,6 +200,21 @@ export const readShoppingLists = (planId: string) =>
 
 export const readShoppingList = (listId: string) =>
   request<ShoppingList>(`/shopping-lists/${listId}`);
+
+/**
+ * Quanto custaria a lista com outras quantidades. Não grava nada.
+ *
+ * A conta é do servidor porque produto embalado sobe de pacote em pacote:
+ * multiplicar preço por quantidade aqui sairia errado para tudo que vem embalado.
+ */
+export const simulateShoppingList = (
+  listId: string,
+  items: { item_id: string; quantity: string }[],
+) =>
+  request<SimulatedItem[]>(`/shopping-lists/${listId}/simulation`, {
+    method: 'POST',
+    body: { items },
+  });
 
 /** Marca ou desmarca um item, dentro do mercado. */
 export const setItemPurchased = (listId: string, itemId: string, purchased: boolean) =>

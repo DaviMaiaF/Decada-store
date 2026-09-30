@@ -116,6 +116,8 @@ de item.
 | Adicionar item avulso | 🔨 | Exige `plan_item_id` nulo em `ShoppingListItem`; a rota ainda não existe |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
+| Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
+| Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Exportar para WhatsApp | ⛔ | |
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
@@ -128,6 +130,30 @@ o item volta a aparecer como não comprado.
 Item que a despensa dispensou também aceita marcação. O servidor guarda o fato e
 a tela é que decide não oferecer o botão; a contagem do progresso conta só entre
 os itens que havia para comprar.
+
+**A simulação não toca na lista nem na prescrição.** "E se eu não levar isto?" é
+respondido somando os `estimated_cost` que sobraram, na própria tela: nada é enviado ao
+servidor, a lista salva continua inteira e o item some apenas visualmente, desbotado em
+vez de removido. A decisão 8 vale aqui também — o app pode comparar o custo do que foi
+prescrito, nunca decidir que a pessoa não deve levar um alimento.
+
+A soma é feita em centavos, com inteiros. Somar `Number("5.32") + Number("12.31")` em
+ponto flutuante acumula erro e produz casas que não existem, justamente no número que a
+pessoa usa para decidir a compra.
+
+**Mexer na quantidade é pergunta para o servidor.** Dobrar um item não é dobrar o preço:
+produto embalado sobe de pacote em pacote, e essa conta é do
+[`quantity_to_charge`](../../backend/app/services/pricing.py). Fazê-la na tela seria copiar
+regra de negócio para um lugar onde ela não tem teste, então a tela pergunta a
+`POST /shopping-lists/{id}/simulation` e recebe o custo de cada item de volta. A soma
+continua sendo do cliente: somar não é regra de negócio, arredondar embalagem é.
+
+O preço usado é **o que a lista congelou**. Consultar de novo faria a simulação misturar
+duas mudanças — a quantidade que a pessoa mexeu e a coleta que chegou no meio — e a
+comparação deixaria de responder à pergunta feita.
+
+**A diferença tem sinal.** Simular quantidade maior encarece a compra, e a tela diz "a
+mais"; chamar isso de economia seria mentir para quem está decidindo o que levar.
 
 **Região sem coleta não é lista errada.** O catálogo de desenvolvimento só tem preço em
 Brasília e Taguatinga. Pedir a lista em outra cidade devolve os itens certos com preço
@@ -214,7 +240,7 @@ a caixa de 1 L do mesmo jeito, e não poupou nada. A conta é
 > o que custaria a quantidade prescrita inteira **−** o que de fato se compra
 
 respeitando o arredondamento para embalagem fechada do
-[`_quantity_to_charge`](../../backend/app/services/pricing.py). Para item a granel dá a
+[`quantity_to_charge`](../../backend/app/services/pricing.py). Para item a granel dá a
 proporção; para embalado que não reduziu o número de pacotes dá zero, que é a verdade.
 Item sem preço fica com economia **nula**, não zero — nulo é "não sei", zero é "não
 poupou".
@@ -259,13 +285,31 @@ tem o aceite: o botão de enviar só libera com ele marcado. Descrito na seção
 
 ---
 
+## A trilha da jornada
+
+As quatro abas do protótipo continuam livres, e por cima delas passou a existir uma
+trilha: **Enviar → Confirmar → Região → Comprar**, marcando o que já foi cumprido e o
+quanto falta da etapa em andamento ("6/15").
+
+O protótipo não previa isso porque cada tela foi desenhada isolada. Na prática, quem
+abria o Mercado antes de confirmar os produtos via uma tela quase vazia sem entender que
+o problema era a etapa anterior — a ordem existia no código e não na interface.
+
+A trilha **não é clicável**, de propósito: a barra de abas logo abaixo já navega, e dois
+lugares diferentes para a mesma navegação confundiriam em vez de guiar. Ela também tomou
+o lugar do cabeçalho, que só repetia o nome da aba enquanto cada tela já abre com o
+próprio título.
+
+---
+
 ## Resumo do que entra no MVP
 
 **Entra:** despensa (`PantryItem`) com quantidade, o desconto dela na lista de compras e a
 correção do item já salvo; import de plano por PDF com texto, com aceite na tela; o plano e
 a lista reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso
 quando ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas
-com percentual de disponibilidade; aba Economia com o que a despensa poupou.
+com percentual de disponibilidade; aba Economia com o que a despensa poupou; trilha da
+jornada; simulação de compra sem um item.
 
 **Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR de foto,
 projeção mensal, métricas de desperdício, dicas de substituição geradas pelo app, validade

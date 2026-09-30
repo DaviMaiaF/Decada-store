@@ -142,6 +142,7 @@ trocá-la invalida todos os tokens já emitidos.
 | `GET` | `/meal-plans/{id}/shopping-lists` | Listas já geradas para o plano, da mais recente à mais antiga |
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
 | `PATCH` | `/shopping-lists/{id}/items/{item_id}` | Marca ou desmarca o item como comprado |
+| `POST` | `/shopping-lists/{id}/simulation` | Quanto custaria com outras quantidades. **Não grava nada** |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
 | `PATCH` | `/pantry/{id}` | Vincula o produto ou mede um item já salvo |
 | `DELETE` | `/pantry/{id}` | Remove item da despensa |

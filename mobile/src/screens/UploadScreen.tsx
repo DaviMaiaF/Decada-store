@@ -51,6 +51,17 @@ export default function UploadScreen({
 
   const erro = envio.error;
 
+  // Botão inerte sem explicação faz a pessoa tocar de novo achando que falhou.
+  // Duas condições, e a frase diz qual das duas está faltando.
+  const faltando =
+    !arquivo && !aceitou
+      ? 'Escolha o PDF e marque o aceite para enviar.'
+      : !arquivo
+        ? 'Escolha o PDF para enviar.'
+        : !aceitou
+          ? 'Marque o aceite para enviar.'
+          : null;
+
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <View style={styles.cabecalho}>
@@ -116,6 +127,8 @@ export default function UploadScreen({
         disabled={!arquivo || !aceitou}
         loading={envio.isPending}
       />
+
+      {faltando ? <Body muted>{faltando}</Body> : null}
 
       {resultado ? <Resumo resultado={resultado} onContinuar={onImported} /> : null}
     </ScrollView>

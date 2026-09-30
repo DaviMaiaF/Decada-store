@@ -505,6 +505,10 @@ export default function PantryScreen() {
               </Body>
             ) : null}
 
+            {itens.length > 0 ? (
+              <Body muted>Toque em um item para vincular o produto ou medir.</Body>
+            ) : null}
+
             <View style={styles.chips}>
               {itens.map((item) => (
                 <ChipDaDespensa
@@ -610,18 +614,24 @@ function ChipDaDespensa({
   const quantidade =
     item.quantity && item.unit ? formatQuantity(item.quantity, item.unit) : null;
 
+  // Os dois toques são irmãos, e não um dentro do outro: na versão web cada
+  // `Pressable` vira um `<button>`, e botão aninhado é HTML inválido — o React
+  // acusa erro de hidratação, e o clique no ✕ ainda dispara o toque de fora.
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Item ${item.raw_description}`}
-      onPress={onPress}
-      style={[styles.chipItem, !vinculado && styles.chipItemSolto]}
-    >
-      <View style={[styles.ponto, vinculado ? styles.pontoVinculado : styles.pontoSolto]} />
-      <Text style={styles.chipItemTexto} numberOfLines={1}>
-        {item.raw_description}
-        {quantidade ? ` (${quantidade})` : ''}
-      </Text>
+    <View style={[styles.chipItem, !vinculado && styles.chipItemSolto]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Item ${item.raw_description}`}
+        accessibilityHint="Abre o produto e a quantidade deste item"
+        onPress={onPress}
+        style={styles.chipItemToque}
+      >
+        <View style={[styles.ponto, vinculado ? styles.pontoVinculado : styles.pontoSolto]} />
+        <Text style={styles.chipItemTexto} numberOfLines={1}>
+          {item.raw_description}
+          {quantidade ? ` (${quantidade})` : ''}
+        </Text>
+      </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Remover ${item.raw_description}`}
@@ -630,7 +640,7 @@ function ChipDaDespensa({
       >
         <Text style={styles.chipItemRemover}>✕</Text>
       </Pressable>
-    </Pressable>
+    </View>
   );
 }
 
@@ -767,6 +777,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     maxWidth: '100%',
+  },
+  chipItemToque: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
   },
   // Contorno tracejado marca o item que ainda não abate da compra.
   chipItemSolto: { borderWidth: 1, borderStyle: 'dashed', borderColor: colors.outlineVariant },
