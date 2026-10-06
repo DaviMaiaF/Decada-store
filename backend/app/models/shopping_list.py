@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,6 +60,17 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint(
             "shopping_list_id", "plan_item_id", name="uq_shopping_list_items_lista_item"
         ),
+        # A restrição acima não alcança o item avulso: no Postgres, NULL não
+        # colide com NULL, e uma lista aceitaria dez linhas do mesmo produto
+        # sem plano. Este índice parcial fecha isso pelo produto, que é o que
+        # identifica o avulso.
+        Index(
+            "uq_shopping_list_items_avulso",
+            "shopping_list_id",
+            "product_id",
+            unique=True,
+            postgresql_where=text("plan_item_id IS NULL"),
+        ),
     )
 
     shopping_list_id: Mapped[uuid.UUID] = mapped_column(
@@ -66,8 +79,12 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    plan_item_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("plan_items.id", ondelete="CASCADE"), nullable=False
+    # Nulo no item avulso: o que a pessoa acrescentou à compra sem que uma
+    # prescrição o tenha pedido. É o que separa o que a nutricionista mandou
+    # comprar do que o usuário decidiu levar — e só o segundo pode sair da
+    # lista depois (decisão 8).
+    plan_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("plan_items.id", ondelete="CASCADE")
     )
     product_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
@@ -116,7 +133,7 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     purchased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
-    plan_item: Mapped["PlanItem"] = relationship()
+    plan_item: Mapped["PlanItem | None"] = relationship()
     product: Mapped["Product"] = relationship()
 
     @property
@@ -127,6 +144,15 @@ class ShoppingListItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         usuário uma decisão que o aplicativo tomou por ele.
         """
         return self.quantity == 0 and self.quantity_from_pantry > 0
+
+    @property
+    def is_extra(self) -> bool:
+        """Item que a pessoa acrescentou, sem vir de um item do plano.
+
+        A prescrição não pode ser alterada pelo aplicativo, mas a compra sim:
+        quem vai ao mercado leva o que a receita pediu e o que acabou em casa.
+        """
+        return self.plan_item_id is None
 
     @property
     def purchased(self) -> bool:

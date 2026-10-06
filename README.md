@@ -8,8 +8,9 @@ os ingredientes da lista.
 Projeto acadêmico — Engenharia de Software, UCB.
 
 > **Status:** beta. Backend completo e app mobile com login, envio da prescrição em
-> PDF, confirmação dos produtos, lista de compras, despensa com quantidade, sugestão
-> de receitas e a aba Economia. NFC-e continua fora do MVP.
+> PDF, confirmação dos produtos, lista de compras — com item avulso para o que a
+> receita pede e o que acabou em casa —, despensa com quantidade, sugestão de
+> receitas e a aba Economia. NFC-e continua fora do MVP.
 
 ## Design
 
@@ -21,10 +22,9 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
-| Vincular item já salvo ao catálogo | Só dá para escolher o produto e a quantidade na hora de adicionar; não há como vincular nem medir depois |
-| Região escolhida pelo usuário | `MarketScreen` gera a lista com `'DF', 'Brasília'` fixo no código, e a média de preço é sempre regional |
-| Leitura de NFC-e por QR Code | Fora do MVP |
-| Item avulso na lista de compras | Exige `plan_item_id` nulo em `ShoppingListItem` |
+| Leitura de NFC-e por QR Code | Fora do MVP — hoje todo preço do catálogo vem do seed fictício |
+| Nome e CRN da nutricionista | Não são lidos do PDF, e o CRN não tem campo no modelo |
+| Refeições com horário e status | Depende de um modelo `Meal`, fora do MVP. Ver [`docs/design/telas.md`](docs/design/telas.md) |
 
 ## Stack
 
@@ -141,7 +141,9 @@ trocá-la invalida todos os tokens já emitidos.
 | `POST` | `/meal-plans/{id}/shopping-lists` | Gera a lista de compras para uma região |
 | `GET` | `/meal-plans/{id}/shopping-lists` | Listas já geradas para o plano, da mais recente à mais antiga |
 | `GET` | `/shopping-lists/{id}` | Lista com preço, data e origem de cada item |
+| `POST` | `/shopping-lists/{id}/items` | Acrescenta à compra um produto que o plano não pediu |
 | `PATCH` | `/shopping-lists/{id}/items/{item_id}` | Marca ou desmarca o item como comprado |
+| `DELETE` | `/shopping-lists/{id}/items/{item_id}` | Tira o item avulso da lista. Item prescrito responde 422 |
 | `POST` | `/shopping-lists/{id}/simulation` | Quanto custaria com outras quantidades. **Não grava nada** |
 | `GET` `POST` | `/pantry` | Lê e adiciona itens da despensa |
 | `PATCH` | `/pantry/{id}` | Vincula o produto ou mede um item já salvo |

@@ -30,11 +30,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import {
   ApiError,
+  addExtraItem,
   addPantryItem,
   readPantry,
   readRecipeSuggestions,
+  readShoppingList,
   removePantryItem,
   searchProducts,
   updatePantryItem,
@@ -48,9 +51,10 @@ import type {
   Product,
   ProductSuggestion,
   RecipeAvailability,
+  RecipeIngredient,
 } from '../types/api';
 
-export default function PantryScreen() {
+export default function PantryScreen({ listId }: { listId: string | null }) {
   const cliente = useQueryClient();
   const [texto, setTexto] = useState('');
   // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
@@ -71,10 +75,26 @@ export default function PantryScreen() {
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
 
+  // A disponibilidade soma duas fontes: a despensa e a lista de compras
+  // corrente. Sem o id da lista ela contava só o que está em casa, e uma
+  // receita cujo ingrediente já estava no carrinho aparecia como incompleta.
   const receitas = useQuery({
-    queryKey: ['recipe-suggestions'],
-    queryFn: () => readRecipeSuggestions(),
+    queryKey: ['recipe-suggestions', listId],
+    queryFn: () => readRecipeSuggestions(listId ?? undefined),
   });
+
+  // Mesma chave que o Mercado usa: o React Query serve as duas telas do mesmo
+  // cache, e saber o que já está na lista não custa requisição nova.
+  const lista = useQuery({
+    queryKey: ['shopping-list', listId],
+    queryFn: () => readShoppingList(listId!),
+    enabled: listId !== null,
+  });
+
+  // Produto que já está na lista não entra de novo — o servidor recusa com 409.
+  // Sem isto o botão convidava para uma recusa: o ingrediente falta porque a
+  // receita pede mais do que a lista traz, e não porque ele não foi comprado.
+  const naLista = new Set((lista.data?.items ?? []).map((item) => item.product.id));
 
   /** Depois de mexer na despensa, as receitas mudam junto. */
   function recarregar() {
@@ -545,53 +565,11 @@ export default function PantryScreen() {
           {receitas.isError ? <ErrorNotice message="não foi possível buscar receitas" /> : null}
         </View>
       }
-      renderItem={({ item }) => <CartaoDeReceita disponibilidade={item} />}
+      renderItem={({ item }) => (
+        <CartaoDeReceita disponibilidade={item} listId={listId} naLista={naLista} />
+      )}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
     />
-  );
-}
-
-/**
- * Unidades compatíveis com a grandeza em que o produto é vendido.
- *
- * Produto vendido por unidade não tem escolha a fazer — mostra o rótulo e
- * pronto, em vez de um seletor de uma opção só.
- */
-function SeletorDeUnidade({
-  produto,
-  escolhida,
-  onEscolher,
-}: {
-  produto: Product;
-  escolhida: MeasurementUnit;
-  onEscolher: (unidade: MeasurementUnit) => void;
-}) {
-  const opcoes = unitOptions(produto.base_unit);
-
-  if (opcoes.length === 1) {
-    return <Text style={styles.unidadeFixa}>unidades</Text>;
-  }
-
-  return (
-    <View style={styles.unidades}>
-      {opcoes.map((opcao) => {
-        const ativa = opcao === escolhida;
-        return (
-          <Pressable
-            key={opcao}
-            accessibilityRole="button"
-            accessibilityLabel={`Unidade ${opcao}`}
-            accessibilityState={{ selected: ativa }}
-            onPress={() => onEscolher(opcao)}
-            style={[styles.unidadeBotao, ativa && styles.unidadeBotaoAtivo]}
-          >
-            <Text style={[styles.unidadeTexto, ativa && styles.unidadeTextoAtivo]}>
-              {opcao}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
   );
 }
 
@@ -644,9 +622,46 @@ function ChipDaDespensa({
   );
 }
 
-function CartaoDeReceita({ disponibilidade }: { disponibilidade: RecipeAvailability }) {
+/** "arroz", "arroz e feijão", "arroz, feijão e farofa". */
+function enumerar(nomes: string[]): string {
+  if (nomes.length <= 1) return nomes.join('');
+  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
+}
+
+function CartaoDeReceita({
+  disponibilidade,
+  listId,
+  naLista,
+}: {
+  disponibilidade: RecipeAvailability;
+  /** Nulo enquanto não há lista de compras: sem ela não há onde acrescentar. */
+  listId: string | null;
+  /** Ids dos produtos que a lista de compras já tem. */
+  naLista: Set<string>;
+}) {
+  const cliente = useQueryClient();
   const [aberto, setAberto] = useState(false);
   const { recipe, percentage, complete, missing } = disponibilidade;
+
+  const jaComprados = missing.filter((ingrediente) => naLista.has(ingrediente.product.id));
+
+  /**
+   * O ingrediente que falta vai para a lista de compras, na quantidade que a
+   * receita pede. Não passa pelo plano alimentar: o que muda é a compra.
+   */
+  const acrescentar = useMutation({
+    mutationFn: (ingrediente: RecipeIngredient) =>
+      addExtraItem(listId!, {
+        product_id: ingrediente.product.id,
+        quantity: ingrediente.quantity,
+        unit: ingrediente.unit,
+      }),
+    onSuccess: () => {
+      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
+      // A receita acabou de ficar mais disponível: o que está na lista conta.
+      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+    },
+  });
 
   return (
     <Card style={styles.receita}>
@@ -666,9 +681,61 @@ function CartaoDeReceita({ disponibilidade }: { disponibilidade: RecipeAvailabil
       </Text>
 
       {missing.length > 0 ? (
-        <Text style={styles.faltando}>
-          Falta: {missing.map((item) => item.product.name).join(', ')}
-        </Text>
+        <>
+          <Text style={styles.faltando}>
+            Falta: {missing.map((item) => item.product.name).join(', ')}
+          </Text>
+
+          {listId === null ? (
+            <Body muted>
+              Gere sua lista de compras na aba Mercado para acrescentar o que falta.
+            </Body>
+          ) : (
+            <>
+              <View style={styles.faltantes}>
+                {missing
+                  .filter((ingrediente) => !naLista.has(ingrediente.product.id))
+                  .map((ingrediente) => (
+                    <Pressable
+                      key={ingrediente.product.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Acrescentar ${ingrediente.product.name} à lista de compras`}
+                      disabled={acrescentar.isPending}
+                      onPress={() => acrescentar.mutate(ingrediente)}
+                      style={({ pressed }) => [
+                        styles.botaoFaltante,
+                        acrescentar.isPending && styles.botaoInativo,
+                        pressed && styles.botaoPressionado,
+                      ]}
+                    >
+                      <Text style={styles.botaoFaltanteTexto}>+ {ingrediente.product.name}</Text>
+                    </Pressable>
+                  ))}
+              </View>
+
+              {/* O que já está na lista falta por quantidade, não por ausência:
+                  acrescentar de novo seria recusado, e sem esta linha o botão
+                  sumiria sem explicar por quê. */}
+              {jaComprados.length > 0 ? (
+                <Body muted>
+                  {enumerar(jaComprados.map((ingrediente) => ingrediente.product.name))}{' '}
+                  {jaComprados.length === 1 ? 'já está' : 'já estão'} na sua lista, em
+                  quantidade menor do que esta receita pede.
+                </Body>
+              ) : null}
+            </>
+          )}
+
+          {acrescentar.isError ? (
+            <ErrorNotice
+              message={
+                acrescentar.error instanceof ApiError
+                  ? acrescentar.error.message
+                  : 'não foi possível acrescentar à lista'
+              }
+            />
+          ) : null}
+        </>
       ) : (
         <Text style={styles.completa}>Dá para fazer com o que você já tem.</Text>
       )}
@@ -752,18 +819,6 @@ const styles = StyleSheet.create({
 
   medidaLinha: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center' },
   campoQuantidade: { flex: 0, minWidth: 96 },
-  unidades: { flexDirection: 'row', gap: spacing.xs },
-  unidadeBotao: {
-    minHeight: MIN_TOUCH_HEIGHT,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerLowest,
-  },
-  unidadeBotaoAtivo: { backgroundColor: colors.primaryContainer },
-  unidadeTexto: { ...typography.labelLg, color: colors.onSurfaceVariant },
-  unidadeTextoAtivo: { color: colors.onPrimary },
-  unidadeFixa: { ...typography.labelLg, color: colors.onSurfaceVariant },
   acaoSecundaria: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },
   acaoSecundariaTexto: { ...typography.labelLg, color: colors.primary },
 
@@ -796,6 +851,15 @@ const styles = StyleSheet.create({
   receitaNome: { ...typography.headlineSm, color: colors.primary, flex: 1 },
   receitaDetalhe: { ...typography.labelSm, color: colors.onSurfaceVariant },
   faltando: { ...typography.bodySm, color: colors.onSecondaryFixedVariant },
+  faltantes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  botaoFaltante: {
+    minHeight: MIN_TOUCH_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.secondaryContainer,
+  },
+  botaoFaltanteTexto: { ...typography.labelLg, color: colors.onSecondaryContainer },
   completa: { ...typography.bodySm, color: colors.onPrimaryFixedVariant },
   verPreparo: { paddingVertical: spacing.xs },
   verPreparoTexto: { ...typography.labelLg, color: colors.primary },

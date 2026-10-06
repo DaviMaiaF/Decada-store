@@ -218,6 +218,78 @@ def _pantry_savings(
     return custo_cheio - cost
 
 
+def price_item(
+    session: Session,
+    item: ShoppingListItem,
+    state_code: str,
+    city: str,
+    *,
+    reference: datetime | None = None,
+) -> PriceConfidence | None:
+    """Grava no item o retrato do preço dele na região. Devolve a confiança.
+
+    Devolve None quando não há preço — e aí todos os campos de preço do item
+    ficam nulos, nunca zero: zero é um preço, ausência é outra coisa.
+
+    Mora fora de `price_shopping_list` porque o item avulso chega um de cada
+    vez, depois da lista pronta, e precisa da mesma conta sem reprecificar o
+    resto.
+    """
+    aggregate = product_price(session, item.product, state_code, city, reference=reference)
+
+    if aggregate is None:
+        # Sem preço na região o item fica sem custo. Zero seria mentira.
+        item.unit_price_snapshot = None
+        item.price_reference_date = None
+        item.price_origin = None
+        item.price_confidence = None
+        item.price_sample_size = None
+        item.estimated_cost = None
+        item.pantry_savings = None
+        return None
+
+    try:
+        quantity_in_base = to_base_quantity(item.quantity, item.unit, item.product.base_unit)
+    except IncompatibleUnitError:
+        # Unidade do item não bate com a do produto: não há custo a calcular.
+        item.estimated_cost = None
+        item.pantry_savings = None
+        return None
+
+    quantity_charged, packages_needed = quantity_to_charge(quantity_in_base, item.product)
+    cost = (aggregate.average * quantity_charged).quantize(_MONEY, ROUND_HALF_UP)
+
+    item.packages_needed = packages_needed
+    item.unit_price_snapshot = aggregate.average
+    item.price_reference_date = aggregate.latest_collected_at
+    item.price_origin = aggregate.latest_origin
+    item.price_confidence = aggregate.confidence
+    item.price_sample_size = aggregate.sample_size
+    item.estimated_cost = cost
+    item.pantry_savings = _pantry_savings(item, quantity_in_base, aggregate.average, cost)
+
+    return aggregate.confidence
+
+
+def lowest_confidence(confidences: Sequence[PriceConfidence]) -> PriceConfidence | None:
+    """O pior selo do conjunto. None quando nenhum item tem preço.
+
+    É o selo que a tela mostra para a lista inteira: dizer "atual" porque a
+    maioria é atual esconderia justamente o preço que merece ressalva.
+    """
+    if not confidences:
+        return None
+    return max(confidences, key=_CONFIDENCE_ORDER.index)
+
+
+def list_total(shopping_list: ShoppingList) -> Decimal:
+    """Soma dos custos dos itens. Item sem preço não entra — não vale zero."""
+    return sum(
+        (item.estimated_cost for item in shopping_list.items if item.estimated_cost is not None),
+        Decimal("0.00"),
+    )
+
+
 def price_shopping_list(
     session: Session, shopping_list: ShoppingList, *, reference: datetime | None = None
 ) -> ShoppingListCost:
@@ -232,63 +304,30 @@ def price_shopping_list(
     confidences: list[PriceConfidence] = []
 
     for item in shopping_list.items:
-        aggregate = product_price(
+        confidence = price_item(
             session,
-            item.product,
+            item,
             shopping_list.state_code,
             shopping_list.city,
             reference=reference,
         )
 
-        if aggregate is None:
-            # Sem preço na região o item fica sem custo. Zero seria mentira.
-            item.unit_price_snapshot = None
-            item.price_reference_date = None
-            item.price_origin = None
-            item.price_confidence = None
-            item.price_sample_size = None
-            item.estimated_cost = None
-            item.pantry_savings = None
+        if confidence is None:
             without_price += 1
             continue
 
-        try:
-            quantity_in_base = to_base_quantity(item.quantity, item.unit, item.product.base_unit)
-        except IncompatibleUnitError:
-            # Unidade do item não bate com a do produto: não há custo a calcular.
-            item.estimated_cost = None
-            item.pantry_savings = None
-            without_price += 1
-            continue
-
-        quantity_charged, packages_needed = quantity_to_charge(quantity_in_base, item.product)
-        cost = (aggregate.average * quantity_charged).quantize(_MONEY, ROUND_HALF_UP)
-
-        item.packages_needed = packages_needed
-        item.unit_price_snapshot = aggregate.average
-        item.price_reference_date = aggregate.latest_collected_at
-        item.price_origin = aggregate.latest_origin
-        item.price_confidence = aggregate.confidence
-        item.price_sample_size = aggregate.sample_size
-        item.estimated_cost = cost
-        item.pantry_savings = _pantry_savings(item, quantity_in_base, aggregate.average, cost)
-
-        total += cost
+        total += item.estimated_cost
         economia += item.pantry_savings
         priced += 1
-        confidences.append(aggregate.confidence)
+        confidences.append(confidence)
 
     shopping_list.estimated_total = total
     shopping_list.calculated_at = reference or _now()
-
-    lowest = None
-    if confidences:
-        lowest = max(confidences, key=_CONFIDENCE_ORDER.index)
 
     return ShoppingListCost(
         total=total,
         items_priced=priced,
         items_without_price=without_price,
-        lowest_confidence=lowest,
+        lowest_confidence=lowest_confidence(confidences),
         pantry_savings=economia,
     )

@@ -181,12 +181,15 @@ export default function AppNavigator() {
 
         <Tab.Screen
           name="Despensa"
-          component={PantryScreen}
           options={{
             title: 'Despensa',
             tabBarIcon: ({ color, size }) => <IconeDespensa color={color} size={size} />,
           }}
-        />
+        >
+          {/* A despensa precisa da lista corrente por dois motivos: a receita
+              conta o que será comprado, e o ingrediente que falta vai para lá. */}
+          {() => <PantryScreen listId={listId} />}
+        </Tab.Screen>
 
         <Tab.Screen
           name="Economia"

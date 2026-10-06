@@ -8,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
-from app.models import MealPlan, ShoppingList, ShoppingListItem
+from app.models import MealPlan, Product, ShoppingList, ShoppingListItem
 from app.schemas.shopping_list import (
+    ExtraItemIn,
     GeneratedListOut,
     GenerateListIn,
     PurchaseIn,
@@ -19,7 +20,7 @@ from app.schemas.shopping_list import (
     SimulatedItemOut,
     SimulationIn,
 )
-from app.services.shopping import generate_shopping_list
+from app.services.shopping import add_extra_item, generate_shopping_list, remove_item
 from app.services.simulation import simulate_item
 
 router = APIRouter(tags=["listas de compras"])
@@ -106,15 +107,33 @@ def read_shopping_lists(
     ).all()
 
 
-@router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
-def read_shopping_list(
-    session: DbSession, user: CurrentUser, list_id: uuid.UUID
-) -> ShoppingList:
-    """A lista com seus itens e o retrato do preço de cada um.
+def _get_item(
+    session: DbSession, user: CurrentUser, list_id: uuid.UUID, item_id: uuid.UUID
+) -> ShoppingListItem:
+    """Item da lista do usuário, ou 404.
 
-    Os itens vêm em lista plana, com a categoria dentro do produto: agrupar por
-    corredor é decisão de quem exibe, não do servidor.
+    Item de outra pessoa e item que não é desta lista respondem igual: 404,
+    nunca 403. Ver decisão 10 e docs/lgpd.md.
     """
+    item = session.scalars(
+        select(ShoppingListItem)
+        .join(ShoppingList)
+        .join(MealPlan)
+        .where(
+            ShoppingListItem.id == item_id,
+            ShoppingListItem.shopping_list_id == list_id,
+            MealPlan.user_id == user.id,
+        )
+        .options(selectinload(ShoppingListItem.product))
+    ).first()
+
+    if item is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "item não encontrado nesta lista")
+    return item
+
+
+def _get_list(session: DbSession, user: CurrentUser, list_id: uuid.UUID) -> ShoppingList:
+    """Lista do usuário, com os itens e os produtos deles, ou 404."""
     shopping_list = session.scalars(
         select(ShoppingList)
         .join(MealPlan)
@@ -126,6 +145,75 @@ def read_shopping_list(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "lista de compras não encontrada")
 
     return shopping_list
+
+
+@router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
+def read_shopping_list(
+    session: DbSession, user: CurrentUser, list_id: uuid.UUID
+) -> ShoppingList:
+    """A lista com seus itens e o retrato do preço de cada um.
+
+    Os itens vêm em lista plana, com a categoria dentro do produto: agrupar por
+    corredor é decisão de quem exibe, não do servidor.
+    """
+    return _get_list(session, user, list_id)
+
+
+@router.post(
+    "/shopping-lists/{list_id}/items",
+    response_model=ShoppingListItemOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_item(
+    session: DbSession,
+    user: CurrentUser,
+    list_id: uuid.UUID,
+    payload: ExtraItemIn,
+) -> ShoppingListItem:
+    """Acrescenta à compra um produto que o plano não pediu.
+
+    É o ingrediente que falta para a receita e o que acabou em casa. A
+    prescrição não muda — muda a lista de compras, que é outra coisa.
+
+    O que a despensa cobre é descontado, como em qualquer item. Produto que já
+    está na lista responde 409 em vez de entrar duas vezes: a segunda linha
+    abateria de novo um estoque que a primeira já consumiu.
+
+    Só o item novo é precificado; os preços que a lista congelou na geração
+    ficam como estão.
+    """
+    shopping_list = _get_list(session, user, list_id)
+
+    product = session.get(Product, payload.product_id)
+    # Produto inexistente e produto de catálogo respondem igual ao resto da
+    # API: o recurso pedido não está lá.
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "produto não encontrado")
+
+    item = add_extra_item(session, shopping_list, product, payload.quantity, payload.unit)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+@router.delete(
+    "/shopping-lists/{list_id}/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_item(
+    session: DbSession, user: CurrentUser, list_id: uuid.UUID, item_id: uuid.UUID
+) -> None:
+    """Tira da lista um item avulso.
+
+    Só o avulso sai. Item que veio da prescrição responde 422: o aplicativo
+    compara o preço do que foi prescrito, nunca decide que a pessoa não deve
+    levar um alimento (decisão 8). Para ver a compra sem ele existe a
+    simulação, que não grava nada.
+    """
+    item = _get_item(session, user, list_id, item_id)
+
+    remove_item(session, item)
+    session.commit()
 
 
 @router.patch(
@@ -151,22 +239,7 @@ def set_item_purchased(
     Item que a despensa dispensou também aceita marcação: o servidor guarda o
     fato, e oferecer ou não o botão é decisão da tela.
     """
-    item = session.scalars(
-        select(ShoppingListItem)
-        .join(ShoppingList)
-        .join(MealPlan)
-        .where(
-            ShoppingListItem.id == item_id,
-            ShoppingListItem.shopping_list_id == list_id,
-            MealPlan.user_id == user.id,
-        )
-        .options(selectinload(ShoppingListItem.product))
-    ).first()
-
-    # Item de outra pessoa e item que não é desta lista respondem igual: 404,
-    # nunca 403. Ver decisão 10 e docs/lgpd.md.
-    if item is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "item não encontrado nesta lista")
+    item = _get_item(session, user, list_id, item_id)
 
     if payload.purchased and item.purchased_at is None:
         item.purchased_at = datetime.now(timezone.utc)

@@ -12,7 +12,14 @@ from sqlalchemy import select
 
 from app.models import MealPlan, PantryItem, PlanItem, Product, ShoppingList, User
 from app.models.enums import MeasurementUnit, PlanItemStatus
-from app.services.shopping import generate_shopping_list
+from app.services.shopping import (
+    PrescribedItemError,
+    ProductAlreadyInListError,
+    add_extra_item,
+    generate_shopping_list,
+    remove_item,
+)
+from app.services.units import IncompatibleUnitError
 from tests.conftest import novo_usuario
 
 pytestmark = pytest.mark.db
@@ -21,6 +28,7 @@ AGORA = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
 KG = MeasurementUnit.QUILOGRAMA
 G = MeasurementUnit.GRAMA
+ML = MeasurementUnit.MILILITRO
 UN = MeasurementUnit.UNIDADE
 
 FRANGO = "Peito de frango sem pele"
@@ -339,3 +347,142 @@ def test_a_escolha_confirmada_sobrevive_a_nova_geracao(db_session, usuario, cata
 
     assert item.product_id == frango.id
     assert item.match_score == Decimal("0.930")
+
+
+# --------------------------------------------------------------------------
+# item avulso: o que a pessoa acrescenta depois da lista pronta
+# --------------------------------------------------------------------------
+
+AVEIA = "Aveia em flocos"
+
+
+def _lista_de_um_item(db_session, usuario, produto: Product) -> ShoppingList:
+    """Uma lista já gerada e precificada, para o avulso chegar depois."""
+    plano = _plano(usuario, _item(1, f"1,2 kg de {produto.name.lower()}", "1.2", KG, produto))
+    db_session.add(plano)
+    db_session.flush()
+    gerada = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
+    return gerada.shopping_list
+
+
+def test_item_avulso_entra_na_lista_precificado(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    item = add_extra_item(
+        db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G, reference=AGORA
+    )
+
+    assert item.is_extra
+    assert item.plan_item_id is None
+    assert item.estimated_cost > Decimal("0.00")
+    # Nenhum preço anda sem data, origem e amostra — nem o que chegou depois.
+    assert item.price_reference_date is not None
+    assert item.price_origin is not None
+    assert item.price_sample_size > 0
+
+
+def test_o_avulso_soma_no_total_da_lista(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    antes = lista.estimated_total
+
+    item = add_extra_item(
+        db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G, reference=AGORA
+    )
+
+    assert lista.estimated_total == antes + item.estimated_cost
+
+
+def test_o_avulso_nao_reprecifica_o_que_a_lista_congelou(
+    db_session, usuario, catalogo_carregado
+):
+    """O preço dos itens do plano é um retrato da geração, e continua sendo."""
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    do_plano = lista.items[0]
+    preco_congelado = do_plano.unit_price_snapshot
+    precificada_em = lista.calculated_at
+
+    add_extra_item(db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G, reference=AGORA)
+
+    assert do_plano.unit_price_snapshot == preco_congelado
+    # `calculated_at` diz quando a lista foi precificada, e isso não se repetiu.
+    assert lista.calculated_at == precificada_em
+
+
+def test_a_despensa_abate_o_avulso_como_qualquer_item(db_session, usuario, catalogo_carregado):
+    aveia = catalogo_carregado(AVEIA)
+    _guardar(db_session, PantryItem(raw_description="aveia", product=aveia,
+                                    quantity=Decimal("200"), unit=G), usuario)
+
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    item = add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+    # Pede 500 g, tem 200 g em casa: compra 300 g.
+    assert item.quantity == Decimal("0.300")
+    assert item.quantity_from_pantry == Decimal("0.200")
+
+
+def test_despensa_que_cobre_tudo_deixa_o_avulso_dispensado(
+    db_session, usuario, catalogo_carregado
+):
+    aveia = catalogo_carregado(AVEIA)
+    _guardar(db_session, PantryItem(raw_description="aveia", product=aveia,
+                                    quantity=Decimal("2"), unit=KG), usuario)
+
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    item = add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+    # Continua na lista, com quantidade zero: some da compra, não da tela.
+    assert item.dispensed_by_pantry
+
+
+def test_produto_que_ja_esta_na_lista_nao_entra_de_novo(db_session, usuario, catalogo_carregado):
+    """Duas linhas do mesmo produto abateriam a despensa duas vezes."""
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    with pytest.raises(ProductAlreadyInListError):
+        add_extra_item(db_session, lista, frango, Decimal("1"), KG, reference=AGORA)
+
+
+def test_o_mesmo_avulso_duas_vezes_tambem_e_recusado(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    aveia = catalogo_carregado(AVEIA)
+    add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+    with pytest.raises(ProductAlreadyInListError):
+        add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+
+def test_avulso_em_grandeza_que_o_produto_nao_usa_e_recusado(
+    db_session, usuario, catalogo_carregado
+):
+    """Meio litro de uma aveia vendida por quilo não é pedido que se atenda."""
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    with pytest.raises(IncompatibleUnitError):
+        add_extra_item(
+            db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), ML, reference=AGORA
+        )
+
+
+def test_remover_o_avulso_devolve_o_total_ao_que_era(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    antes = lista.estimated_total
+
+    item = add_extra_item(
+        db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G, reference=AGORA
+    )
+    remove_item(db_session, item)
+
+    assert lista.estimated_total == antes
+    assert len(lista.items) == 1
+
+
+def test_item_da_prescricao_nao_sai_da_lista(db_session, usuario, catalogo_carregado):
+    """Decisão 8: comparar preço do que foi prescrito, sim; tirar o alimento, não."""
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    with pytest.raises(PrescribedItemError):
+        remove_item(db_session, lista.items[0])
+
+    assert len(lista.items) == 1

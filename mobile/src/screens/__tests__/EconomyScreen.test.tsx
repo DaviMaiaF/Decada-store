@@ -54,6 +54,7 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
     purchased: false,
     purchased_at: null,
     pantry_savings: '0.00',
+    is_extra: false,
     ...over,
   };
 }
