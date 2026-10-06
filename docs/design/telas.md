@@ -49,7 +49,7 @@ Legenda:
 | A tela mostra | Backend | Observação |
 |---|---|---|
 | Escolher PDF | ✅ | `import_plan.import_plan_from_pdf` (etapa 8) |
-| Tirar foto | ⛔ | Exige OCR. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso |
+| Tirar foto | ⛔ | Exige OCR **da prescrição**. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso. Não confundir com a foto da despensa (seção 4), que é foto de comida, não de documento |
 | Nome e CRN da nutricionista | 🔨 | `nutritionist_name` é parâmetro de quem importa, não é detectado no PDF; **CRN não tem campo** |
 | "Plano de 4 semanas • Foco: Energia" | ⛔ | Não há duração nem objetivo no modelo |
 | "5 refeições diárias organizadas" | ⛔ | Depende de `Meal`, que está fora do MVP |
@@ -206,6 +206,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
+| Encher a despensa por foto | 🔨 | Não estava no protótipo. Fotografar o que se tem em casa, o app dizer o que viu e a pessoa confirmar o que vira item |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | ✅ | Um botão por ingrediente que falta, na quantidade que a receita pede |
@@ -252,6 +253,38 @@ O percentual é a proporção de ingredientes **obrigatórios** disponíveis: 3 
 Ingrediente opcional não entra na conta. Item da despensa sem quantidade conta como
 disponível — regra oposta à da lista de compras, onde item sem quantidade não abate
 nada, porque aqui o custo do erro é uma sugestão imprecisa, não uma compra a menos.
+
+**Encher a despensa por foto — a próxima funcionalidade.** A pessoa fotografa o que tem
+em casa (a prateleira, a geladeira, as compras em cima da mesa) e **o app diz o que viu**.
+O que ela confirmar vira item da despensa. Nasceu de um problema de uso, não do protótipo:
+cadastrar item por item é trabalhoso o bastante para a pessoa não fazer — e despensa vazia
+desliga as duas coisas que dependem dela, o abatimento da lista e a ordem das receitas.
+
+O reconhecimento **propõe**; quem decide é a pessoa, item a item, como já acontece no
+casamento do plano alimentar — nunca 100% automático (decisão 11). A foto devolve nomes
+("arroz", "ovos"), não produtos do catálogo: daí para a frente vale o caminho que já
+existe, `services/text.py` e `services/matching.py`, o mesmo motor de `GET
+/products/search`. O que o reconhecimento não resolver aparece como não identificado e
+espera a pessoa, igual ao relatório do descarte do import de PDF. Nada entra sozinho.
+
+**Foto não pesa arroz.** O item reconhecido entra vinculado ao produto, com a medida em
+branco ou na embalagem padrão — o mesmo que o cadastro manual já faz. Isso aciona a regra
+de sempre: item sem quantidade conta para a receita e **não** abate da lista de compras.
+A foto melhora a sugestão de receitas no mesmo instante; só ajuda na compra depois que a
+pessoa disser quanto tem.
+
+**A imagem não é guardada.** Foto do interior da casa de alguém é dado pessoal, e a
+decisão 5 pede minimização: o app extrai os itens e descarta o arquivo — não há coluna
+para imagem, nem nada a apagar depois. Se o reconhecimento for feito por serviço de
+terceiros, isso entra no termo de consentimento antes de a primeira foto sair do aparelho.
+
+**Isto não é a decisão 7.** O que está fora do MVP lá é OCR do *plano alimentar* — ler a
+prescrição de uma foto, onde errar significa comida sumindo da dieta de alguém. Aqui o
+erro custa um item a mais ou a menos numa lista que a pessoa está olhando na hora.
+
+**E não forma preço.** A foto enche a despensa; a NFC-e (decisão 3) é que formaria o
+preço, e continua fora do MVP. São duas câmeras com dois propósitos, e não vale
+confundi-las.
 
 ## 5. Economia
 
@@ -340,13 +373,15 @@ próprio título.
 ## Resumo do que entra no MVP
 
 **Entra:** item avulso na lista de compras — o ingrediente que falta para a receita e o
-que acabou em casa; despensa (`PantryItem`) com quantidade, o desconto dela na lista de compras e a
-correção do item já salvo; import de plano por PDF com texto, com aceite na tela; o plano e
-a lista reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso
-quando ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas
-com percentual de disponibilidade; aba Economia com o que a despensa poupou; trilha da
+que acabou em casa; despensa (`PantryItem`) com quantidade, o desconto dela na lista de
+compras e a correção do item já salvo; **a despensa preenchida por foto**, com confirmação
+item a item; import de plano por PDF com texto, com aceite na tela; o plano e a lista
+reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso quando
+ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas com
+percentual de disponibilidade; aba Economia com o que a despensa poupou; trilha da
 jornada; simulação de compra sem um item.
 
-**Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR de foto,
-projeção mensal, métricas de desperdício, dicas de substituição geradas pelo app, validade
-de item da despensa, exportação para WhatsApp e fotos de receita.
+**Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR da
+prescrição por foto, projeção mensal, métricas de desperdício, dicas de substituição
+geradas pelo app, validade de item da despensa, exportação para WhatsApp e fotos de
+receita.
