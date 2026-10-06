@@ -22,9 +22,13 @@ Dieta, Mercado, Despensa e Economia.
 
 | O que | Situação |
 |---|---|
+| Encher a despensa por foto | **Próxima funcionalidade.** Fotografar o que se tem em casa, o app reconhecer os alimentos e a pessoa confirmar o que vira item da despensa. A imagem não é guardada |
 | Leitura de NFC-e por QR Code | Fora do MVP — hoje todo preço do catálogo vem do seed fictício |
 | Nome e CRN da nutricionista | Não são lidos do PDF, e o CRN não tem campo no modelo |
 | Refeições com horário e status | Depende de um modelo `Meal`, fora do MVP. Ver [`docs/design/telas.md`](docs/design/telas.md) |
+
+A foto enche a despensa; **não forma preço**. Ela não substitui a NFC-e, que continua
+sendo a fonte principal de preço do projeto — e continua fora do MVP.
 
 ## Stack
 

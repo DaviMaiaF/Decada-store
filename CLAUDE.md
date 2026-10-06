@@ -75,7 +75,8 @@ decada/
 - **PriceRecord (registro de preço)**: preço de um Product, em um Market, em uma data,
   com uma origem (`nfce`, `scraping`, `usuario`, `seed`).
 - **PantryItem (item da despensa)**: o que o usuário já tem em casa. Abate da lista
-  de compras e alimenta a sugestão de receitas.
+  de compras e alimenta a sugestão de receitas. Entra pelo cadastro manual ou por
+  foto do que se tem em casa — ver decisão 11.
 - **ShoppingList (lista de compras)**: resultado final — produtos escolhidos,
   quantidades e custo estimado.
 - **Recipe (receita)**: preparo que consome ingredientes presentes na lista
@@ -93,13 +94,21 @@ decada/
    consentimento explícito, minimização e exclusão sob demanda são requisitos.
 6. A marca é **DÉCADA** (feminina: *a* DÉCADA). Tabelas, colunas e enums seguem
    em inglês, como sempre.
-7. Import de plano é **PDF com texto**. OCR de foto está fora do MVP.
+7. Import de plano é **PDF com texto**. OCR da *prescrição* por foto está fora do
+   MVP — errar ali faz comida sumir da dieta de alguém. Não confundir com a
+   decisão 11, que é foto de comida, não de documento.
 8. Substituição de alimento só existe se veio da nutricionista. O app pode comparar
    preços do mesmo item; não pode trocar o alimento prescrito por outro.
 9. Autenticação é JWT assinado; senha é hash bcrypt. Exclusão de conta apaga a
    linha de verdade — sem soft delete —, e só o preço sobrevive, anonimizado.
 10. Recurso de outra pessoa responde 404, nunca 403; senha errada e e-mail
     inexistente respondem igual. Ver [`docs/lgpd.md`](docs/lgpd.md).
+11. A despensa pode ser preenchida por **foto do que se tem em casa**: o app
+    reconhece os alimentos e **propõe**; quem confirma é a pessoa, item a item, como
+    no casamento do plano. O que o reconhecimento não resolver aparece como não
+    identificado, nunca entra sozinho. **A imagem não é guardada** — o app extrai os
+    itens e descarta o arquivo (decisão 5, minimização). Isso enche a despensa; não
+    forma preço, que continua sendo a decisão 3.
 
 ## Design
 
