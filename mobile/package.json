@@ -8,6 +8,7 @@
     "@react-navigation/native": "^7.3.18",
     "@react-navigation/native-stack": "^7.18.10",
     "@tanstack/react-query": "^5.102.8",
+    "axios": "^1.20.0",
     "expo": "~57.0.21",
     "expo-document-picker": "~57.0.1",
     "expo-font": "~57.0.3",
@@ -35,7 +36,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "jest --testMatch '**/e2e/*.e2e.ts' --runInBand"
   },
   "private": true,
   "jest": {

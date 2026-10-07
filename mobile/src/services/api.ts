@@ -1,14 +1,13 @@
 /**
  * Cliente HTTP da API da DÉCADA.
  *
- * Uma função só monta toda requisição: assim o token entra em um lugar, e o
- * tratamento de erro do servidor vira sempre o mesmo tipo de exceção.
+ * Cada função daqui é um endpoint do backend, e nada mais: autenticação, tempo
+ * limite e tradução de erro ficam na instância do axios, em `http.ts`.
  */
 
 import { Platform } from 'react-native';
 
-import { API_URL } from './config';
-import { readToken } from './session';
+import { http } from './http';
 import type {
   Account,
   Candidate,
@@ -28,34 +27,7 @@ import type {
   Token,
 } from '../types/api';
 
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-
-  /** Sessão expirada, token adulterado ou conta excluída. */
-  get isUnauthorized(): boolean {
-    return this.status === 401;
-  }
-}
-
-/** Mensagem legível a partir do corpo de erro da API. */
-function readDetail(body: unknown, fallback: string): string {
-  if (typeof body === 'object' && body !== null && 'detail' in body) {
-    const detail = (body as { detail: unknown }).detail;
-    if (typeof detail === 'string') return detail;
-    // Erro de validação do Pydantic: lista de problemas por campo.
-    if (Array.isArray(detail) && detail.length > 0) {
-      const primeiro = detail[0] as { msg?: string };
-      if (primeiro?.msg) return primeiro.msg;
-    }
-  }
-  return fallback;
-}
+export { ApiError } from './http';
 
 interface RequestOptions {
   method?: string;
@@ -67,36 +39,12 @@ interface RequestOptions {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, anonymous = false } = options;
 
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const resposta = await http.request<T>({ url: path, method, data: body, anonymous });
 
-  if (!anonymous) {
-    const token = await readToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-
-  let resposta: Response;
-  try {
-    resposta = await fetch(`${API_URL}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    // Falha de rede não tem status HTTP; 0 marca esse caso.
-    throw new ApiError(0, 'não foi possível falar com o servidor');
-  }
-
+  // O 204 do DELETE não tem corpo; o axios devolve string vazia nesse caso.
   if (resposta.status === 204) return undefined as T;
 
-  const texto = await resposta.text();
-  const corpo = texto ? JSON.parse(texto) : null;
-
-  if (!resposta.ok) {
-    throw new ApiError(resposta.status, readDetail(corpo, 'erro inesperado no servidor'));
-  }
-
-  return corpo as T;
+  return resposta.data;
 }
 
 // --- conta ---
@@ -118,15 +66,14 @@ export const deleteAccount = () => request<unknown>('/auth/me', { method: 'DELET
 // --- plano alimentar ---
 
 /**
- * Envia o PDF. Vai como multipart, e não JSON, então monta a requisição à mão
- * em vez de passar por `request`.
+ * Envia o PDF. Vai como multipart, e não JSON, então não passa por `request`.
+ * O token continua vindo do interceptor, como em qualquer outra chamada.
  */
 export async function importMealPlan(
   file: { uri: string; name: string; mimeType?: string },
   consentAccepted: boolean,
   extras: { title?: string; nutritionistName?: string } = {},
 ): Promise<ImportResult> {
-  const token = await readToken();
   const form = new FormData();
 
   if (Platform.OS === 'web') {
@@ -147,25 +94,14 @@ export async function importMealPlan(
   if (extras.title) form.append('title', extras.title);
   if (extras.nutritionistName) form.append('nutritionist_name', extras.nutritionistName);
 
-  let resposta: Response;
-  try {
-    resposta = await fetch(`${API_URL}/meal-plans`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-  } catch {
-    throw new ApiError(0, 'não foi possível enviar o arquivo');
-  }
+  const resposta = await http.post<ImportResult>('/meal-plans', form, {
+    networkMessage: 'não foi possível enviar o arquivo',
+    fallbackMessage: 'não foi possível ler o PDF',
+    // Subir arquivo em rede de celular passa do tempo limite das outras chamadas.
+    timeout: 60_000,
+  });
 
-  const texto = await resposta.text();
-  const corpo = texto ? JSON.parse(texto) : null;
-
-  if (!resposta.ok) {
-    throw new ApiError(resposta.status, readDetail(corpo, 'não foi possível ler o PDF'));
-  }
-
-  return corpo as ImportResult;
+  return resposta.data;
 }
 
 /** Planos do usuário, do mais recente ao mais antigo. */

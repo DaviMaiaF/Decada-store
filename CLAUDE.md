@@ -127,6 +127,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
   regra de exclusão.
 - [`docs/lgpd.md`](docs/lgpd.md) — consentimento, minimização e exclusão, cada um
   com o teste que o sustenta.
+- [`docs/integracao-api.md`](docs/integracao-api.md) — como o app consome a API:
+  a instância do axios, os interceptors, as rotas e o que cada status faz na tela.
 
 ## Como rodar
 
@@ -142,7 +144,12 @@ python3 -m venv .venv                      # apenas na primeira vez
 
 cd ../mobile && npx expo start             # app mobile
 cd ../mobile && npm test                   # testes do app
+cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 ```
+
+> O `test:smoke` fala com o backend de verdade e cria a própria conta, que apaga
+> no fim. Ele não entra no `npm test` porque sem servidor de pé falharia — ver
+> [`docs/integracao-api.md`](docs/integracao-api.md).
 
 > **Nota de ambiente:** a máquina de desenvolvimento tem Python 3.10.12.
 > A stack (FastAPI, Pydantic v2, SQLAlchemy 2.x) roda sem restrição nessa versão,
