@@ -21,6 +21,8 @@ jest.mock('../../services/api', () => ({
   readShoppingList: jest.fn(),
   readPantry: jest.fn(),
   readRecipeSuggestions: jest.fn(),
+  // A tela de confirmação busca candidatos ao montar; aqui ela só é atravessada.
+  readCandidates: jest.fn(() => Promise.resolve([])),
 }));
 
 const lerPlanos = api.readMealPlans as jest.Mock;
