@@ -237,6 +237,33 @@ describe('envio do PDF', () => {
     expect(enviado().find((entrada) => entrada.campo === 'consent_accepted')?.valor).toBe('true');
   });
 
+  it('manda a nutricionista e o CRN quando foram preenchidos', async () => {
+    const { enviado } = capturarFormData();
+
+    await api.importMealPlan({ uri: 'file:///p.pdf', name: 'p.pdf' }, true, {
+      nutritionistName: 'Dra. Camila Fernandes',
+      nutritionistCrn: 'CRN-3 48291',
+    });
+
+    expect(enviado().find((entrada) => entrada.campo === 'nutritionist_name')?.valor).toBe(
+      'Dra. Camila Fernandes',
+    );
+    expect(enviado().find((entrada) => entrada.campo === 'nutritionist_crn')?.valor).toBe(
+      'CRN-3 48291',
+    );
+  });
+
+  it('sem nutricionista e sem CRN, os campos nem vão no envio', async () => {
+    // Mandar string vazia gravaria "" no lugar de nulo, e o plano passaria a
+    // dizer que alguém informou um registro em branco.
+    const { enviado } = capturarFormData();
+
+    await api.importMealPlan({ uri: 'file:///p.pdf', name: 'p.pdf' }, true);
+
+    expect(enviado().some((entrada) => entrada.campo === 'nutritionist_name')).toBe(false);
+    expect(enviado().some((entrada) => entrada.campo === 'nutritionist_crn')).toBe(false);
+  });
+
   it('o PDF também leva o token, pelo interceptor', async () => {
     const { adaptador } = capturarFormData();
 

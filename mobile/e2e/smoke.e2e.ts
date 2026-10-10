@@ -82,7 +82,7 @@ it('percorre o app de ponta a ponta', async () => {
   const importado = await api.importMealPlan(
     { uri: PLANO_DE_EXEMPLO, name: 'plano.pdf' },
     true,
-    { nutritionistName: 'Dra. Helena Marques' },
+    { nutritionistName: 'Dra. Helena Marques', nutritionistCrn: 'CRN-1 12345' },
   );
   const planoId = importado.meal_plan.id;
   passo(
@@ -97,6 +97,8 @@ it('percorre o app de ponta a ponta', async () => {
 
   // 3. casamento item–produto: o usuário confirma, item a item
   const plano = await api.readMealPlan(planoId);
+  expect(plano.nutritionist_name).toBe('Dra. Helena Marques');
+  expect(plano.nutritionist_crn).toBe('CRN-1 12345');
   let confirmados = 0;
   for (const item of plano.items) {
     const candidatos = await api.readCandidates(planoId, item.id);

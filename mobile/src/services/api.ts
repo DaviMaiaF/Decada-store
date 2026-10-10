@@ -72,7 +72,7 @@ export const deleteAccount = () => request<unknown>('/auth/me', { method: 'DELET
 export async function importMealPlan(
   file: { uri: string; name: string; mimeType?: string },
   consentAccepted: boolean,
-  extras: { title?: string; nutritionistName?: string } = {},
+  extras: { title?: string; nutritionistName?: string; nutritionistCrn?: string } = {},
 ): Promise<ImportResult> {
   const form = new FormData();
 
@@ -93,6 +93,7 @@ export async function importMealPlan(
   form.append('consent_accepted', String(consentAccepted));
   if (extras.title) form.append('title', extras.title);
   if (extras.nutritionistName) form.append('nutritionist_name', extras.nutritionistName);
+  if (extras.nutritionistCrn) form.append('nutritionist_crn', extras.nutritionistCrn);
 
   const resposta = await http.post<ImportResult>('/meal-plans', form, {
     networkMessage: 'não foi possível enviar o arquivo',
