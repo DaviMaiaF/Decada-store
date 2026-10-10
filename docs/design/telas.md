@@ -50,7 +50,7 @@ Legenda:
 |---|---|---|
 | Escolher PDF | ✅ | `import_plan.import_plan_from_pdf` (etapa 8) |
 | Tirar foto | ⛔ | Exige OCR **da prescrição**. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso. Não confundir com a foto da despensa (seção 4), que é foto de comida, não de documento |
-| Nome e CRN da nutricionista | 🔨 | `nutritionist_name` é parâmetro de quem importa, não é detectado no PDF; **CRN não tem campo** |
+| Nome e CRN da nutricionista | ✅ | `nutritionist_name` e `nutritionist_crn` são campos opcionais da tela de upload, informados por quem importa — nenhum dos dois é detectado no PDF |
 | "Plano de 4 semanas • Foco: Energia" | ⛔ | Não há duração nem objetivo no modelo |
 | "5 refeições diárias organizadas" | ⛔ | Depende de `Meal`, que está fora do MVP |
 | "28 itens mapeados" | ✅ | `ImportedPlan.items_matched` |

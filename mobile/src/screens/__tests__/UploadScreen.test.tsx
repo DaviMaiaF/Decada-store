@@ -47,6 +47,18 @@ it('depois do aceite, cobra só o arquivo', async () => {
   expect(screen.getByText('Escolha o PDF para enviar.')).toBeTruthy();
 });
 
+it('a nutricionista e o CRN são opcionais: a trava do envio não os cobra', async () => {
+  await montar();
+
+  expect(screen.getByLabelText('Nutricionista').props.value).toBe('');
+  expect(screen.getByLabelText('CRN').props.value).toBe('');
+
+  await fireEvent.press(screen.getByLabelText('Aceito o tratamento do meu plano alimentar'));
+
+  // Com os dois campos vazios, o que falta é só o arquivo.
+  expect(screen.getByText('Escolha o PDF para enviar.')).toBeTruthy();
+});
+
 it('o aceite é um passo da tela, e não um padrão marcado', async () => {
   await montar();
 

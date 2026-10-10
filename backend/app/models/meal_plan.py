@@ -29,6 +29,10 @@ class MealPlan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Texto livre original enviado pelo usuário, preservado para auditoria.
     source_text: Mapped[str | None] = mapped_column(Text)
     nutritionist_name: Mapped[str | None] = mapped_column(String(255))
+    # Texto livre: o formato do registro varia por região ("CRN-1 12345",
+    # "CRN-3 48291"), e recusar um registro válido por regex travaria o import
+    # de um plano legítimo. O campo é informativo e não controla nada.
+    nutritionist_crn: Mapped[str | None] = mapped_column(String(50))
     # Consentimento explícito: sem data e versão do termo o plano não pode existir.
     consent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consent_version: Mapped[str] = mapped_column(String(50), nullable=False)

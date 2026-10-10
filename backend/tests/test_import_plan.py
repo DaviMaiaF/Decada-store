@@ -205,13 +205,33 @@ def test_o_plano_fica_gravado_no_usuario(db_session, usuario):
         consent_at=AGORA,
         title="Plano de outubro",
         nutritionist_name="Dra. Camila Fernandes",
+        nutritionist_crn="CRN-3 48291",
     )
     db_session.commit()
 
     plano = db_session.scalars(select(MealPlan).where(MealPlan.user_id == usuario.id)).one()
     assert plano.title == "Plano de outubro"
     assert plano.nutritionist_name == "Dra. Camila Fernandes"
+    assert plano.nutritionist_crn == "CRN-3 48291"
     assert db_session.scalars(select(PlanItem).where(PlanItem.meal_plan_id == plano.id)).all()
+
+
+@pytest.mark.db
+def test_nutricionista_e_crn_sao_opcionais(db_session, usuario):
+    """Sem nome e sem CRN o plano continua válido.
+
+    Exigir o registro profissional impediria de importar uma prescrição que a
+    pessoa tem em mãos — a prescrição é que importa, não o cadastro de quem a
+    assinou.
+    """
+    resultado = import_plan_from_pdf(
+        db_session, usuario, build_pdf(PLANO_REALISTA), consent_at=AGORA
+    )
+    db_session.commit()
+
+    assert resultado.meal_plan.nutritionist_name is None
+    assert resultado.meal_plan.nutritionist_crn is None
+    assert resultado.items_created > 0
 
 
 @pytest.mark.db
