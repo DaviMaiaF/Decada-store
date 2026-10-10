@@ -61,6 +61,7 @@ def import_meal_plan(
     ],
     title: Annotated[str | None, Form()] = None,
     nutritionist_name: Annotated[str | None, Form()] = None,
+    nutritionist_crn: Annotated[str | None, Form()] = None,
 ) -> ImportResultOut:
     """Importa o plano alimentar a partir do PDF entregue pela nutricionista.
 
@@ -83,6 +84,7 @@ def import_meal_plan(
         consent_at=datetime.now(timezone.utc),
         title=title,
         nutritionist_name=nutritionist_name,
+        nutritionist_crn=nutritionist_crn,
     )
     session.commit()
     return ImportResultOut.model_validate(result)
@@ -114,6 +116,7 @@ def read_meal_plans(session: DbSession, user: CurrentUser) -> list[MealPlanSumma
             id=plan.id,
             title=plan.title,
             nutritionist_name=plan.nutritionist_name,
+            nutritionist_crn=plan.nutritionist_crn,
             consent_at=plan.consent_at,
             created_at=plan.created_at,
             item_count=len(plan.items),
