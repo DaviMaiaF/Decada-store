@@ -104,12 +104,15 @@ por nada. Agora não estão mais.
 
 | O que | Onde | Esforço |
 |---|---|---|
-| **Nome e CRN da nutricionista** | `MealPlan` tem `nutritionist_name`, e `api.ts` já sabe enviá-lo — mas **a tela de upload não tem o campo**, e **CRN não existe no modelo**. Pede migração, campo no schema, dois campos na tela | pequeno |
 | **Card de custo na aba Dieta** | `telas.md` §2 prevê o card "~ R$ X" com atalho para o Mercado na confirmação. O atalho existe; o custo não aparece ali | pequeno |
 
-Os dois são pequenos. O que de fato falta construir é a **despensa por foto**, que
+O nome e o CRN da nutricionista saíram desta lista: `MealPlan` ganhou
+`nutritionist_crn`, e a tela de upload ganhou os dois campos, opcionais — exigir o
+registro profissional impediria de importar uma prescrição que a pessoa tem em mãos.
+
+O que sobrou aqui é pequeno. O que de fato falta construir é a **despensa por foto**, que
 ganhou seção própria logo abaixo por ser funcionalidade nova, e não ajuste de tela.
-Fora esses três, o que `telas.md` marca como MVP está ✅ e consumido pelo app.
+Fora esses dois, o que `telas.md` marca como MVP está ✅ e consumido pelo app.
 
 ### 4.3 A próxima funcionalidade: encher a despensa por foto
 
