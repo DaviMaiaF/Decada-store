@@ -10,9 +10,10 @@ decide volta por outra. Este documento diz por onde essa conversa passa.
 | Servidor | FastAPI + Pydantic v2, Python | 23 rotas de domínio, autenticadas por JWT, mais `/health` |
 | Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | Se não definido: IP do host do Expo, `10.0.2.2` no emulador Android, `localhost` na web (ver `config.ts`) |
 
-O endereço não é fixo no código de propósito: `localhost` no emulador Android e
-no celular físico aponta para o próprio aparelho, não para a máquina que roda o
-backend.
+O endereço não é fixo em `localhost` de propósito: no emulador Android e no
+celular físico ele aponta para o próprio aparelho, não para a máquina que roda o
+backend. Por isso `config.ts` deduz o IP do computador a partir do Expo, e
+`npm run dev:api-url` escreve o `.env` quando a dedução não servir.
 
 ## Onde isso mora no código
 
