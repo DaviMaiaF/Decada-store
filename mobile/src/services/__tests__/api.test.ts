@@ -13,7 +13,7 @@ import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import * as api from '../api';
 import { ApiError, login, readPantry, removePantryItem } from '../api';
 import { API_URL } from '../config';
-import { http } from '../http';
+import { http, onSessionExpired } from '../http';
 import { saveToken } from '../session';
 
 jest.mock('../session', () => ({
@@ -22,7 +22,7 @@ jest.mock('../session', () => ({
   clearToken: jest.fn(),
 }));
 
-const { readToken } = jest.requireMock('../session');
+const { readToken, clearToken } = jest.requireMock('../session');
 
 type Adaptador = jest.Mock<ReturnType<AxiosAdapter>, [InternalAxiosRequestConfig]>;
 
@@ -243,5 +243,34 @@ describe('envio do PDF', () => {
     await api.importMealPlan({ uri: 'file:///p.pdf', name: 'p.pdf' }, true);
 
     expect(adaptador.mock.calls[0][0].headers.get('Authorization')).toBe('Bearer token-de-teste');
+  });
+});
+
+describe('sessão que caiu', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('401 numa chamada autenticada limpa o token e avisa a sessão', async () => {
+    readToken.mockResolvedValue('token-vencido');
+    responder(401, { detail: 'credenciais inválidas' });
+    const aviso = jest.fn();
+    const desfazer = onSessionExpired(aviso);
+
+    await expect(readPantry()).rejects.toMatchObject({ status: 401 });
+
+    expect(clearToken).toHaveBeenCalledTimes(1);
+    expect(aviso).toHaveBeenCalledTimes(1);
+    desfazer();
+  });
+
+  it('401 no login é senha errada e não derruba nada', async () => {
+    responder(401, { detail: 'credenciais inválidas' });
+    const aviso = jest.fn();
+    const desfazer = onSessionExpired(aviso);
+
+    await expect(login('a@b.com', 'errada')).rejects.toMatchObject({ status: 401 });
+
+    expect(clearToken).not.toHaveBeenCalled();
+    expect(aviso).not.toHaveBeenCalled();
+    desfazer();
   });
 });
