@@ -8,7 +8,7 @@ decide volta por outra. Este documento diz por onde essa conversa passa.
 |---|---|---|
 | Cliente | React Native + Expo, TypeScript | axios sobre HTTP, corpo em JSON |
 | Servidor | FastAPI + Pydantic v2, Python | 23 rotas de domínio, autenticadas por JWT, mais `/health` |
-| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | `http://localhost:8000` quando não definido |
+| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | Se não definido: IP do host do Expo, `10.0.2.2` no emulador Android, `localhost` na web (ver `config.ts`) |
 
 O endereço não é fixo no código de propósito: `localhost` no emulador Android e
 no celular físico aponta para o próprio aparelho, não para a máquina que roda o
@@ -119,7 +119,7 @@ de pé; o app não o usa.
 
 | Status | O que é | O que a tela faz |
 |---|---|---|
-| `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor". Não é bug do app nem do backend |
+| `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor em <endereço> — …", que mostra o endereço tentado. Não é bug do app nem do backend |
 | `401` | Sessão expirada, token adulterado ou conta excluída | Derruba a sessão e volta para o login |
 | `404` | Recurso que não existe **ou que é de outra pessoa** | Trata como inexistente |
 | `409` | Conflito — produto que já está na lista | Mostra a mensagem do servidor |
