@@ -10,6 +10,7 @@
     "@tanstack/react-query": "^5.102.8",
     "axios": "^1.20.0",
     "expo": "~57.0.21",
+    "expo-constants": "~57.0.21",
     "expo-document-picker": "~57.0.1",
     "expo-font": "~57.0.3",
     "expo-secure-store": "~57.0.3",
@@ -37,6 +38,7 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
+    "dev:api-url": "node scripts/set-api-url.js",
     "test:smoke": "jest --testMatch '**/e2e/*.e2e.ts' --runInBand"
   },
   "private": true,
