@@ -15,7 +15,7 @@ import { readToken } from './session';
 /** Rede ruim não pode travar a tela para sempre. */
 const TEMPO_LIMITE = 15_000;
 
-const MENSAGEM_DE_REDE = 'não foi possível falar com o servidor';
+const MENSAGEM_DE_REDE = `não foi possível falar com o servidor em ${API_URL} — confira se a API está no ar e na mesma rede`;
 const MENSAGEM_DO_SERVIDOR = 'erro inesperado no servidor';
 
 declare module 'axios' {
