@@ -67,6 +67,25 @@ repetir os dois. Agora são política da instância — e veio de graça o **tem
 limite**, que não existia antes (15s nas chamadas, 60s no envio do PDF; sem
 ele, rede ruim deixava a tela esperando para sempre).
 
+## Quando a sessão cai
+
+Ter um token guardado não prova que a sessão vale: ele pode ter vencido (7 dias),
+ter sido assinado com outra `SECRET_KEY` ou ser de uma conta já excluída. Por isso
+o app trata o `401` em dois momentos:
+
+- **Na abertura.** Com token guardado, o `AuthProvider` chama `GET /auth/me` antes
+  de decidir entre login e app. `401` leva ao login. Qualquer outra falha — rede
+  fora, servidor desligado — **mantém** a sessão: deslogar quem só está sem
+  internet seria pior do que mostrar um erro de rede.
+- **Durante o uso.** O interceptor de resposta vê todo `401` de chamada
+  autenticada, apaga o token e avisa o `AuthProvider` (por `onSessionExpired`, em
+  `http.ts`), que volta para o login com o aviso. Chamadas `anonymous` ficam de
+  fora, porque lá `401` significa senha errada.
+
+Sem isso, um token velho deixava a pessoa presa em telas que só devolviam
+"credenciais inválidas", sem caminho de volta para o login. Os testes estão em
+`services/__tests__/api.test.ts` e `auth.test.tsx`.
+
 ## O que o app consome
 
 Das 23 rotas de domínio, o app consome 22. A que falta é
@@ -120,8 +139,8 @@ de pé; o app não o usa.
 
 | Status | O que é | O que a tela faz |
 |---|---|---|
-| `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor em <endereço> — …", que mostra o endereço tentado. Não é bug do app nem do backend |
-| `401` | Sessão expirada, token adulterado ou conta excluída | Derruba a sessão e volta para o login |
+| `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor em `http://…:8000` — …", com o endereço que o app tentou. Não é bug do app nem do backend |
+| `401` | Sessão expirada, token adulterado ou conta excluída | Apaga o token, volta para o login e avisa "sua sessão expirou, entre de novo". No login e no cadastro, o `401` é só senha errada: a mensagem aparece no formulário e nada é apagado |
 | `404` | Recurso que não existe **ou que é de outra pessoa** | Trata como inexistente |
 | `409` | Conflito — produto que já está na lista | Mostra a mensagem do servidor |
 | `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista | Mostra a mensagem do servidor |
