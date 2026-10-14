@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import * as api from './api';
+import { RESET_SESSION } from './config';
 import { clearToken, readToken, saveToken } from './session';
 
 interface AuthValue {
@@ -26,7 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Na abertura, a sessão guardada decide se cai no login ou no app.
-    readToken().then((token) => setSignedIn(token !== null));
+    const abrir = async () => {
+      if (RESET_SESSION) await clearToken();
+      setSignedIn((await readToken()) !== null);
+    };
+    abrir();
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {

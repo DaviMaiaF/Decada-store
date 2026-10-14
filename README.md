@@ -61,6 +61,8 @@ docker compose up --build     # db + api (migrações automáticas) + mobile
   para alcançar o Metro e a API; sem ele, vale `localhost`, que só serve no emulador.
 - O código de `backend/` e `mobile/` é montado por volume: editar recarrega sozinho.
   Se mudar o `package.json`, rode `docker compose down -v` e suba de novo para refazer o `node_modules`.
+- Para o app abrir sempre na tela de login (sem tocar no banco), ponha `RESET_SESSION=1` no `.env`
+  e suba de novo. Só limpa o token do aparelho, e só em desenvolvimento.
 - Os passos abaixo continuam valendo para rodar cada parte fora do Docker.
 
 ## Instalação

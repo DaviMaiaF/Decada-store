@@ -49,6 +49,8 @@ services:
       - api
     environment:
       # IP da máquina na rede local: o QR code do Expo e a API usam este endereço.
+      # RESET_SESSION=1 no .env: o app abre sempre no login (só limpa o token do aparelho).
+      EXPO_PUBLIC_RESET_SESSION: ${RESET_SESSION:-0}
       EXPO_NO_TELEMETRY: "1"
       REACT_NATIVE_PACKAGER_HOSTNAME: ${HOST_IP:-localhost}
       EXPO_PUBLIC_API_URL: http://${HOST_IP:-localhost}:${API_PORT:-8000}
