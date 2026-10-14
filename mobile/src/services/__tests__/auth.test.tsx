@@ -19,7 +19,13 @@ jest.mock('../api', () => ({
   readAccount: jest.fn(),
 }));
 
-const { readToken } = jest.requireMock('../session');
+const mockConfig = { reset: false };
+jest.mock('../config', () => ({
+  ...jest.requireActual('../config'),
+  resetSessionAtivo: () => mockConfig.reset,
+}));
+
+const { readToken, clearToken } = jest.requireMock('../session');
 const readAccountFalso = api.readAccount as jest.Mock;
 
 function Estado() {
@@ -40,7 +46,10 @@ async function montar() {
   );
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockConfig.reset = false;
+});
 
 it('sem token, cai no login sem chamar a API', async () => {
   readToken.mockResolvedValue(null);
@@ -85,4 +94,26 @@ it('servidor fora do ar não derruba a sessão', async () => {
   await montar();
 
   expect(await screen.findByText('logado')).toBeTruthy();
+});
+
+it('por padrão não apaga o token guardado', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com' });
+  await montar();
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+  expect(clearToken).not.toHaveBeenCalled();
+});
+
+it('com RESET_SESSION ligado, apaga o token e abre no login', async () => {
+  mockConfig.reset = true;
+  readToken.mockResolvedValue('token-bom');
+  clearToken.mockImplementationOnce(async () => {
+    readToken.mockResolvedValue(null);
+  });
+  await montar();
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearToken).toHaveBeenCalled();
+  expect(readAccountFalso).not.toHaveBeenCalled();
 });

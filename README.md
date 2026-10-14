@@ -46,6 +46,26 @@ sendo a fonte principal de preço do projeto — e continua fora do MVP.
 - Docker e Docker Compose
 - Node.js 20+ (apenas a partir da etapa do app mobile)
 
+## Subir tudo com um comando
+
+Banco, API e app (Expo) sobem juntos no Docker:
+
+```bash
+cp .env.example .env          # defina HOST_IP com o IP da sua máquina na rede local
+docker compose up --build     # db + api (migrações automáticas) + mobile
+```
+
+- A API fica em `http://localhost:8000` e o QR code do Expo aparece nos logs do `mobile`.
+- `HOST_IP` (ex.: `hostname -I | awk '{print $1}'` no Linux) é o endereço que o celular usa
+  para alcançar o Metro e a API; sem ele, vale `localhost`, que só serve no emulador.
+- O código de `backend/` e `mobile/` é montado por volume: editar recarrega sozinho.
+  Se mudar o `package.json`, rode `docker compose down -v` e suba de novo para refazer o `node_modules`.
+- Para o app abrir na tela de login, sem tocar no banco (só limpa o token do aparelho, e só em desenvolvimento):
+  - numa subida só: `RESET_SESSION=1 docker compose up --build`;
+  - em toda subida: ponha `RESET_SESSION=1` no `.env` (volte para `0` para desligar).
+  Com o app já aberto no celular, recarregue-o (agite o aparelho → Reload) depois de subir.
+- Os passos abaixo continuam valendo para rodar cada parte fora do Docker.
+
 ## Instalação
 
 ```bash

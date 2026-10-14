@@ -35,7 +35,7 @@ bem documentado**, não escala de produção.
 | ORM / migrações | SQLAlchemy 2.x + Alembic |
 | Banco | PostgreSQL 16 |
 | Testes | pytest (backend), Jest + React Native Testing Library (mobile) |
-| Ambiente | Docker Compose para o banco |
+| Ambiente | Docker Compose para banco, API e app |
 
 ## Estrutura de pastas
 
@@ -133,7 +133,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
 ## Como rodar
 
 ```bash
-docker compose up -d                       # sobe o Postgres 16
+docker compose up --build                  # sobe tudo: Postgres 16 + API + app (defina HOST_IP no .env)
+docker compose up -d db                    # ou só o Postgres, para rodar back e front à mão
 
 cd backend
 python3 -m venv .venv                      # apenas na primeira vez

@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 
 import * as api from './api';
+import { resetSessionAtivo } from './config';
 import { onSessionExpired } from './http';
 import { clearToken, readToken, saveToken } from './session';
 
@@ -41,6 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // token não basta: ele pode ter vencido, ou a conta pode ter sido excluída.
     let ativo = true;
     (async () => {
+      // Só em desenvolvimento (RESET_SESSION=1): começa sempre deslogado.
+      if (resetSessionAtivo()) await clearToken();
       const token = await readToken();
       if (token === null) {
         if (ativo) setSignedIn(false);

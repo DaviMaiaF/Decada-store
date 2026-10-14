@@ -48,3 +48,11 @@ export const API_URL = resolveApiUrl({
   hostUri: Constants.expoConfig?.hostUri,
   os: Platform.OS,
 });
+
+/**
+ * Só em desenvolvimento: com `EXPO_PUBLIC_RESET_SESSION=1`, o app apaga o token
+ * guardado ao abrir e cai no login. Não mexe no banco — só na sessão do aparelho.
+ */
+export function resetSessionAtivo(): boolean {
+  return __DEV__ && process.env.EXPO_PUBLIC_RESET_SESSION === '1';
+}
