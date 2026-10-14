@@ -148,6 +148,11 @@ cd ../mobile && npm test                   # testes do app
 cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 ```
 
+> O `node_modules` do app no compose mora no volume `mobile_node_modules`. Ao subir, o
+> container compara o volume com o `package-lock.json` e roda `npm ci` só se o lock mudou
+> (`mobile/sync-node-modules.sh`) — sem isso, dependência nova não chegava ao volume e o
+> app abria em página branca.
+
 > O `test:smoke` fala com o backend de verdade e cria a própria conta, que apaga
 > no fim. Ele não entra no `npm test` porque sem servidor de pé falharia — ver
 > [`docs/integracao-api.md`](docs/integracao-api.md).

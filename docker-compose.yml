@@ -25,6 +25,9 @@ services:
     build: ./backend
     container_name: decada-api
     restart: unless-stopped
+    # Um init de verdade no PID 1 repassa o sinal de parada e recolhe os
+    # processos do --reload; sem ele, parar a API esperava 10 s.
+    init: true
     depends_on:
       db:
         condition: service_healthy
