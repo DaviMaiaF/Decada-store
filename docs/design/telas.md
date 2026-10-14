@@ -100,6 +100,16 @@ os `PlanItem` pendurados nele, mais um registro de consumo (refeição, data, ho
 aceite). O parser precisaria reconhecer os cabeçalhos de refeição do PDF, não só as linhas
 de item.
 
+**A confirmação aceita lote e edição.** Um plano de quinze itens pedia quinze toques em
+"Confirmar". A tela ganhou caixas de seleção, "Selecionar todos" e "Confirmar
+selecionados": o lote confirma a sugestão principal de cada item marcado, com uma chamada
+de `POST …/items/{id}/confirmation` por item. Se uma falhar, só aquele item avisa e continua
+marcado. Ficam fora do lote o item com **unidade diferente** e o item **sem sugestão**: é
+onde o casamento por nome mais erra, e a confirmação deles continua sendo um toque por
+item. Nada é marcado sem a pessoa marcar (decisão 4). Item confirmado ganhou "Editar", que
+abre os candidatos com o produto atual destacado e reconfirma com o escolhido. O backend
+não mudou: a rota de confirmação já sobrescrevia a anterior.
+
 ## 3. Mercado
 
 [Protótipo](prototipos/03-mercado.html) · [captura](prototipos/capturas/03-mercado.png)

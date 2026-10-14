@@ -167,3 +167,108 @@ it('o rodapé leva ao mercado, e não promete gerar a lista', async () => {
   await fireEvent.press(await screen.findByText('Ir para o mercado'));
   expect(onReady).toHaveBeenCalledWith('plano-1');
 });
+
+describe('confirmação em lote', () => {
+  beforeEach(() => {
+    lerPlano.mockResolvedValue(
+      plano([
+        item({ id: 'item-1', raw_description: '50 g de aveia em flocos' }),
+        item({ id: 'item-2', raw_description: '200 ml de leite' }),
+        item({ id: 'item-3', raw_description: '1 banana' }),
+      ]),
+    );
+    lerCandidatos.mockImplementation(async (_plano: string, itemId: string) => {
+      if (itemId === 'item-1') return [candidato('Aveia em flocos', '0.940')];
+      if (itemId === 'item-2') return [candidato('Leite integral', '0.880')];
+      // Unidade diferente: fica fora do lote.
+      return [candidato('Banana prata', '0.900', { unit_compatible: false })];
+    });
+  });
+
+  it('selecionar todos deixa de fora o item com unidade diferente', async () => {
+    await montar();
+
+    expect(await screen.findByText('Selecionar todos (2)')).toBeTruthy();
+    expect(screen.getByLabelText('Selecionar 50 g de aveia em flocos')).toBeTruthy();
+    expect(screen.queryByLabelText('Selecionar 1 banana')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Selecionar todos'));
+    await fireEvent.press(screen.getByText('Confirmar selecionados (2)'));
+
+    await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(2));
+    expect(confirmar).toHaveBeenCalledWith('plano-1', 'item-1', 'produto-Aveia em flocos', '0.940');
+    expect(confirmar).toHaveBeenCalledWith('plano-1', 'item-2', 'produto-Leite integral', '0.880');
+  });
+
+  it('confirma só os itens marcados', async () => {
+    await montar();
+
+    await fireEvent.press(await screen.findByLabelText('Selecionar 200 ml de leite'));
+    await fireEvent.press(screen.getByText('Confirmar selecionados (1)'));
+
+    await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
+    expect(confirmar).toHaveBeenCalledWith('plano-1', 'item-2', 'produto-Leite integral', '0.880');
+  });
+
+  it('não grava nada sem a pessoa marcar', async () => {
+    await montar();
+
+    await screen.findByText('Selecionar todos (2)');
+    // Decisão 4: o lote é um ato da pessoa, não uma confirmação automática.
+    expect(screen.getByText('Confirmar selecionados (0)')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Confirmar selecionados (0)'));
+    expect(confirmar).not.toHaveBeenCalled();
+  });
+
+  it('a falha de um item não derruba os outros', async () => {
+    confirmar.mockImplementation(async (_plano: string, itemId: string) => {
+      if (itemId === 'item-1') throw new Error('falhou');
+      return item({ id: itemId, status: 'confirmado' });
+    });
+
+    await montar();
+
+    await fireEvent.press(await screen.findByLabelText('Selecionar todos'));
+    await fireEvent.press(screen.getByText('Confirmar selecionados (2)'));
+
+    expect(await screen.findByText('não foi possível confirmar este produto')).toBeTruthy();
+    expect(confirmar).toHaveBeenCalledTimes(2);
+    // O que falhou continua marcado, pronto para tentar de novo.
+    expect(screen.getByText('Confirmar selecionados (1)')).toBeTruthy();
+  });
+});
+
+describe('edição de item confirmado', () => {
+  beforeEach(() => {
+    lerPlano.mockResolvedValue(
+      plano([
+        item({ id: 'item-1', status: 'confirmado', product_id: 'produto-Aveia em flocos' }),
+      ]),
+    );
+  });
+
+  it('troca o produto de um item já confirmado', async () => {
+    await montar();
+
+    await fireEvent.press(await screen.findByText('Editar'));
+
+    expect(await screen.findByText('atual')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Granola tradicional'));
+
+    await waitFor(() =>
+      expect(confirmar).toHaveBeenCalledWith(
+        'plano-1',
+        'item-1',
+        'produto-Granola tradicional',
+        '0.610',
+      ),
+    );
+  });
+
+  it('item confirmado não entra no lote', async () => {
+    await montar();
+
+    await screen.findByText('Editar');
+    expect(screen.queryByText(/Selecionar todos/)).toBeNull();
+  });
+});

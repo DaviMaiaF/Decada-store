@@ -100,6 +100,34 @@ export function Chip({ label, tone = 'neutral' }: { label: string; tone?: ChipTo
   );
 }
 
+/** Caixa de seleção. O rótulo é obrigatório: sem ele o leitor de tela anuncia
+ * só "caixa de seleção", e numa lista de itens ninguém sabe qual é qual. */
+export function Checkbox({
+  label,
+  checked,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  checked: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked, disabled }}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={spacing.xs}
+      style={[styles.checkbox, checked && styles.checkboxChecked, disabled && styles.buttonDisabled]}
+    >
+      {checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+    </Pressable>
+  );
+}
+
 export function Field({
   label,
   error,
@@ -195,6 +223,18 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   chipLabel: { ...typography.labelSm },
+
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: colors.outline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: colors.primaryContainer, borderColor: colors.primaryContainer },
+  checkboxMark: { ...typography.labelLg, color: colors.onPrimary, lineHeight: 18 },
 
   field: { gap: spacing.xs2 },
   fieldLabel: { ...typography.labelMd, color: colors.onSurfaceVariant },
