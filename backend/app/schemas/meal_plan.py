@@ -28,6 +28,7 @@ class MealPlanOut(ApiModel):
     id: uuid.UUID
     title: str | None = None
     nutritionist_name: str | None = None
+    nutritionist_crn: str | None = None
     consent_at: datetime
     consent_version: str
     created_at: datetime
@@ -46,6 +47,7 @@ class MealPlanSummaryOut(ApiModel):
     id: uuid.UUID
     title: str | None = None
     nutritionist_name: str | None = None
+    nutritionist_crn: str | None = None
     consent_at: datetime
     created_at: datetime
     item_count: int

@@ -21,6 +21,8 @@ jest.mock('../../services/api', () => ({
   readShoppingList: jest.fn(),
   readPantry: jest.fn(),
   readRecipeSuggestions: jest.fn(),
+  // A tela de confirmação busca candidatos ao montar; aqui ela só é atravessada.
+  readCandidates: jest.fn(() => Promise.resolve([])),
 }));
 
 const lerPlanos = api.readMealPlans as jest.Mock;
@@ -33,6 +35,7 @@ function planoSalvo(over: Partial<MealPlanSummary> = {}): MealPlanSummary {
     id: 'plano-1',
     title: null,
     nutritionist_name: 'Dra. Helena Marques',
+    nutritionist_crn: 'CRN-1 12345',
     consent_at: '2026-09-27T10:00:00Z',
     created_at: '2026-09-27T10:00:00Z',
     item_count: 3,
@@ -85,6 +88,7 @@ beforeEach(() => {
     id: 'plano-1',
     title: null,
     nutritionist_name: null,
+    nutritionist_crn: null,
     consent_at: '2026-09-27T10:00:00Z',
     consent_version: 'v1',
     created_at: '2026-09-27T10:00:00Z',
@@ -129,6 +133,7 @@ describe('trilha da jornada', () => {
       id: 'plano-1',
       title: null,
       nutritionist_name: null,
+      nutritionist_crn: null,
       consent_at: '2026-09-27T10:00:00Z',
       consent_version: 'v1',
       created_at: '2026-09-27T10:00:00Z',

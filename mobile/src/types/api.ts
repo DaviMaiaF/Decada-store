@@ -41,6 +41,7 @@ export interface MealPlan {
   id: string;
   title: string | null;
   nutritionist_name: string | null;
+  nutritionist_crn: string | null;
   consent_at: string;
   consent_version: string;
   created_at: string;
@@ -52,6 +53,7 @@ export interface MealPlanSummary {
   id: string;
   title: string | null;
   nutritionist_name: string | null;
+  nutritionist_crn: string | null;
   consent_at: string;
   created_at: string;
   item_count: number;

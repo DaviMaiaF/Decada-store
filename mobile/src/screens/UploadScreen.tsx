@@ -11,7 +11,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
-import { Body, Button, Card, Chip, ErrorNotice, SectionTitle } from '../components';
+import { Body, Button, Card, Chip, ErrorNotice, Field, SectionTitle } from '../components';
 import { ApiError, importMealPlan } from '../services/api';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ImportResult } from '../types/api';
@@ -24,11 +24,17 @@ export default function UploadScreen({
   onImported: (resultado: ImportResult) => void;
 }) {
   const [arquivo, setArquivo] = useState<Arquivo | null>(null);
+  const [nutricionista, setNutricionista] = useState('');
+  const [crn, setCrn] = useState('');
   const [aceitou, setAceitou] = useState(false);
   const [resultado, setResultado] = useState<ImportResult | null>(null);
 
   const envio = useMutation({
-    mutationFn: () => importMealPlan(arquivo!, aceitou),
+    mutationFn: () =>
+      importMealPlan(arquivo!, aceitou, {
+        nutritionistName: nutricionista.trim() || undefined,
+        nutritionistCrn: crn.trim() || undefined,
+      }),
     onSuccess: (dados) => setResultado(dados),
   });
 
@@ -97,6 +103,30 @@ export default function UploadScreen({
             </Text>
           </View>
         ) : null}
+      </Card>
+
+      <Card style={styles.cartaoProfissional}>
+        <SectionTitle>Quem assinou a prescrição</SectionTitle>
+        <Body muted>
+          Opcional. Serve para você reconhecer de qual plano é esta lista — a DÉCADA
+          não valida o registro nem consulta o conselho.
+        </Body>
+
+        <Field
+          label="Nutricionista"
+          placeholder="Dra. Camila Fernandes"
+          value={nutricionista}
+          onChangeText={setNutricionista}
+          autoCapitalize="words"
+        />
+        <Field
+          label="CRN"
+          placeholder="CRN-3 48291"
+          value={crn}
+          onChangeText={setCrn}
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
       </Card>
 
       <Pressable
@@ -202,6 +232,7 @@ const styles = StyleSheet.create({
   avisoTitulo: { ...typography.labelMd, color: colors.onSecondaryFixed },
 
   cartaoEnvio: { gap: spacing.sm },
+  cartaoProfissional: { gap: spacing.sm },
   arquivo: {
     backgroundColor: colors.surfaceContainerLow,
     borderRadius: radius.md,

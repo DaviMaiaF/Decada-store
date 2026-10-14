@@ -132,6 +132,7 @@ def import_plan_from_pdf(
     consent_at: datetime,
     title: str | None = None,
     nutritionist_name: str | None = None,
+    nutritionist_crn: str | None = None,
 ) -> ImportedPlan:
     """Lê o PDF e grava o plano alimentar do usuário.
 
@@ -153,6 +154,7 @@ def import_plan_from_pdf(
         # filtro descartou e o que o parser entendeu errado.
         source_text="\n".join(lines),
         nutritionist_name=nutritionist_name,
+        nutritionist_crn=nutritionist_crn,
         consent_at=consent_at,
         consent_version=get_settings().consent_version,
     )

@@ -42,6 +42,7 @@ function plano(itens: PlanItem[]): MealPlan {
     id: 'plano-1',
     title: null,
     nutritionist_name: null,
+    nutritionist_crn: null,
     consent_at: '2026-09-27T10:00:00Z',
     consent_version: 'v1',
     created_at: '2026-09-27T10:00:00Z',

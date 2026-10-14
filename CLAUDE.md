@@ -127,6 +127,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
   regra de exclusão.
 - [`docs/lgpd.md`](docs/lgpd.md) — consentimento, minimização e exclusão, cada um
   com o teste que o sustenta.
+- [`docs/integracao-api.md`](docs/integracao-api.md) — como o app consome a API:
+  a instância do axios, os interceptors, as rotas e o que cada status faz na tela.
 
 ## Como rodar
 
@@ -137,13 +139,18 @@ docker compose up -d db                    # ou só o Postgres, para rodar back 
 cd backend
 python3 -m venv .venv                      # apenas na primeira vez
 .venv/bin/pip install -e ".[dev]"          # apenas na primeira vez
-.venv/bin/uvicorn app.main:app --reload    # API em http://localhost:8000
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --reload  # API em http://localhost:8000, alcançável pelo celular
 
 .venv/bin/pytest -q                        # testes do backend
 
-cd ../mobile && npx expo start             # app mobile
+cd ../mobile && npx expo start             # app mobile (npm run dev:api-url fixa o IP da API no .env)
 cd ../mobile && npm test                   # testes do app
+cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 ```
+
+> O `test:smoke` fala com o backend de verdade e cria a própria conta, que apaga
+> no fim. Ele não entra no `npm test` porque sem servidor de pé falharia — ver
+> [`docs/integracao-api.md`](docs/integracao-api.md).
 
 > **Nota de ambiente:** a máquina de desenvolvimento tem Python 3.10.12.
 > A stack (FastAPI, Pydantic v2, SQLAlchemy 2.x) roda sem restrição nessa versão,

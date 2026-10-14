@@ -1,45 +1,119 @@
+/** Testes da sessão: o que decide entre login e app na abertura. */
+
 import { render, screen, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
+import { ApiError } from '../api';
+import * as api from '../api';
 import { AuthProvider, useAuth } from '../auth';
-import * as session from '../session';
+import { http } from '../http';
 
-jest.mock('../session');
-const mockConfig = { reset: false };
-jest.mock('../config', () => ({
-  API_URL: 'http://localhost:8000',
-  get RESET_SESSION() {
-    return mockConfig.reset;
-  },
+jest.mock('../session', () => ({
+  readToken: jest.fn(),
+  saveToken: jest.fn().mockResolvedValue(undefined),
+  clearToken: jest.fn().mockResolvedValue(undefined),
 }));
 
-const mocked = session as jest.Mocked<typeof session>;
+jest.mock('../api', () => ({
+  ...jest.requireActual('../api'),
+  readAccount: jest.fn(),
+}));
+
+const mockConfig = { reset: false };
+jest.mock('../config', () => ({
+  ...jest.requireActual('../config'),
+  resetSessionAtivo: () => mockConfig.reset,
+}));
+
+const { readToken, clearToken } = jest.requireMock('../session');
+const readAccountFalso = api.readAccount as jest.Mock;
 
 function Estado() {
-  const { signedIn } = useAuth();
-  return <Text>{String(signedIn)}</Text>;
+  const { signedIn, notice } = useAuth();
+  return (
+    <Text>
+      {signedIn === null ? 'carregando' : signedIn ? 'logado' : 'deslogado'}
+      {notice ? ` | ${notice}` : ''}
+    </Text>
+  );
 }
 
-describe('AuthProvider na abertura', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockConfig.reset = false;
-    mocked.readToken.mockResolvedValue('token-guardado');
-  });
+async function montar() {
+  await render(
+    <AuthProvider>
+      <Estado />
+    </AuthProvider>,
+  );
+}
 
-  it('mantém a sessão guardada por padrão', async () => {
-    await render(<AuthProvider><Estado /></AuthProvider>);
-    await waitFor(() => screen.getByText('true'));
-    expect(mocked.clearToken).not.toHaveBeenCalled();
-  });
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockConfig.reset = false;
+});
 
-  it('apaga o token ao abrir quando RESET_SESSION está ligado', async () => {
-    mockConfig.reset = true;
-    mocked.clearToken.mockImplementation(async () => {
-      mocked.readToken.mockResolvedValue(null);
-    });
-    await render(<AuthProvider><Estado /></AuthProvider>);
-    await waitFor(() => screen.getByText('false'));
-    expect(mocked.clearToken).toHaveBeenCalled();
+it('sem token, cai no login sem chamar a API', async () => {
+  readToken.mockResolvedValue(null);
+  await montar();
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(readAccountFalso).not.toHaveBeenCalled();
+});
+
+it('token válido mantém a sessão', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com' });
+  await montar();
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+});
+
+it('token vencido leva ao login com aviso', async () => {
+  readToken.mockResolvedValue('token-vencido');
+  readAccountFalso.mockImplementation(async () => {
+    // Faz o 401 passar pelo interceptor de verdade, como na rede.
+    await http.get('/auth/me', {
+        adapter: (config) =>
+          Promise.reject(
+            Object.assign(new Error('401'), {
+              isAxiosError: true,
+              config,
+              response: { status: 401, data: { detail: 'credenciais inválidas' } },
+            }),
+          ),
+      });
   });
+  await montar();
+
+  await waitFor(() => expect(screen.getByText(/deslogado/)).toBeTruthy());
+  expect(screen.getByText(/sua sessão expirou/)).toBeTruthy();
+});
+
+it('servidor fora do ar não derruba a sessão', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockRejectedValue(new ApiError(0, 'sem rede'));
+  await montar();
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+});
+
+it('por padrão não apaga o token guardado', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com' });
+  await montar();
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+  expect(clearToken).not.toHaveBeenCalled();
+});
+
+it('com RESET_SESSION ligado, apaga o token e abre no login', async () => {
+  mockConfig.reset = true;
+  readToken.mockResolvedValue('token-bom');
+  clearToken.mockImplementationOnce(async () => {
+    readToken.mockResolvedValue(null);
+  });
+  await montar();
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearToken).toHaveBeenCalled();
+  expect(readAccountFalso).not.toHaveBeenCalled();
 });
