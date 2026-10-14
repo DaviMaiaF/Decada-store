@@ -193,23 +193,27 @@ cd backend && .venv/bin/python -m app.seeds.demo_plan
 ```bash
 cd mobile
 npm install                  # apenas na primeira vez
-cp .env.example .env         # ajuste EXPO_PUBLIC_API_URL
 npx expo start
 ```
 
-No navegador, `localhost` funciona. **No celular ou no emulador, não**: eles
-resolvem esse nome para o próprio aparelho, não para a máquina que roda o backend.
-Este comando descobre o IP da sua máquina na rede e escreve o `.env` já preenchido:
+Na maioria dos casos não há nada a configurar: sem `EXPO_PUBLIC_API_URL`, o app usa
+o IP do computador que o Expo já conhece (e `10.0.2.2` no emulador Android). Se a
+detecção não servir para a sua rede (VPN, várias placas), escreva o `.env` com o IP
+da máquina — o comando é o mesmo em Windows, macOS e Linux:
 
 ```bash
-cd mobile && printf 'EXPO_PUBLIC_API_URL=http://%s:8000\n' "$(hostname -I | awk '{print $1}')" > .env && cat .env
+cd mobile && npm run dev:api-url
 ```
 
-E o backend precisa aceitar conexões de fora da máquina:
+O backend precisa aceitar conexões de fora da máquina:
 
 ```bash
 cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --reload
 ```
+
+No Windows o executável fica em `.venv\Scripts\uvicorn`. Se o celular ainda não
+alcançar a API, libere a porta 8000 no firewall e confirme que celular e computador
+estão na mesma rede Wi-Fi.
 
 ### Conta de desenvolvimento
 

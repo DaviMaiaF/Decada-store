@@ -138,11 +138,11 @@ docker compose up -d                       # sobe o Postgres 16
 cd backend
 python3 -m venv .venv                      # apenas na primeira vez
 .venv/bin/pip install -e ".[dev]"          # apenas na primeira vez
-.venv/bin/uvicorn app.main:app --reload    # API em http://localhost:8000
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --reload  # API em http://localhost:8000, alcançável pelo celular
 
 .venv/bin/pytest -q                        # testes do backend
 
-cd ../mobile && npx expo start             # app mobile
+cd ../mobile && npx expo start             # app mobile (npm run dev:api-url fixa o IP da API no .env)
 cd ../mobile && npm test                   # testes do app
 cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 ```

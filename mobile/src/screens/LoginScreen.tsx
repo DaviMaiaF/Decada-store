@@ -18,7 +18,7 @@ import { colors, spacing, typography } from '../theme/tokens';
 const SENHA_MINIMA = 8;
 
 export default function LoginScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, notice } = useAuth();
   const [cadastrando, setCadastrando] = useState(false);
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -92,7 +92,7 @@ export default function LoginScreen() {
             error={senhaCurta ? `pelo menos ${SENHA_MINIMA} caracteres` : null}
           />
 
-          {erro ? <ErrorNotice message={erro} /> : null}
+          {erro || notice ? <ErrorNotice message={erro ?? notice ?? ''} /> : null}
 
           <Button
             label={cadastrando ? 'Criar conta' : 'Entrar'}

@@ -10,12 +10,12 @@
 import axios from 'axios';
 
 import { API_URL } from './config';
-import { readToken } from './session';
+import { clearToken, readToken } from './session';
 
 /** Rede ruim não pode travar a tela para sempre. */
 const TEMPO_LIMITE = 15_000;
 
-const MENSAGEM_DE_REDE = 'não foi possível falar com o servidor';
+const MENSAGEM_DE_REDE = `não foi possível falar com o servidor em ${API_URL} — confira se a API está no ar e na mesma rede`;
 const MENSAGEM_DO_SERVIDOR = 'erro inesperado no servidor';
 
 declare module 'axios' {
@@ -58,6 +58,21 @@ function readDetail(body: unknown, fallback: string): string {
   return fallback;
 }
 
+type SessionExpiredHandler = () => void;
+
+let aoExpirar: SessionExpiredHandler | null = null;
+
+/**
+ * Quem quiser saber que a sessão caiu (hoje, o `AuthProvider`) se registra aqui.
+ * Devolve a função que desfaz o registro.
+ */
+export function onSessionExpired(handler: SessionExpiredHandler): () => void {
+  aoExpirar = handler;
+  return () => {
+    if (aoExpirar === handler) aoExpirar = null;
+  };
+}
+
 export const http = axios.create({
   baseURL: API_URL,
   timeout: TEMPO_LIMITE,
@@ -81,13 +96,21 @@ http.interceptors.request.use(async (config) => {
  */
 http.interceptors.response.use(
   (resposta) => resposta,
-  (problema: unknown) => {
+  async (problema: unknown) => {
     if (!axios.isAxiosError(problema)) throw problema;
 
     const { config, response } = problema;
 
     if (!response) {
       throw new ApiError(0, config?.networkMessage ?? MENSAGEM_DE_REDE);
+    }
+
+    // 401 numa chamada autenticada é token vencido, adulterado ou de conta
+    // excluída: a sessão guardada não serve mais. No login e no cadastro o 401 é
+    // só senha errada, e a sessão não tem o que perder.
+    if (response.status === 401 && !config?.anonymous) {
+      await clearToken();
+      aoExpirar?.();
     }
 
     throw new ApiError(
