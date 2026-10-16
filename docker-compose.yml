@@ -51,12 +51,15 @@ services:
     depends_on:
       - api
     environment:
-      # IP da máquina na rede local: o QR code do Expo e a API usam este endereço.
+      # IP da máquina na rede local: vai no QR code do Expo, e o celular deduz a
+      # API dele (config.ts). A web não depende dele: usa o host da página.
       # RESET_SESSION=1 no .env: o app abre sempre no login (só limpa o token do aparelho).
       EXPO_PUBLIC_RESET_SESSION: ${RESET_SESSION:-0}
       EXPO_NO_TELEMETRY: "1"
       REACT_NATIVE_PACKAGER_HOSTNAME: ${HOST_IP:-localhost}
-      EXPO_PUBLIC_API_URL: http://${HOST_IP:-localhost}:${API_PORT:-8000}
+      # O mobile/.env de quem roda o app fora do Docker entra pelo volume; aqui
+      # ele não vale, senão um `localhost` escrito ali desviava o celular.
+      EXPO_NO_DOTENV: "1"
     ports:
       - "8081:8081"
     volumes:

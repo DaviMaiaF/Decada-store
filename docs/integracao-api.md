@@ -8,7 +8,7 @@ decide volta por outra. Este documento diz por onde essa conversa passa.
 |---|---|---|
 | Cliente | React Native + Expo, TypeScript | axios sobre HTTP, corpo em JSON |
 | Servidor | FastAPI + Pydantic v2, Python | 23 rotas de domínio, autenticadas por JWT, mais `/health` |
-| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | Se não definido: IP do host do Expo, `10.0.2.2` no emulador Android, `localhost` na web (ver `config.ts`) |
+| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | Se não definido: na web, o host da própria página; no aparelho, o IP do host do Expo; `10.0.2.2` no emulador Android (ver `config.ts`). No compose o `mobile/.env` é ignorado (`EXPO_NO_DOTENV`) |
 
 O endereço não é fixo em `localhost` de propósito: no emulador Android e no
 celular físico ele aponta para o próprio aparelho, não para a máquina que roda o
