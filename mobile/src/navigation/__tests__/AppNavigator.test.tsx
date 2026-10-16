@@ -63,6 +63,7 @@ const itemDoPlano = {
   quantity: '50.000',
   unit: 'g' as const,
   product_id: null,
+  product: null,
   match_score: null,
 };
 

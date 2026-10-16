@@ -131,6 +131,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
+| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` só na tela, com aviso de valores fictícios; não chama a API nem marca item como comprado |
 | Exportar para WhatsApp | ⛔ | |
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante

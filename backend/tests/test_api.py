@@ -195,6 +195,32 @@ def test_confirmar_grava_o_produto_escolhido(client, marina, db_session):
     corpo = resposta.json()
     assert corpo["status"] == "confirmado"
     assert corpo["product_id"] == str(produto.id)
+    assert corpo["product"]["name"] == "Peito de frango sem pele"
+
+
+def test_editar_o_item_troca_o_produto_que_o_plano_mostra(client, marina, db_session):
+    # Sem o produto na resposta, a tela só tinha o texto da prescrição: a troca
+    # ficava gravada, mas nada nela dizia que o produto tinha mudado.
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
+    plano_id = plano["meal_plan"]["id"]
+    item = plano["meal_plan"]["items"][0]
+    primeiro, segundo = db_session.scalars(select(Product).order_by(Product.name).limit(2)).all()
+    url = f"/meal-plans/{plano_id}/items/{item['id']}/confirmation"
+
+    client.post(url, headers=_headers(marina), json={"product_id": str(primeiro.id)})
+    client.post(url, headers=_headers(marina), json={"product_id": str(segundo.id)})
+    resposta = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina))
+
+    assert resposta.status_code == 200
+    lido = resposta.json()["items"][0]
+    assert lido["product_id"] == str(segundo.id)
+    assert lido["product"]["name"] == segundo.name
+
+
+def test_item_nao_confirmado_vem_sem_produto(client, marina):
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
+
+    assert plano["meal_plan"]["items"][0]["product"] is None
 
 
 def test_nao_da_para_confirmar_item_de_plano_alheio(client, marina, outra_pessoa, db_session):

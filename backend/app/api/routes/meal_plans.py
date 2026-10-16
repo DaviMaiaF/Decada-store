@@ -35,7 +35,7 @@ def _get_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> Meal
     plan = session.scalars(
         select(MealPlan)
         .where(MealPlan.id == plan_id, MealPlan.user_id == user.id)
-        .options(selectinload(MealPlan.items))
+        .options(selectinload(MealPlan.items).selectinload(PlanItem.product))
     ).first()
 
     if plan is None:

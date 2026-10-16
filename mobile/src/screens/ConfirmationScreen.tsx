@@ -261,6 +261,15 @@ function ItemDoPlano({
           <Text style={styles.itemQuantidade}>
             {item.quantity} {item.unit}
           </Text>
+          {/* O texto acima é o da prescrição e não muda; o que muda ao editar é
+              o produto. Sem esta linha, trocar por outro não aparecia em lugar
+              nenhum do card. */}
+          {confirmado && item.product !== null ? (
+            <Text style={styles.produtoEscolhido}>
+              → {item.product.name}
+              {item.product.brand ? ` · ${item.product.brand}` : ''}
+            </Text>
+          ) : null}
         </View>
         <Chip
           label={
@@ -388,6 +397,7 @@ const styles = StyleSheet.create({
   descricao: { flex: 1, gap: 2 },
   itemTexto: { ...typography.bodyMd, color: colors.onSurface },
   itemQuantidade: { ...typography.labelSm, color: colors.onSurfaceVariant },
+  produtoEscolhido: { ...typography.labelLg, color: colors.primary },
 
   sugestao: {
     flexDirection: 'row',

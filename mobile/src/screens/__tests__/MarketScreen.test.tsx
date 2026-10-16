@@ -658,3 +658,69 @@ describe('acrescentar à compra', () => {
     ).toBeTruthy();
   });
 });
+
+describe('checkout simulado', () => {
+  // O MVP não compra de verdade: a tela precisa dizer isso antes da
+  // confirmação, e confirmar não pode gravar nada — nem marcar como comprado.
+  it('abre a finalização com o aviso de simulação e o total', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+
+    expect(screen.getByText('Finalizar compra')).toBeTruthy();
+    expect(screen.getByText(/Compra simulada: os valores são estimativas/)).toBeTruthy();
+    expect(screen.getByText('R$ 174,20')).toBeTruthy();
+    expect(screen.getByText('Peito de frango sem pele')).toBeTruthy();
+  });
+
+  it('confirmar não chama a API nem marca itens como comprados', async () => {
+    await montar(lista([item({ id: 'a' })]));
+    const chamadasDeLeitura = lerLista.mock.calls.length;
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+
+    expect(await screen.findByText('Compra simulada concluída')).toBeTruthy();
+    expect(screen.getByText(/nenhum pedido é feito e nada é cobrado/)).toBeTruthy();
+    expect(marcarItem).not.toHaveBeenCalled();
+    expect(gerarLista).not.toHaveBeenCalled();
+    expect(simular).not.toHaveBeenCalled();
+    expect(lerLista.mock.calls.length).toBe(chamadasDeLeitura);
+  });
+
+  it('item dispensado pela despensa fica fora do checkout', async () => {
+    await montar(
+      lista([
+        item({ id: 'a' }),
+        item({
+          id: 'b',
+          product: produto('Banana prata', 'hortifruti'),
+          dispensed_by_pantry: true,
+        }),
+      ]),
+    );
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+
+    expect(screen.getByText('Itens (1)')).toBeTruthy();
+    expect(screen.queryByText('Banana prata')).toBeNull();
+  });
+
+  it('volta à lista sem mudar nada', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Voltar à lista'));
+
+    expect(await screen.findByText('Lista de Mercado')).toBeTruthy();
+    expect(marcarItem).not.toHaveBeenCalled();
+  });
+
+  it('sem nada a comprar, não dá para finalizar', async () => {
+    await montar(lista([item({ id: 'a', dispensed_by_pantry: true })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+
+    expect(screen.queryByText('Finalizar compra')).toBeNull();
+  });
+});
