@@ -21,6 +21,9 @@ class PlanItemOut(ApiModel):
     status: PlanItemStatus
     # Nulo até o usuário confirmar qual produto atende ao item.
     product_id: uuid.UUID | None = None
+    # O produto inteiro, e não só o id: depois de confirmar (ou editar), a tela
+    # precisa dizer qual produto ficou — sem isso, trocar por outro não aparecia.
+    product: ProductOut | None = None
     match_score: Decimal | None = None
 
 

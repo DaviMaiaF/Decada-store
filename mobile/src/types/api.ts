@@ -34,6 +34,9 @@ export interface PlanItem {
   unit: MeasurementUnit;
   status: PlanItemStatus;
   product_id: string | null;
+  /** Produto escolhido; nulo até a confirmação. É o que a tela mostra depois
+   * de confirmar ou editar. */
+  product: Product | null;
   match_score: string | null;
 }
 

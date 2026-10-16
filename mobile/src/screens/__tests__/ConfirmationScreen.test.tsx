@@ -32,6 +32,7 @@ function item(over: Partial<PlanItem> & { id: string }): PlanItem {
     unit: 'g',
     status: 'pendente',
     product_id: null,
+    product: null,
     match_score: null,
     ...over,
   };
@@ -269,9 +270,41 @@ describe('edição de item confirmado', () => {
   beforeEach(() => {
     lerPlano.mockResolvedValue(
       plano([
-        item({ id: 'item-1', status: 'confirmado', product_id: 'produto-Aveia em flocos' }),
+        item({
+          id: 'item-1',
+          status: 'confirmado',
+          product_id: 'produto-Aveia em flocos',
+          product: candidato('Aveia em flocos', '0.940').product,
+        }),
       ]),
     );
+  });
+
+  it('mostra qual produto foi escolhido', async () => {
+    await montar();
+
+    expect(await screen.findByText('→ Aveia em flocos · Manhã Boa')).toBeTruthy();
+  });
+
+  it('depois de editar, o card mostra o produto novo', async () => {
+    // O servidor passa a devolver o item com o produto trocado, como faz de
+    // verdade depois da confirmação.
+    const granola = candidato('Granola tradicional', '0.610').product;
+    confirmar.mockImplementation(async () => {
+      lerPlano.mockResolvedValue(
+        plano([
+          item({ id: 'item-1', status: 'confirmado', product_id: granola.id, product: granola }),
+        ]),
+      );
+      return item({ id: 'item-1', status: 'confirmado', product_id: granola.id, product: granola });
+    });
+    await montar();
+
+    await fireEvent.press(await screen.findByText('Editar'));
+    await fireEvent.press(await screen.findByText('Granola tradicional'));
+
+    expect(await screen.findByText('→ Granola tradicional · Manhã Boa')).toBeTruthy();
+    expect(screen.queryByText('→ Aveia em flocos · Manhã Boa')).toBeNull();
   });
 
   it('troca o produto de um item já confirmado', async () => {
