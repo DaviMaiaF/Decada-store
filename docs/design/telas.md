@@ -101,8 +101,8 @@ aceite). O parser precisaria reconhecer os cabeçalhos de refeição do PDF, nã
 de item.
 
 **A confirmação aceita lote e edição.** Um plano de quinze itens pedia quinze toques em
-"Confirmar". A tela ganhou caixas de seleção, "Selecionar todos" e "Confirmar
-selecionados": o lote confirma a sugestão principal de cada item marcado, com uma chamada
+"Confirmar". A tela ganhou caixas de seleção, "Selecionar sugeridos (N de M)" e "Confirmar
+selecionados" (o "de M" deixa claro que o lote é só parte da lista). O lote confirma a sugestão principal de cada item marcado, com uma chamada
 de `POST …/items/{id}/confirmation` por item. Se uma falhar, só aquele item avisa e continua
 marcado. Só entra no lote o item **a confirmar**. Ficam de fora o **não encontrado**
 (o melhor candidato ficou abaixo do score mínimo do casamento; na primeira versão ele
