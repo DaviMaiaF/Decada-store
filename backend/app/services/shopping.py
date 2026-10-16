@@ -11,7 +11,8 @@ Regras que este módulo faz valer:
   - item coberto por inteiro continua na lista, com quantidade zero;
   - a despensa nunca abate mais do que o item pedia;
   - o mesmo produto não entra duas vezes na lista;
-  - item vindo da prescrição não pode ser removido; item avulso pode.
+  - item vindo da prescrição não pode ser removido; item avulso pode;
+  - a lista não se corrige quando o plano muda: ela diz o que divergiu.
 
 Depois de gerada, a lista aceita item avulso: o que a pessoa acrescenta à
 compra sem que o plano o tenha pedido. Ele muda a compra, nunca a prescrição —
@@ -29,8 +30,8 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import MealPlan, Product, ShoppingList, ShoppingListItem
-from app.models.enums import MeasurementUnit, PlanItemStatus
+from app.models import MealPlan, PlanItem, Product, ShoppingList, ShoppingListItem
+from app.models.enums import MeasurementUnit, PlanChange, PlanItemStatus
 from app.services.pantry import coverage, ensure_measurable, user_pantry
 from app.services.pricing import (
     ShoppingListCost,
@@ -38,7 +39,7 @@ from app.services.pricing import (
     price_item,
     price_shopping_list,
 )
-from app.services.units import IncompatibleUnitError, measurement_unit_of
+from app.services.units import IncompatibleUnitError, base_unit_of, measurement_unit_of
 
 
 class ProductAlreadyInListError(Exception):
@@ -209,3 +210,46 @@ def remove_item(session: Session, item: ShoppingListItem) -> None:
     session.flush()
 
     shopping_list.estimated_total = list_total(shopping_list)
+
+
+@dataclass(frozen=True)
+class OutdatedItem:
+    """Um item do plano que mudou depois de a lista ser gerada."""
+
+    plan_item: PlanItem
+    change: PlanChange
+
+
+def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
+    """O que mudou no plano desde que a lista foi gerada.
+
+    A lista é um retrato: produto e preço ficam congelados na geração, e é isso
+    que torna o total reproduzível. O preço do retrato, a pessoa sabe que é do
+    dia em que gerou; o produto, não — trocar o frango na aba Dieta e ver o
+    antigo no Mercado parece defeito. Por isso a lista não se corrige sozinha,
+    mas diz o que divergiu, e quem decide gerar de novo é a pessoa.
+
+    Só compara o que a geração usa: item confirmado com produto. Item de
+    grandeza incompatível com o produto não conta como novo — a geração o
+    deixaria de fora outra vez, e o aviso nunca sairia da tela.
+    """
+    in_list = {
+        item.plan_item_id: item for item in shopping_list.items if item.plan_item_id is not None
+    }
+    changes: list[OutdatedItem] = []
+
+    for plan_item in shopping_list.meal_plan.items:
+        confirmed = (
+            plan_item.product is not None and plan_item.status is PlanItemStatus.CONFIRMADO
+        )
+        list_item = in_list.get(plan_item.id)
+
+        if list_item is not None:
+            if not confirmed:
+                changes.append(OutdatedItem(plan_item, PlanChange.NAO_CONFIRMADO))
+            elif list_item.product_id != plan_item.product_id:
+                changes.append(OutdatedItem(plan_item, PlanChange.PRODUTO_TROCADO))
+        elif confirmed and base_unit_of(plan_item.unit) is plan_item.product.base_unit:
+            changes.append(OutdatedItem(plan_item, PlanChange.NOVO_CONFIRMADO))
+
+    return changes
