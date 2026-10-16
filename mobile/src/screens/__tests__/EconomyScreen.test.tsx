@@ -68,6 +68,7 @@ function lista(itens: ShoppingListItem[], over: Partial<ShoppingList> = {}): Sho
     estimated_total: '60.00',
     calculated_at: HA_TRES_DIAS,
     items: itens,
+    outdated_items: [],
     ...over,
   };
 }
