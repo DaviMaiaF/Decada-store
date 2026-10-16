@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
+import CheckoutScreen from './CheckoutScreen';
 import {
   ApiError,
   addExtraItem,
@@ -65,6 +66,8 @@ export default function MarketScreen({
   // definitiva — inclusive para quem lia o aviso de região sem preço, que manda
   // justamente gerar em outra cidade. Conselho sem caminho não é conselho.
   const [trocandoRegiao, setTrocandoRegiao] = useState(false);
+  // Checkout simulado: toma a aba até a pessoa voltar à lista.
+  const [finalizando, setFinalizando] = useState(false);
 
   const lista = useQuery({
     queryKey: ['shopping-list', listId],
@@ -104,8 +107,16 @@ export default function MarketScreen({
     );
   }
 
+  if (finalizando) {
+    return <CheckoutScreen lista={lista.data} onVoltar={() => setFinalizando(false)} />;
+  }
+
   return (
-    <ListaCarregada lista={lista.data} onTrocarRegiao={() => setTrocandoRegiao(true)} />
+    <ListaCarregada
+      lista={lista.data}
+      onTrocarRegiao={() => setTrocandoRegiao(true)}
+      onFinalizar={() => setFinalizando(true)}
+    />
   );
 }
 
@@ -211,9 +222,12 @@ function FormularioRegiaoEGeracao({
 function ListaCarregada({
   lista,
   onTrocarRegiao,
+  onFinalizar,
 }: {
   lista: ShoppingList;
   onTrocarRegiao: () => void;
+  /** Abre o checkout simulado. */
+  onFinalizar: () => void;
 }) {
   const cliente = useQueryClient();
   const chave = ['shopping-list', lista.id];
@@ -354,6 +368,14 @@ function ListaCarregada({
           </Text>
         </View>
       </Card>
+
+      {/* Leva ao checkout, que é simulado: o MVP não faz pedido em mercado
+          nenhum, e a tela seguinte diz isso antes de qualquer confirmação. */}
+      <Button
+        label="Finalizar compra (simulada)"
+        onPress={onFinalizar}
+        disabled={aComprar.length === 0}
+      />
 
       {simulando ? (
         <Card style={styles.simulacao}>
