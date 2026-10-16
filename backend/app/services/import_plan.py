@@ -17,6 +17,14 @@ Sobre o filtro de ruído: `parsing.parse_item_line` aceita quase qualquer texto 
 conjunto de padrões abaixo, deliberadamente conservador. Na dúvida a linha vira
 item e o casamento a marca como não identificada, que é um estado visível; o
 contrário jogaria comida fora do plano de alguém.
+
+Algumas linhas só se reconhecem pelo contexto, e é `_discard_reasons` quem olha
+o documento inteiro:
+  - o cabeçalho antes da primeira refeição (nome da nutricionista, cidade, nome
+    do paciente) não é comida, desde que o PDF tenha refeições;
+  - o bloco "Substituição 1" do Dietbox é alternativa a uma refeição, não item a
+    mais: entraria na lista de compras somado ao prato principal (decisão 8);
+  - parágrafo de orientação que o PDF quebrou em várias linhas.
 """
 
 import re
@@ -37,10 +45,15 @@ from app.services.text import normalize_text, strip_accents
 # Acima disto a linha é parágrafo de orientação, não item de compra.
 MAXIMUM_ITEM_LENGTH = 120
 
+# Linha deste tamanho em diante é um parágrafo que o PDF quebrou na margem. A
+# linha seguinte é a continuação dele, mesmo que curta: "necessários.".
+WRAPPED_LINE_LENGTH = 90
+
 _MEAL_HEADERS = frozenset(
     {
         "cafe da manha",
         "colacao",
+        "lanche",
         "lanche da manha",
         "almoco",
         "lanche da tarde",
@@ -64,6 +77,12 @@ _DOCUMENT_TITLE = re.compile(r"plano\s+alimentar|prescri[çc][ãa]o\s+nutriciona
 _HAS_LETTER = re.compile(r"[a-zA-ZÀ-ÿ]")
 # Hora solta ou prefixando a linha: "07:30", "16h30".
 _TIME_PREFIX = re.compile(r"^\d{1,2}\s*[:h]\s*\d{0,2}\s*[-–—]?\s*", re.IGNORECASE)
+# Horário seguido de um nome curto: "09:00 - Lanche", "21h00 - Antes de dormir".
+# Item alimentar não começa com horário, então o nome não precisa ser conhecido.
+_TIMED_HEADER = re.compile(r"^\d{1,2}\s*[:h]\s*\d{2}\s*[-–—]\s*[^\W\d_].{0,40}$", re.IGNORECASE)
+_SUBSTITUTION_HEADER = re.compile(r"^substitui[çc][ãa]o(\s+\d+)?\s*:?$", re.IGNORECASE)
+
+_MEAL_HEADER_REASON = "cabeçalho de refeição"
 
 
 @dataclass(frozen=True)
@@ -115,13 +134,51 @@ def _discard_reason(line: str) -> str | None:
     # "Café da Manhã", "07:30 - Lanche da tarde:".
     sem_horario = _TIME_PREFIX.sub("", line)
     nucleo = strip_accents(sem_horario.strip().rstrip(":").strip().lower())
-    if nucleo in _MEAL_HEADERS:
-        return "cabeçalho de refeição"
+    if nucleo in _MEAL_HEADERS or _TIMED_HEADER.match(line):
+        return _MEAL_HEADER_REASON
 
     if line.rstrip().endswith(":"):
         return "cabeçalho de seção"
 
     return None
+
+
+def _discard_reasons(lines: list[str]) -> list[str | None]:
+    """O motivo de descarte de cada linha, olhando também as vizinhas.
+
+    Devolve uma lista do mesmo tamanho de `lines`; None é item. O motivo da
+    linha isolada (`_discard_reason`) vale primeiro, por ser o mais específico.
+    """
+    own = [_discard_reason(line) for line in lines]
+    has_meals = _MEAL_HEADER_REASON in own
+
+    reasons: list[str | None] = []
+    before_first_meal = has_meals
+    in_substitution = False
+    previous_wrapped = False
+
+    for line, reason in zip(lines, own, strict=True):
+        if reason == _MEAL_HEADER_REASON:
+            before_first_meal = False
+            in_substitution = False
+
+        wrapped = previous_wrapped
+        previous_wrapped = len(line) >= WRAPPED_LINE_LENGTH
+
+        if reason is None:
+            if before_first_meal:
+                reason = "cabeçalho do documento"
+            elif _SUBSTITUTION_HEADER.match(line):
+                in_substitution = True
+                reason = "opção de substituição"
+            elif in_substitution:
+                reason = "opção de substituição"
+            elif len(line) >= WRAPPED_LINE_LENGTH or wrapped:
+                reason = "texto de orientação"
+
+        reasons.append(reason)
+
+    return reasons
 
 
 def import_plan_from_pdf(
@@ -167,8 +224,7 @@ def import_plan_from_pdf(
     unidentified = 0
     position = 0
 
-    for line in lines:
-        reason = _discard_reason(line)
+    for line, reason in zip(lines, _discard_reasons(lines), strict=True):
         if reason is not None:
             discarded.append(DiscardedLine(text=line, reason=reason))
             continue

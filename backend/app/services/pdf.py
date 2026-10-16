@@ -6,6 +6,7 @@ usuário achar que o plano dele não tem nada dentro.
 """
 
 import io
+import re
 
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
@@ -14,6 +15,8 @@ from pypdf.errors import PdfReadError
 # scanner costuma trazer um punhado de caracteres de metadado no meio das
 # imagens, e isso não é o plano alimentar.
 MINIMUM_CHARACTERS = 20
+
+_SPACES = re.compile(r"\s+")
 
 
 class InvalidPdfError(ValueError):
@@ -25,10 +28,16 @@ class PdfWithoutTextError(ValueError):
 
 
 def extract_text(data: bytes) -> str:
-    """Todo o texto do PDF, com as páginas separadas por quebra de linha."""
+    """Todo o texto do PDF, com as páginas separadas por quebra de linha.
+
+    Usa o modo `layout`, que monta as linhas pela posição na página. O modo
+    padrão do pypdf segue a ordem interna dos trechos de texto, e PDF gerado por
+    sistema (o Dietbox, por exemplo) quebra ali o item no meio: "Ovo de galinha"
+    numa linha e "- 2 Unidades" na seguinte, que viravam dois itens.
+    """
     try:
         reader = PdfReader(io.BytesIO(data))
-        pages = [page.extract_text() or "" for page in reader.pages]
+        pages = [page.extract_text(extraction_mode="layout") or "" for page in reader.pages]
     except PdfReadError as erro:
         raise InvalidPdfError(f"não foi possível ler o PDF: {erro}") from erro
 
@@ -45,5 +54,10 @@ def extract_text(data: bytes) -> str:
 
 
 def extract_lines(data: bytes) -> list[str]:
-    """As linhas do PDF, sem as vazias e sem espaço sobrando nas pontas."""
-    return [line.strip() for line in extract_text(data).splitlines() if line.strip()]
+    """As linhas do PDF, sem as vazias e sem espaço sobrando.
+
+    O modo layout alinha colunas com espaços, então os espaços repetidos no meio
+    da linha também viram um só.
+    """
+    lines = (_SPACES.sub(" ", line).strip() for line in extract_text(data).splitlines())
+    return [line for line in lines if line]

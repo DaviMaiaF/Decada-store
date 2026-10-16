@@ -27,10 +27,10 @@ cd mobile && npx expo start
 | conta | `beta@example.com` · `decada-beta-2026` |
 | plano de exemplo | [`plano-exemplo.pdf`](plano-exemplo.pdf) |
 
-O PDF é fictício e foi feito para ser lido bem: um item por linha. Plano real
-costuma quebrar o item em duas linhas e ter parágrafos de substituição, e o
-filtro de ruído ainda não dá conta disso — está registrado em
-[`../design/telas.md`](../design/telas.md).
+O PDF é fictício e traz um item por linha. O import também lê o formato do
+Dietbox ("Arroz branco cozido - 6 colheres de sopa cheia - 150g"): descarta o
+cabeçalho antes da primeira refeição, os parágrafos de orientação e os blocos
+"Substituição 1", que são alternativas e não entram na lista de compras.
 
 ## O roteiro
 
@@ -101,8 +101,9 @@ de economia. Dá para mostrar isso pela API enquanto a tela não tem o campo.
 - **Desperdício evitado** continua fora: exigiria validade no item da despensa.
 - Leitura de **NFC-e por QR Code** está fora do MVP.
 - Item da despensa **já salvo** não pode ser vinculado depois ao catálogo.
-- O filtro de ruído do PDF foi calibrado em planos simples; plano real ainda
-  exige ajuste.
+- O filtro de ruído do PDF lê um item por linha e o formato do Dietbox; PDF de
+  outro sistema pode precisar de ajuste. Os blocos de substituição são
+  descartados (aparecem no relatório do import, não viram item).
 
 Todos os dados de catálogo, preço e receita são **fictícios** e estão marcados
 como tal no banco.

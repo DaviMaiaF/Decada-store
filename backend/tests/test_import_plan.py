@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.models import MealPlan, PlanItem
 from app.models.enums import PlanItemStatus
-from app.services.import_plan import _discard_reason, import_plan_from_pdf
+from app.services.import_plan import _discard_reason, _discard_reasons, import_plan_from_pdf
 from app.services.pdf import PdfWithoutTextError
 from tests.helpers import PLANO_REALISTA, build_pdf
 
@@ -70,6 +70,95 @@ def test_na_duvida_a_linha_vira_item():
     # Palavra solta que não é cabeçalho conhecido: vira item e o casamento
     # decide. Descartar seria tirar comida do plano de alguém sem avisar.
     assert _discard_reason("Suplemento prescrito") is None
+
+
+@pytest.mark.parametrize("linha", ["09:00 - Lanche", "21h00 - Antes de dormir", "15:30 - Lanche:"])
+def test_horario_com_nome_e_cabecalho_de_refeicao(linha):
+    assert _discard_reason(linha) == "cabeçalho de refeição"
+
+
+# --------------------------------------------------------------------------
+# filtro com contexto: PDF do Dietbox
+# --------------------------------------------------------------------------
+
+# Recorte de um plano exportado pelo Dietbox, com as linhas como o pypdf as
+# entrega. Nomes, cidade e contatos são fictícios.
+PLANO_DIETBOX = [
+    "Fernanda Lima",
+    "fernanda.nutri@example.com",
+    "CRN: 99999",
+    "Goiânia",
+    "Plano Alimentar",
+    "JOÃO DA SILVA",
+    "11/02/2026",
+    "Todos os dias",
+    "Plano alimentar para JOÃO DA SILVA",
+    "08:30 - Café da manhã",
+    "Pão francês - 1 unidade média de 50g",
+    "Ovo de galinha - 2 Unidades",
+    "Substituição para 1 pão francês: 2 fatias de pão de forma integral OU 7 colheres de "
+    "sopa de cuscuz cozido 126g OU 2",
+    "colheres de sopa cheia de tapioca 35g OU 160g de batata doce.",
+    "Substituição 1",
+    "Ovo - 1 unidade",
+    "Tapioca - 2 colheres de sopa - 35g",
+    "09:00 - Lanche",
+    "Fruta - 1 das porções abaixo",
+    "12:30 - Almoço",
+    "Arroz branco cozido - 6 colheres de sopa cheia - 150g",
+    "Feijão cozido - 1 concha pequena - 50g",
+]
+
+
+def _itens(linhas):
+    motivos = _discard_reasons(linhas)
+    return [linha for linha, motivo in zip(linhas, motivos, strict=True) if motivo is None]
+
+
+def test_dietbox_so_os_itens_das_refeicoes_viram_item():
+    assert _itens(PLANO_DIETBOX) == [
+        "Pão francês - 1 unidade média de 50g",
+        "Ovo de galinha - 2 Unidades",
+        "Fruta - 1 das porções abaixo",
+        "Arroz branco cozido - 6 colheres de sopa cheia - 150g",
+        "Feijão cozido - 1 concha pequena - 50g",
+    ]
+
+
+def test_cabecalho_antes_da_primeira_refeicao_e_descartado():
+    motivos = dict(zip(PLANO_DIETBOX, _discard_reasons(PLANO_DIETBOX), strict=True))
+
+    assert motivos["Fernanda Lima"] == "cabeçalho do documento"
+    assert motivos["Goiânia"] == "cabeçalho do documento"
+    assert motivos["JOÃO DA SILVA"] == "cabeçalho do documento"
+    assert motivos["Todos os dias"] == "cabeçalho do documento"
+    # O motivo específico continua valendo dentro do cabeçalho.
+    assert motivos["CRN: 99999"] == "identificação do profissional"
+
+
+def test_bloco_de_substituicao_vai_ate_a_proxima_refeicao():
+    motivos = dict(zip(PLANO_DIETBOX, _discard_reasons(PLANO_DIETBOX), strict=True))
+
+    assert motivos["Substituição 1"] == "opção de substituição"
+    assert motivos["Ovo - 1 unidade"] == "opção de substituição"
+    assert motivos["Tapioca - 2 colheres de sopa - 35g"] == "opção de substituição"
+    assert motivos["Fruta - 1 das porções abaixo"] is None
+
+
+def test_paragrafo_quebrado_e_descartado_inteiro():
+    motivos = dict(zip(PLANO_DIETBOX, _discard_reasons(PLANO_DIETBOX), strict=True))
+
+    # A última linha do parágrafo é curta, mas continua a anterior.
+    assert motivos["colheres de sopa cheia de tapioca 35g OU 160g de batata doce."] == (
+        "texto de orientação"
+    )
+
+
+def test_sem_refeicoes_nada_e_tratado_como_cabecalho():
+    # Lista de compras solta, sem horários: a primeira linha é comida.
+    linhas = ["Peito de frango - 1,2 kg", "Arroz integral - 1 kg"]
+
+    assert _itens(linhas) == linhas
 
 
 # --------------------------------------------------------------------------
@@ -136,6 +225,28 @@ def test_posicoes_sao_sequenciais_mesmo_com_linhas_descartadas(db_session, usuar
     )
 
     assert [item.position for item in resultado.meal_plan.items] == [1, 2, 3, 4, 5]
+
+
+@pytest.mark.db
+def test_importa_o_plano_do_dietbox_com_as_quantidades_de_compra(db_session, usuario):
+    resultado = import_plan_from_pdf(
+        db_session, usuario, build_pdf(PLANO_DIETBOX), consent_at=AGORA
+    )
+
+    itens = [
+        (item.raw_description, item.quantity, item.unit.value)
+        for item in resultado.meal_plan.items
+    ]
+    assert itens == [
+        ("Pão francês - 1 unidade média de 50g", 50, "g"),
+        ("Ovo de galinha - 2 Unidades", 2, "unidade"),
+        ("Fruta - 1 das porções abaixo", 1, "unidade"),
+        ("Arroz branco cozido - 6 colheres de sopa cheia - 150g", 150, "g"),
+        ("Feijão cozido - 1 concha pequena - 50g", 50, "g"),
+    ]
+    # A medida não entra na descrição que vai para o casamento.
+    assert all("-" not in item.normalized_description for item in resultado.meal_plan.items)
+    assert len(resultado.discarded) + resultado.items_created == len(PLANO_DIETBOX)
 
 
 # --------------------------------------------------------------------------

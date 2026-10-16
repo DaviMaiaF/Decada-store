@@ -1,7 +1,10 @@
 """Leitura de uma linha do plano alimentar.
 
-Formato aceito: quantidade, unidade e descrição, nessa ordem.
-Exemplos: "1,2 kg de peito de frango", "1 dúzia de ovos", "banana prata".
+Dois formatos são aceitos:
+  - quantidade, unidade e descrição, nessa ordem: "1,2 kg de peito de frango",
+    "1 dúzia de ovos", "banana prata";
+  - descrição e medidas separadas por travessão, como sai do Dietbox:
+    "Arroz branco cozido - 6 colheres de sopa cheia - 150g".
 
 Separar a quantidade antes de comparar com o catálogo não é detalhe: sem isso,
 o "1 2 kg" entra na comparação textual e derruba o score do produto certo.
@@ -52,6 +55,25 @@ _LINE = re.compile(
 
 _LEADING_DE = re.compile(r"^de\s+", re.IGNORECASE)
 
+# Hífen ou travessão com espaço dos dois lados. Sem o espaço, é palavra
+# composta ("castanha-do-pará") e não separador.
+_DASH_SEPARATOR = re.compile(r"\s+[-–—]\s+")
+_STARTS_WITH_NUMBER = re.compile(r"^\d")
+# Número seguido de palavra, com ou sem espaço: "150g", "2 Unidades".
+_MEASURE = re.compile(r"(?P<quantity>\d+(?:[.,]\d+)?)\s*(?P<word>[^\W\d_]+)", re.UNICODE)
+
+# Massa e volume vêm antes da contagem: é nessas grandezas que o supermercado
+# vende pão, arroz e queijo, e "1 unidade média de 50g" comprada como 50 g casa
+# com o produto vendido por quilo.
+_METRIC_UNITS = frozenset(
+    {
+        MeasurementUnit.GRAMA,
+        MeasurementUnit.QUILOGRAMA,
+        MeasurementUnit.MILILITRO,
+        MeasurementUnit.LITRO,
+    }
+)
+
 
 @dataclass(frozen=True)
 class ParsedItem:
@@ -64,6 +86,30 @@ class ParsedItem:
     raw: str
 
 
+def _parse_measures(measures: str) -> tuple[Decimal, MeasurementUnit]:
+    """A quantidade de compra dentro das medidas de uma linha do Dietbox.
+
+    Medida caseira ("6 colheres de sopa", "1 concha") não é unidade de compra e
+    é ignorada. Entre as medidas que são, ganha a primeira de massa ou volume;
+    sem nenhuma, a primeira contagem; sem nada, 1 unidade, como no outro formato.
+    """
+    found: list[tuple[Decimal, MeasurementUnit]] = []
+    for match in _MEASURE.finditer(measures):
+        quantity = Decimal(match["quantity"].replace(",", "."))
+        key = strip_accents(match["word"].lower())
+        if key in _MULTIPLIERS:
+            found.append((quantity * _MULTIPLIERS[key], MeasurementUnit.UNIDADE))
+        elif key in _UNIT_ALIASES:
+            found.append((quantity, _UNIT_ALIASES[key]))
+
+    for quantity, unit in found:
+        if unit in _METRIC_UNITS:
+            return quantity, unit
+    if found:
+        return found[0]
+    return Decimal("1"), MeasurementUnit.UNIDADE
+
+
 def parse_item_line(line: str) -> ParsedItem:
     """Separa quantidade, unidade e descrição de uma linha do plano.
 
@@ -74,6 +120,13 @@ def parse_item_line(line: str) -> ParsedItem:
     text = line.strip()
     if not text:
         raise ValueError("linha vazia do plano alimentar")
+
+    # Formato do Dietbox: descrição antes, medidas depois do travessão. Linha
+    # que começa com número é do outro formato, mesmo que tenha travessão.
+    parts = _DASH_SEPARATOR.split(text, maxsplit=1)
+    if len(parts) == 2 and not _STARTS_WITH_NUMBER.match(text) and parts[0].strip():
+        quantity, unit = _parse_measures(parts[1])
+        return ParsedItem(quantity=quantity, unit=unit, description=parts[0].strip(), raw=line)
 
     match = _LINE.match(text)
     if match is None:  # pragma: no cover - o padrão aceita qualquer texto não vazio

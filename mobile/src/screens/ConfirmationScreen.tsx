@@ -144,12 +144,14 @@ export default function ConfirmationScreen({
                 style={styles.selecionarTodos}
               >
                 <Checkbox
-                  label="Selecionar todos"
+                  label="Selecionar sugeridos"
                   checked={todosMarcados}
                   onPress={alternarTodos}
                 />
+                {/* O "de N" mostra que o lote é parte da lista de propósito: com
+                    "Selecionar todos (1)" num plano de 50 itens, parecia defeito. */}
                 <Text style={styles.selecionarTodosTexto}>
-                  Selecionar todos ({sugestoes.size})
+                  Selecionar sugeridos ({sugestoes.size} de {pendentes.length})
                 </Text>
               </Pressable>
               <Button

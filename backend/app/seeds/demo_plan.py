@@ -1,9 +1,8 @@
 """Plano alimentar fictício para demonstração.
 
-Gera um PDF com um item por linha, que é o formato que o import lê bem. Planos
-reais costumam quebrar o item em duas linhas e ter parágrafos longos de
-substituição, e para esses o filtro de ruído ainda precisa evoluir — ver a
-seção de divergências em `docs/design/telas.md`.
+Gera um PDF com um item por linha, o formato mais simples que o import lê. O
+formato do Dietbox ("Nome - medida - medida", com blocos de substituição) está
+coberto em `tests/test_import_plan.py`.
 
 **É dado fictício.** A nutricionista, a paciente e o plano são inventados; os
 itens apontam para produtos do catálogo de desenvolvimento.

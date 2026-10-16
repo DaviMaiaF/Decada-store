@@ -185,14 +185,14 @@ describe('confirmação em lote', () => {
     });
   });
 
-  it('selecionar todos deixa de fora o item com unidade diferente', async () => {
+  it('selecionar sugeridos deixa de fora o item com unidade diferente', async () => {
     await montar();
 
-    expect(await screen.findByText('Selecionar todos (2)')).toBeTruthy();
+    expect(await screen.findByText('Selecionar sugeridos (2 de 3)')).toBeTruthy();
     expect(screen.getByLabelText('Selecionar 50 g de aveia em flocos')).toBeTruthy();
     expect(screen.queryByLabelText('Selecionar 1 banana')).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText('Selecionar todos'));
+    await fireEvent.press(screen.getByLabelText('Selecionar sugeridos'));
     await fireEvent.press(screen.getByText('Confirmar selecionados (2)'));
 
     await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(2));
@@ -217,10 +217,10 @@ describe('confirmação em lote', () => {
 
     await montar();
 
-    expect(await screen.findByText('Selecionar todos (1)')).toBeTruthy();
+    expect(await screen.findByText('Selecionar sugeridos (1 de 2)')).toBeTruthy();
     expect(screen.queryByLabelText('Selecionar Tapioca')).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText('Selecionar todos'));
+    await fireEvent.press(screen.getByLabelText('Selecionar sugeridos'));
     await fireEvent.press(screen.getByText('Confirmar selecionados (1)'));
 
     await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
@@ -240,7 +240,7 @@ describe('confirmação em lote', () => {
   it('não grava nada sem a pessoa marcar', async () => {
     await montar();
 
-    await screen.findByText('Selecionar todos (2)');
+    await screen.findByText('Selecionar sugeridos (2 de 3)');
     // Decisão 4: o lote é um ato da pessoa, não uma confirmação automática.
     expect(screen.getByText('Confirmar selecionados (0)')).toBeTruthy();
     await fireEvent.press(screen.getByText('Confirmar selecionados (0)'));
@@ -255,7 +255,7 @@ describe('confirmação em lote', () => {
 
     await montar();
 
-    await fireEvent.press(await screen.findByLabelText('Selecionar todos'));
+    await fireEvent.press(await screen.findByLabelText('Selecionar sugeridos'));
     await fireEvent.press(screen.getByText('Confirmar selecionados (2)'));
 
     expect(await screen.findByText('não foi possível confirmar este produto')).toBeTruthy();
@@ -296,6 +296,6 @@ describe('edição de item confirmado', () => {
     await montar();
 
     await screen.findByText('Editar');
-    expect(screen.queryByText(/Selecionar todos/)).toBeNull();
+    expect(screen.queryByText(/Selecionar sugeridos/)).toBeNull();
   });
 });

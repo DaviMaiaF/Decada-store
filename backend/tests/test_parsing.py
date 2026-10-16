@@ -101,3 +101,51 @@ def test_guarda_a_linha_original():
 def test_linha_vazia_e_erro(linha):
     with pytest.raises(ValueError):
         parse_item_line(linha)
+
+
+# --------------------------------------------------------------------------
+# formato do Dietbox: descrição - medida caseira - medida de compra
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("linha", "quantidade", "unidade", "descricao"),
+    [
+        # A medida caseira fica de fora; a de compra, não.
+        ("Arroz branco cozido - 6 colheres de sopa cheia - 150g", "150", G, "Arroz branco cozido"),
+        ("Queijo muçarela - 1 fatia de 20g", "20", G, "Queijo muçarela"),
+        (
+            "Iogurte triplo zero OU natural - 150g - 1 pote",
+            "150", G, "Iogurte triplo zero OU natural",
+        ),
+        ("Macarrão Cozido(a) - 200 Gramas - 2 conchas", "200", G, "Macarrão Cozido(a)"),
+        ("Ovo de galinha - 2 Unidades", "2", UN, "Ovo de galinha"),
+        # Massa ganha da contagem: o pão é vendido por quilo.
+        ("Pão francês - 1 unidade média de 50g", "50", G, "Pão francês"),
+        # Nenhuma medida de compra: 1 unidade, como no outro formato.
+        ("Café - 1 Xicara De Cafe", "1", UN, "Café"),
+        ("Fruta - 1 das porções abaixo", "1", UN, "Fruta"),
+        ("Leite – 200 ml", "200", ML, "Leite"),
+    ],
+)
+def test_le_o_formato_do_dietbox(linha, quantidade, unidade, descricao):
+    item = parse_item_line(linha)
+
+    assert item.quantity == Decimal(quantidade)
+    assert item.unit is unidade
+    assert item.description == descricao
+    assert item.raw == linha
+
+
+def test_hifen_sem_espaco_nao_separa_medida():
+    item = parse_item_line("30 g de castanha-do-pará")
+
+    assert item.quantity == Decimal("30")
+    assert item.description == "castanha-do-pará"
+
+
+def test_linha_que_comeca_com_numero_segue_o_formato_antigo():
+    item = parse_item_line("150 g de frango - grelhado")
+
+    assert item.quantity == Decimal("150")
+    assert item.unit is G
+    assert item.description == "frango - grelhado"
