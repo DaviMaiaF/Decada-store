@@ -11,12 +11,13 @@ import pytest
 from sqlalchemy import select
 
 from app.models import MealPlan, PantryItem, PlanItem, Product, ShoppingList, User
-from app.models.enums import MeasurementUnit, PlanItemStatus
+from app.models.enums import MeasurementUnit, PlanChange, PlanItemStatus
 from app.services.shopping import (
     PrescribedItemError,
     ProductAlreadyInListError,
     add_extra_item,
     generate_shopping_list,
+    outdated_items,
     remove_item,
 )
 from app.services.units import IncompatibleUnitError
@@ -486,3 +487,96 @@ def test_item_da_prescricao_nao_sai_da_lista(db_session, usuario, catalogo_carre
         remove_item(db_session, lista.items[0])
 
     assert len(lista.items) == 1
+
+
+# --------------------------------------------------------------------------
+# lista que ficou para trás: o plano mudou depois da geração
+# --------------------------------------------------------------------------
+
+
+def _mudancas(lista: ShoppingList) -> list[tuple[str, PlanChange]]:
+    return [(m.plan_item.raw_description, m.change) for m in outdated_items(lista)]
+
+
+def test_lista_recem_gerada_esta_em_dia(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    assert outdated_items(lista) == []
+
+
+def test_trocar_o_produto_no_plano_deixa_a_lista_desatualizada(
+    db_session, usuario, catalogo_carregado
+):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    queijo = catalogo_carregado(QUEIJO)
+
+    lista.meal_plan.items[0].product = queijo
+    db_session.flush()
+
+    assert _mudancas(lista) == [("1,2 kg de peito de frango sem pele", PlanChange.PRODUTO_TROCADO)]
+    # A lista não se corrige sozinha: o retrato continua com o produto antigo.
+    assert lista.items[0].product.name == FRANGO
+
+
+def test_item_que_deixou_de_estar_confirmado_aparece(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    lista.meal_plan.items[0].status = PlanItemStatus.PENDENTE
+    db_session.flush()
+
+    assert [m for _, m in _mudancas(lista)] == [PlanChange.NAO_CONFIRMADO]
+
+
+def test_item_confirmado_depois_da_geracao_aparece(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    lista.meal_plan.items.append(_item(2, "200 g de queijo minas", "200", G,
+                                       catalogo_carregado(QUEIJO)))
+    db_session.flush()
+
+    assert _mudancas(lista) == [("200 g de queijo minas", PlanChange.NOVO_CONFIRMADO)]
+
+
+def test_item_ainda_pendente_nao_desatualiza_a_lista(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    lista.meal_plan.items.append(_item(2, "200 g de queijo minas", "200", G,
+                                       status=PlanItemStatus.PENDENTE))
+    db_session.flush()
+
+    assert outdated_items(lista) == []
+
+
+def test_item_que_a_geracao_recusaria_nao_conta_como_novo(
+    db_session, usuario, catalogo_carregado
+):
+    # 500 ml de um produto vendido por quilo fica de fora de toda geração; se
+    # contasse, o aviso não sairia da tela nem gerando de novo.
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+
+    lista.meal_plan.items.append(_item(2, "500 ml de queijo", "500", ML,
+                                       catalogo_carregado(QUEIJO)))
+    db_session.flush()
+
+    assert outdated_items(lista) == []
+
+
+def test_avulso_nao_e_divergencia_do_plano(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    add_extra_item(db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G,
+                   reference=AGORA)
+
+    assert outdated_items(lista) == []
+
+
+def test_gerar_de_novo_poe_a_lista_em_dia(db_session, usuario, catalogo_carregado):
+    antiga = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    antiga.meal_plan.items[0].product = catalogo_carregado(QUEIJO)
+    db_session.flush()
+
+    nova = generate_shopping_list(
+        db_session, antiga.meal_plan, "DF", "Brasília", reference=AGORA
+    ).shopping_list
+
+    assert outdated_items(nova) == []
+    assert nova.items[0].product.name == QUEIJO

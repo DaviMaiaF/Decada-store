@@ -116,6 +116,16 @@ export interface ShoppingListItem {
   is_extra: boolean;
 }
 
+/** Por que um item do plano não bate mais com a lista já gerada. */
+export type PlanChange = 'produto_trocado' | 'nao_confirmado' | 'novo_confirmado';
+
+/** Item do plano que mudou depois de a lista ser gerada. */
+export interface OutdatedItem {
+  plan_item_id: string;
+  description: string;
+  change: PlanChange;
+}
+
 export interface ShoppingList {
   id: string;
   meal_plan_id: string;
@@ -124,6 +134,8 @@ export interface ShoppingList {
   estimated_total: string | null;
   calculated_at: string | null;
   items: ShoppingListItem[];
+  /** Vazio é lista em dia; cheio, a tela avisa e oferece gerar de novo. */
+  outdated_items: OutdatedItem[];
 }
 
 /** Um item da lista sob uma quantidade hipotética. Nada disso foi gravado. */

@@ -78,7 +78,7 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
   };
 }
 
-function lista(itens: ShoppingListItem[]): ShoppingList {
+function lista(itens: ShoppingListItem[], over: Partial<ShoppingList> = {}): ShoppingList {
   return {
     id: 'lista-1',
     meal_plan_id: 'plano-1',
@@ -87,17 +87,19 @@ function lista(itens: ShoppingListItem[]): ShoppingList {
     estimated_total: '174.20',
     calculated_at: HA_TRES_DIAS,
     items: itens,
+    outdated_items: [],
+    ...over,
   };
 }
 
 let cliente: QueryClient;
 
-async function montar(dados: ShoppingList) {
+async function montar(dados: ShoppingList, onGenerated: jest.Mock = jest.fn()) {
   lerLista.mockResolvedValue(dados);
 
   await render(
     <QueryClientProvider client={cliente}>
-      <MarketScreen planId="plano-1" listId="lista-1" onGenerated={jest.fn()} />
+      <MarketScreen planId="plano-1" listId="lista-1" onGenerated={onGenerated} />
     </QueryClientProvider>,
   );
 }
@@ -722,5 +724,78 @@ describe('checkout simulado', () => {
     await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
 
     expect(screen.queryByText('Finalizar compra')).toBeNull();
+  });
+});
+
+describe('lista desatualizada', () => {
+  // O caso que motivou o aviso: trocar o produto na aba Dieta depois de gerar,
+  // e o Mercado continuar mostrando o antigo sem dizer nada.
+  const trocado = {
+    outdated_items: [
+      {
+        plan_item_id: 'pi-1',
+        description: '1,2 kg de peito de frango',
+        change: 'produto_trocado' as const,
+      },
+    ],
+  };
+
+  it('lista em dia não mostra aviso', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await screen.findByText('Lista de Mercado');
+    expect(screen.queryByText('Seu plano mudou depois desta lista')).toBeNull();
+  });
+
+  it('avisa o que mudou no plano desde a geração', async () => {
+    await montar(
+      lista([item({ id: 'a' })], {
+        outdated_items: [
+          ...trocado.outdated_items,
+          { plan_item_id: 'pi-2', description: '200 g de queijo', change: 'novo_confirmado' },
+        ],
+      }),
+    );
+
+    expect(await screen.findByText('Seu plano mudou depois desta lista')).toBeTruthy();
+    expect(screen.getByText(/1,2 kg de peito de frango — produto trocado/)).toBeTruthy();
+    expect(screen.getByText(/200 g de queijo — confirmado depois da lista/)).toBeTruthy();
+  });
+
+  it('gera a lista atualizada na mesma região e abre a nova', async () => {
+    const onGenerated = jest.fn();
+    gerarLista.mockResolvedValue({ shopping_list: { id: 'lista-2' } });
+    await montar(
+      lista([item({ id: 'a' })], { ...trocado, city: 'Goiânia', state_code: 'GO' }),
+      onGenerated,
+    );
+
+    await fireEvent.press(await screen.findByText('Gerar lista atualizada'));
+
+    await waitFor(() => expect(onGenerated).toHaveBeenCalledWith('lista-2'));
+    expect(gerarLista).toHaveBeenCalledWith('plano-1', 'GO', 'Goiânia');
+  });
+
+  it('o checkout também avisa, e gera de novo dali', async () => {
+    const onGenerated = jest.fn();
+    gerarLista.mockResolvedValue({ shopping_list: { id: 'lista-2' } });
+    await montar(lista([item({ id: 'a' })], trocado), onGenerated);
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+
+    expect(screen.getByText('Finalizar compra')).toBeTruthy();
+    expect(screen.getByText('Seu plano mudou depois desta lista')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Gerar lista atualizada'));
+    await waitFor(() => expect(onGenerated).toHaveBeenCalledWith('lista-2'));
+  });
+
+  it('falha ao gerar de novo aparece na tela', async () => {
+    gerarLista.mockRejectedValue(new api.ApiError(422, 'região inválida'));
+    await montar(lista([item({ id: 'a' })], trocado));
+
+    await fireEvent.press(await screen.findByText('Gerar lista atualizada'));
+
+    expect(await screen.findByText(/região inválida/)).toBeTruthy();
   });
 });

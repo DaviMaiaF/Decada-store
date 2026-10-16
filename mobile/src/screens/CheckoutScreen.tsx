@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, SectionTitle } from '../components';
+import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import { formatMoney, formatQuantity } from '../services/format';
 import { colors, spacing, typography } from '../theme/tokens';
 import type { ShoppingList } from '../types/api';
@@ -24,9 +25,12 @@ export const AVISO_SIMULACAO =
 export default function CheckoutScreen({
   lista,
   onVoltar,
+  onGenerated,
 }: {
   lista: ShoppingList;
   onVoltar: () => void;
+  /** Lista nova, gerada pelo aviso de plano alterado. */
+  onGenerated: (listId: string) => void;
 }) {
   const [concluido, setConcluido] = useState(false);
 
@@ -68,6 +72,10 @@ export default function CheckoutScreen({
           {lista.city} · {lista.state_code}
         </Text>
       </Card>
+
+      {/* O checkout lê a mesma lista: sem isto, finalizaria com o produto
+          antigo quem trocou o item na Dieta depois de gerar. */}
+      <ListaDesatualizada lista={lista} onGenerated={onGenerated} />
 
       {semPreco > 0 ? (
         <Body muted>

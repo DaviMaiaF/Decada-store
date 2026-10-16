@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import MeasurementUnit, PriceConfidence, PriceOrigin
+from app.models.enums import MeasurementUnit, PlanChange, PriceConfidence, PriceOrigin
 from app.schemas.common import ApiModel, ProductOut
 
 
@@ -73,6 +73,18 @@ class PurchaseIn(BaseModel):
     purchased: bool
 
 
+class OutdatedItemOut(BaseModel):
+    """Item do plano que mudou depois de a lista ser gerada.
+
+    `change` diz o quê: produto trocado na aba Dieta, item que deixou de estar
+    confirmado, ou item confirmado depois que a lista não conhece.
+    """
+
+    plan_item_id: uuid.UUID
+    description: str
+    change: PlanChange
+
+
 class ShoppingListOut(ApiModel):
     id: uuid.UUID
     meal_plan_id: uuid.UUID
@@ -81,6 +93,9 @@ class ShoppingListOut(ApiModel):
     estimated_total: Decimal | None = None
     calculated_at: datetime | None = None
     items: list[ShoppingListItemOut]
+    # O que divergiu do plano desde a geração. Vazio é lista em dia; cheio, a
+    # tela avisa e oferece gerar de novo — a lista nunca se corrige sozinha.
+    outdated_items: list[OutdatedItemOut] = []
 
 
 class SimulationItemIn(BaseModel):

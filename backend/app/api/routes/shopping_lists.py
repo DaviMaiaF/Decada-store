@@ -11,6 +11,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.models import MealPlan, Product, ShoppingList, ShoppingListItem
 from app.schemas.shopping_list import (
     ExtraItemIn,
+    OutdatedItemOut,
     GeneratedListOut,
     GenerateListIn,
     PurchaseIn,
@@ -20,7 +21,12 @@ from app.schemas.shopping_list import (
     SimulatedItemOut,
     SimulationIn,
 )
-from app.services.shopping import add_extra_item, generate_shopping_list, remove_item
+from app.services.shopping import (
+    add_extra_item,
+    generate_shopping_list,
+    outdated_items,
+    remove_item,
+)
 from app.services.simulation import simulate_item
 
 router = APIRouter(tags=["listas de compras"])
@@ -150,13 +156,29 @@ def _get_list(session: DbSession, user: CurrentUser, list_id: uuid.UUID) -> Shop
 @router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
 def read_shopping_list(
     session: DbSession, user: CurrentUser, list_id: uuid.UUID
-) -> ShoppingList:
+) -> ShoppingListOut:
     """A lista com seus itens e o retrato do preço de cada um.
 
     Os itens vêm em lista plana, com a categoria dentro do produto: agrupar por
     corredor é decisão de quem exibe, não do servidor.
+
+    Traz também o que mudou no plano desde a geração, para a tela avisar que a
+    lista ficou para trás em vez de mostrar o produto antigo calada.
     """
-    return _get_list(session, user, list_id)
+    shopping_list = _get_list(session, user, list_id)
+
+    return ShoppingListOut.model_validate(shopping_list).model_copy(
+        update={
+            "outdated_items": [
+                OutdatedItemOut(
+                    plan_item_id=outdated.plan_item.id,
+                    description=outdated.plan_item.raw_description,
+                    change=outdated.change,
+                )
+                for outdated in outdated_items(shopping_list)
+            ]
+        }
+    )
 
 
 @router.post(
