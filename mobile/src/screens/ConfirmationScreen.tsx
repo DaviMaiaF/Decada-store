@@ -16,13 +16,14 @@ import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { Candidate, PlanItem } from '../types/api';
 
 /**
- * Só entra no lote o item cuja sugestão dá para aceitar de olhos fechados:
- * existe e mede na mesma unidade da prescrição. "Unidade diferente" é onde o
- * casamento por nome mais erra, e item sem sugestão não tem o que confirmar —
- * esses continuam pedindo o toque individual.
+ * Só entra no lote o item cuja sugestão dá para aceitar de olhos fechados: o
+ * import o deixou "a confirmar" (sugestão acima do score mínimo), e ela mede na
+ * mesma unidade da prescrição. Item "não encontrado" também tem candidatos, só
+ * que fracos — no lote, viravam "Tapioca → Filé de tilápia" num toque só.
+ * Esses, os de unidade diferente e os sem sugestão pedem o toque individual.
  */
-function entraNoLote(sugestao: Candidate | null): sugestao is Candidate {
-  return sugestao !== null && sugestao.unit_compatible;
+function entraNoLote(item: PlanItem, sugestao: Candidate | null): sugestao is Candidate {
+  return item.status === 'pendente' && sugestao !== null && sugestao.unit_compatible;
 }
 
 export default function ConfirmationScreen({
@@ -57,7 +58,7 @@ export default function ConfirmationScreen({
   const sugestoes = new Map<string, Candidate>();
   pendentes.forEach((item, indice) => {
     const sugestao = buscas[indice]?.data?.[0] ?? null;
-    if (entraNoLote(sugestao)) sugestoes.set(item.id, sugestao);
+    if (entraNoLote(item, sugestao)) sugestoes.set(item.id, sugestao);
   });
 
   const [marcados, setMarcados] = useState<ReadonlySet<string>>(new Set());
@@ -159,8 +160,8 @@ export default function ConfirmationScreen({
               />
               {pendentes.length > sugestoes.size ? (
                 <Body muted>
-                  Itens com unidade diferente ou sem sugestão ficam fora do lote: confirme
-                  esses um a um.
+                  Itens não encontrados, com unidade diferente ou sem sugestão ficam fora
+                  do lote: confirme esses um a um.
                 </Body>
               ) : null}
             </View>

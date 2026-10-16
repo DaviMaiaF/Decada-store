@@ -104,9 +104,11 @@ de item.
 "Confirmar". A tela ganhou caixas de seleção, "Selecionar todos" e "Confirmar
 selecionados": o lote confirma a sugestão principal de cada item marcado, com uma chamada
 de `POST …/items/{id}/confirmation` por item. Se uma falhar, só aquele item avisa e continua
-marcado. Ficam fora do lote o item com **unidade diferente** e o item **sem sugestão**: é
-onde o casamento por nome mais erra, e a confirmação deles continua sendo um toque por
-item. Nada é marcado sem a pessoa marcar (decisão 4). Item confirmado ganhou "Editar", que
+marcado. Só entra no lote o item **a confirmar**. Ficam de fora o **não encontrado**
+(o melhor candidato ficou abaixo do score mínimo do casamento; na primeira versão ele
+entrava, e um plano real teve "Tapioca" confirmada como filé de tilápia num toque só), o
+de **unidade diferente** e o **sem sugestão**: é onde o casamento por nome mais erra, e a
+confirmação deles continua sendo um toque por item. Nada é marcado sem a pessoa marcar (decisão 4). Item confirmado ganhou "Editar", que
 abre os candidatos com o produto atual destacado e reconfirma com o escolhido. O backend
 não mudou: a rota de confirmação já sobrescrevia a anterior.
 

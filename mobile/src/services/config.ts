@@ -6,10 +6,13 @@
  * backend. A ordem de decisão é:
  *
  * 1. `EXPO_PUBLIC_API_URL`, se definida em `mobile/.env`;
- * 2. o IP do computador de desenvolvimento, que o Expo já conhece (é o host de
+ * 2. na web, o host da própria página: quem abriu `localhost:8081` alcança a
+ *    API em `localhost:8000`, seja qual for o IP da máquina na rede — antes, um
+ *    `HOST_IP` velho no compose deixava o app web girando sem resposta;
+ * 3. o IP do computador de desenvolvimento, que o Expo já conhece (é o host de
  *    onde o app foi carregado) — funciona em Windows, macOS e Linux;
- * 3. `10.0.2.2` no emulador Android, que é como ele enxerga a máquina hospedeira;
- * 4. `localhost`.
+ * 4. `10.0.2.2` no emulador Android, que é como ele enxerga a máquina hospedeira;
+ * 5. `localhost`.
  */
 
 import Constants from 'expo-constants';
@@ -22,6 +25,8 @@ interface Ambiente {
   /** `host:porta` do servidor Metro, como em `192.168.0.5:8081`. */
   hostUri?: string | null;
   os: string;
+  /** Na web, o host de onde a página foi servida (`window.location.hostname`). */
+  pageHost?: string;
 }
 
 /** Tira o `:porta` de um `host:porta`, preservando IPv6 entre colchetes. */
@@ -31,8 +36,14 @@ function hostSemPorta(hostUri: string): string {
   return semEsquema.split(':')[0];
 }
 
-export function resolveApiUrl({ explicit, hostUri, os }: Ambiente): string {
+export function resolveApiUrl({ explicit, hostUri, os, pageHost }: Ambiente): string {
   if (explicit && explicit.trim()) return explicit.trim().replace(/\/+$/, '');
+
+  if (os === 'web' && pageHost) {
+    // IPv6 na barra de endereço vem sem colchetes em `hostname`.
+    const host = pageHost.includes(':') ? `[${pageHost}]` : pageHost;
+    return `http://${host}:${PORTA_DA_API}`;
+  }
 
   const host = hostUri ? hostSemPorta(hostUri) : '';
   if (host && host !== 'localhost' && host !== '127.0.0.1') {
@@ -47,6 +58,7 @@ export const API_URL = resolveApiUrl({
   explicit: process.env.EXPO_PUBLIC_API_URL,
   hostUri: Constants.expoConfig?.hostUri,
   os: Platform.OS,
+  pageHost: typeof window !== 'undefined' ? window.location?.hostname : undefined,
 });
 
 /**

@@ -200,6 +200,33 @@ describe('confirmação em lote', () => {
     expect(confirmar).toHaveBeenCalledWith('plano-1', 'item-2', 'produto-Leite integral', '0.880');
   });
 
+  it('item não encontrado fica fora do lote, mesmo com candidato', async () => {
+    // O import marca "não encontrado" quando o melhor candidato fica abaixo do
+    // score mínimo. Ele ainda aparece como sugestão, mas não pode ir no lote.
+    lerPlano.mockResolvedValue(
+      plano([
+        item({ id: 'item-1', raw_description: '50 g de aveia em flocos' }),
+        item({ id: 'item-2', raw_description: 'Tapioca', status: 'nao_identificado' }),
+      ]),
+    );
+    lerCandidatos.mockImplementation(async (_plano: string, itemId: string) =>
+      itemId === 'item-1'
+        ? [candidato('Aveia em flocos', '0.940')]
+        : [candidato('Filé de tilápia', '0.460')],
+    );
+
+    await montar();
+
+    expect(await screen.findByText('Selecionar todos (1)')).toBeTruthy();
+    expect(screen.queryByLabelText('Selecionar Tapioca')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Selecionar todos'));
+    await fireEvent.press(screen.getByText('Confirmar selecionados (1)'));
+
+    await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
+    expect(confirmar).toHaveBeenCalledWith('plano-1', 'item-1', 'produto-Aveia em flocos', '0.940');
+  });
+
   it('confirma só os itens marcados', async () => {
     await montar();
 
