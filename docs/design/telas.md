@@ -132,6 +132,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` só na tela, com aviso de valores fictícios; não chama a API nem marca item como comprado |
+| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
