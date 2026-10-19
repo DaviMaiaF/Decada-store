@@ -94,12 +94,21 @@ function lista(itens: ShoppingListItem[], over: Partial<ShoppingList> = {}): Sho
 
 let cliente: QueryClient;
 
-async function montar(dados: ShoppingList, onGenerated: jest.Mock = jest.fn()) {
+async function montar(
+  dados: ShoppingList,
+  onGenerated: jest.Mock = jest.fn(),
+  onCompraConcluida: jest.Mock = jest.fn(),
+) {
   lerLista.mockResolvedValue(dados);
 
   await render(
     <QueryClientProvider client={cliente}>
-      <MarketScreen planId="plano-1" listId="lista-1" onGenerated={onGenerated} />
+      <MarketScreen
+        planId="plano-1"
+        listId="lista-1"
+        onGenerated={onGenerated}
+        onCompraConcluida={onCompraConcluida}
+      />
     </QueryClientProvider>,
   );
 }
@@ -530,7 +539,12 @@ it('permite escolher a região e gera a lista com os dados informados', async ()
 
   await render(
     <QueryClientProvider client={cliente}>
-      <MarketScreen planId="plano-1" listId={null} onGenerated={onGenerated} />
+      <MarketScreen
+        planId="plano-1"
+        listId={null}
+        onGenerated={onGenerated}
+        onCompraConcluida={jest.fn()}
+      />
     </QueryClientProvider>,
   );
 
@@ -700,6 +714,18 @@ describe('checkout simulado', () => {
     expect(marcarItem).toHaveBeenCalledWith('lista-1', 'a', true);
     expect(gerarLista).not.toHaveBeenCalled();
     expect(simular).not.toHaveBeenCalled();
+  });
+
+  it('a compra concluída leva ao início', async () => {
+    marcarItem.mockResolvedValue({});
+    const onCompraConcluida = jest.fn();
+    await montar(lista([item({ id: 'a' })]), jest.fn(), onCompraConcluida);
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+    await fireEvent.press(await screen.findByText('Ir para o início'));
+
+    expect(onCompraConcluida).toHaveBeenCalledTimes(1);
   });
 
   it('se marcar falhar, a compra não aparece como concluída', async () => {

@@ -58,10 +58,13 @@ export default function MarketScreen({
   planId,
   listId,
   onGenerated,
+  onCompraConcluida,
 }: {
   planId: string | null;
   listId: string | null;
   onGenerated: (listId: string) => void;
+  /** Depois da compra concluída, leva ao início. */
+  onCompraConcluida: () => void;
 }) {
   // Depois de gerada, a lista tomava a tela para sempre e a região virava
   // definitiva — inclusive para quem lia o aviso de região sem preço, que manda
@@ -114,6 +117,7 @@ export default function MarketScreen({
         lista={lista.data}
         onVoltar={() => setFinalizando(false)}
         onGenerated={onGenerated}
+        onIrAoInicio={onCompraConcluida}
       />
     );
   }

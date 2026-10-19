@@ -30,11 +30,14 @@ export default function CheckoutScreen({
   lista,
   onVoltar,
   onGenerated,
+  onIrAoInicio,
 }: {
   lista: ShoppingList;
   onVoltar: () => void;
   /** Lista nova, gerada pelo aviso de plano alterado. */
   onGenerated: (listId: string) => void;
+  /** Fecha a compra concluída e leva ao início. */
+  onIrAoInicio: () => void;
 }) {
   const cliente = useQueryClient();
   const [concluido, setConcluido] = useState(false);
@@ -73,7 +76,8 @@ export default function CheckoutScreen({
         <Card style={styles.aviso}>
           <Body>{AVISO_SIMULACAO}</Body>
         </Card>
-        <Button label="Voltar à lista" onPress={onVoltar} />
+        <Button label="Ir para o início" onPress={onIrAoInicio} />
+        <Button label="Ver a lista" variant="ghost" onPress={onVoltar} />
       </ScrollView>
     );
   }
