@@ -24,7 +24,10 @@ o documento inteiro:
     do paciente) não é comida, desde que o PDF tenha refeições;
   - o bloco "Substituição 1" do Dietbox é alternativa a uma refeição, não item a
     mais: entraria na lista de compras somado ao prato principal (decisão 8);
-  - parágrafo de orientação que o PDF quebrou em várias linhas.
+  - parágrafo de orientação que o PDF quebrou em várias linhas;
+  - o bloco "Orientação:" vai até a próxima substituição ou refeição. É como o
+    plano montado no app escreve a observação da refeição, e a continuação
+    curta de uma orientação quebrada na margem viraria item.
 """
 
 import re
@@ -83,6 +86,9 @@ _TIME_PREFIX = re.compile(r"^\d{1,2}\s*[:h]\s*\d{0,2}\s*[-–—]?\s*", re.IGNOR
 # Item alimentar não começa com horário, então o nome não precisa ser conhecido.
 _TIMED_HEADER = re.compile(r"^\d{1,2}\s*[:h]\s*\d{2}\s*[-–—]\s*[^\W\d_].{0,40}$", re.IGNORECASE)
 _SUBSTITUTION_HEADER = re.compile(r"^substitui[çc][ãa]o(\s+\d+)?\s*:?$", re.IGNORECASE)
+# Começo de um bloco de orientação: "Orientação: evite fritura". É como o plano
+# montado no app escreve as observações da refeição no PDF.
+_ORIENTATION_START = re.compile(r"^orienta[çc][ãa]o\s*:", re.IGNORECASE)
 
 _MEAL_HEADER_REASON = "cabeçalho de refeição"
 
@@ -157,12 +163,18 @@ def _discard_reasons(lines: list[str]) -> list[str | None]:
     reasons: list[str | None] = []
     before_first_meal = has_meals
     in_substitution = False
+    in_orientation = False
     previous_wrapped = False
 
     for line, reason in zip(lines, own, strict=True):
         if reason == _MEAL_HEADER_REASON:
             before_first_meal = False
             in_substitution = False
+            in_orientation = False
+        if _ORIENTATION_START.match(line):
+            # Marcado antes do motivo próprio: a primeira linha pode já chegar
+            # descartada por ser longa, e o bloco tem de começar mesmo assim.
+            in_orientation = True
 
         wrapped = previous_wrapped
         previous_wrapped = len(line) >= WRAPPED_LINE_LENGTH
@@ -172,7 +184,10 @@ def _discard_reasons(lines: list[str]) -> list[str | None]:
                 reason = "cabeçalho do documento"
             elif _SUBSTITUTION_HEADER.match(line):
                 in_substitution = True
+                in_orientation = False
                 reason = "opção de substituição"
+            elif in_orientation:
+                reason = "texto de orientação"
             elif in_substitution:
                 reason = "opção de substituição"
             elif len(line) >= WRAPPED_LINE_LENGTH or wrapped:

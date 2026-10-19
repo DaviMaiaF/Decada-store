@@ -100,7 +100,7 @@ def test_documento_segue_o_formato_do_dietbox():
 
     assert prescription_lines(documento, autora) == [
         "Camila Fernandes",
-        "CRN: 3 48291",
+        "CRN-3 48291",
         "Plano Alimentar",
         "Plano de outubro",
         "Paciente Fictícia",

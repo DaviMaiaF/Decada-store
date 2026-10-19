@@ -17,6 +17,7 @@ from app.schemas.prescription import (
 from app.services.prescriptions import (
     create_prescription,
     meal_structure,
+    prescription_pdf,
     send_prescription,
     update_prescription,
 )
@@ -105,6 +106,29 @@ def replace_prescription(
     """Troca o plano inteiro. Plano já aceito pelo paciente responde 409."""
     prescription = _get_prescription(session, user, prescription_id)
     return to_out(update_prescription(session, prescription, payload))
+
+
+@router.get(
+    "/{prescription_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+def download_pdf(
+    session: DbSession, user: CurrentNutritionist, prescription_id: uuid.UUID
+) -> Response:
+    """O plano em PDF com texto, no formato que o import do paciente lê de volta.
+
+    É a outra forma de entregar o plano: a nutricionista manda o arquivo por
+    onde quiser, e o paciente o importa na aba Dieta como qualquer PDF.
+    """
+    prescription = _get_prescription(session, user, prescription_id)
+    return Response(
+        content=prescription_pdf(prescription, user),
+        media_type="application/pdf",
+        # Sem o nome do paciente no arquivo: o nome do arquivo costuma vazar
+        # para lugares (anexo, pasta de downloads) que o conteúdo não alcança.
+        headers={"Content-Disposition": 'attachment; filename="plano-alimentar.pdf"'},
+    )
 
 
 @router.post("/{prescription_id}/send", response_model=PrescriptionOut)

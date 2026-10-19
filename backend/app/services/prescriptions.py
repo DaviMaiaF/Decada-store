@@ -32,6 +32,7 @@ from app.models import MealPlan, Prescription, PrescriptionItem, PrescriptionMea
 from app.models.enums import MeasurementUnit, PrescriptionStatus
 from app.schemas.prescription import PrescriptionIn, PrescriptionItemIn
 from app.services.import_plan import ImportedPlan, add_plan_item
+from app.services.pdf_writer import Line, write_pdf
 
 # Prefixo que o import reconhece como bloco de orientação, até a próxima
 # substituição ou refeição. Sem ele, uma orientação curta viraria item.
@@ -266,33 +267,47 @@ def _orientation_lines(text: str) -> list[str]:
     return [f"{ORIENTATION_PREFIX} {paragrafos[0]}", *paragrafos[1:]]
 
 
-def prescription_lines(prescription: Prescription, author: User) -> list[str]:
-    """O documento inteiro, uma linha por linha do PDF."""
-    lines = [author.full_name or "Nutricionista"]
+def _document(prescription: Prescription, author: User) -> list[Line]:
+    """O documento inteiro, com o estilo de cada linha no PDF."""
+    lines = [Line(author.full_name or "Nutricionista", bold=True, size=14)]
     if author.crn:
-        # O import descarta "CRN" como identificação do profissional.
-        lines.append(f"CRN: {author.crn.removeprefix('CRN').lstrip(':- ')}")
-    lines.append("Plano Alimentar")
+        # Como foi cadastrado ("CRN-3 48291"): a região faz parte do registro.
+        # O import descarta a linha como identificação do profissional.
+        crn = author.crn if "crn" in author.crn.lower() else f"CRN: {author.crn}"
+        lines.append(Line(crn))
+    lines.append(Line("Plano Alimentar", bold=True, size=16, space_before=12))
     if prescription.title:
-        lines.append(prescription.title)
+        lines.append(Line(prescription.title))
     if prescription.patient_name:
-        lines.append(prescription.patient_name)
+        lines.append(Line(prescription.patient_name))
 
     for meal in prescription.meals:
-        lines.append(f"{meal.time.strftime('%H:%M')} - {meal.name}")
+        lines.append(
+            Line(f"{meal.time.strftime('%H:%M')} - {meal.name}", bold=True, space_before=14)
+        )
         principais = [item for item in meal.items if item.option == 0]
-        lines += [item_line(item) for item in principais]
+        lines += [Line(item_line(item)) for item in principais]
         if meal.notes:
-            lines += _orientation_lines(meal.notes)
+            lines += [Line(texto, size=10) for texto in _orientation_lines(meal.notes)]
 
         opcoes = sorted({item.option for item in meal.items if item.option > 0})
         for numero, option in enumerate(opcoes, start=1):
-            lines.append(f"Substituição {numero}")
-            lines += [item_line(item) for item in meal.items if item.option == option]
+            lines.append(Line(f"Substituição {numero}", bold=True, space_before=6))
+            lines += [Line(item_line(item)) for item in meal.items if item.option == option]
 
     if prescription.notes:
         # A orientação geral vem num bloco próprio, depois da última refeição.
-        lines.append("Orientações gerais:")
-        lines += _orientation_lines(prescription.notes)
+        lines.append(Line("Orientações gerais:", bold=True, space_before=14))
+        lines += [Line(texto, size=10) for texto in _orientation_lines(prescription.notes)]
 
     return lines
+
+
+def prescription_lines(prescription: Prescription, author: User) -> list[str]:
+    """O documento inteiro, uma linha por linha do PDF, antes da quebra na margem."""
+    return [line.text for line in _document(prescription, author)]
+
+
+def prescription_pdf(prescription: Prescription, author: User) -> bytes:
+    """O PDF do plano, no formato que o import lê de volta."""
+    return write_pdf(_document(prescription, author))
