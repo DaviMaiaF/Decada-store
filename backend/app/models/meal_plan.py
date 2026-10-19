@@ -5,7 +5,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
@@ -36,6 +46,12 @@ class MealPlan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Consentimento explícito: sem data e versão do termo o plano não pode existir.
     consent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consent_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Refeições, substituições e orientações, quando o plano veio montado pela
+    # nutricionista no app. É só para ler: o que vai para a compra são os
+    # itens abaixo, que saem da opção principal de cada refeição. Cópia, e não
+    # referência, para o plano sobreviver à nutricionista excluir a conta.
+    # Nulo no plano importado por PDF.
+    prescribed_meals: Mapped[dict | None] = mapped_column(JSON)
 
     user: Mapped["User"] = relationship(back_populates="meal_plans")
     items: Mapped[list["PlanItem"]] = relationship(

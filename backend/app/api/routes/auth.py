@@ -6,7 +6,15 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.models import MealPlan, PantryItem, PriceRecord, ShoppingList, User, UserRole
+from app.models import (
+    MealPlan,
+    PantryItem,
+    Prescription,
+    PriceRecord,
+    ShoppingList,
+    User,
+    UserRole,
+)
 from app.schemas.auth import (
     DeletionReceiptOut,
     LoginIn,
@@ -105,8 +113,10 @@ def read_me(user: CurrentUser) -> User:
 def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
     """Apaga a conta e todos os dados pessoais dela (LGPD, exclusão sob demanda).
 
-    Vão embora: a conta, os planos alimentares com seus itens, a despensa e as
-    listas de compras — por cascata declarada no modelo.
+    Vão embora: a conta, os planos alimentares com seus itens, a despensa, as
+    listas de compras e, da nutricionista, os planos que ela montou — por
+    cascata declarada no modelo. O plano que um paciente já aceitou fica com
+    ele: é uma cópia, e é dado dele.
 
     Ficam: os registros de preço que a pessoa contribuiu, com `user_id` nulo.
     Preço coletado de nota fiscal é informação sobre o mercado, não sobre quem
@@ -132,6 +142,12 @@ def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
             .where(MealPlan.user_id == user.id)
         )
         or 0,
+        "prescriptions": session.scalar(
+            select(func.count())
+            .select_from(Prescription)
+            .where(Prescription.author_id == user.id)
+        )
+        or 0,
         "price_records": session.scalar(
             select(func.count()).select_from(PriceRecord).where(PriceRecord.user_id == user.id)
         )
@@ -151,5 +167,6 @@ def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
         meal_plans_deleted=counts["meal_plans"],
         pantry_items_deleted=counts["pantry_items"],
         shopping_lists_deleted=counts["shopping_lists"],
+        prescriptions_deleted=counts["prescriptions"],
         price_records_anonymized=counts["price_records"],
     )

@@ -63,5 +63,7 @@ class DeletionReceiptOut(BaseModel):
     meal_plans_deleted: int
     pantry_items_deleted: int
     shopping_lists_deleted: int
+    # Planos que a nutricionista montou. Zero para paciente.
+    prescriptions_deleted: int
     # Preços continuam existindo, sem vínculo com a pessoa.
     price_records_anonymized: int

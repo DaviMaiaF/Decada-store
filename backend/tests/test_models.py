@@ -21,6 +21,9 @@ TABELAS_ESPERADAS = {
     "recipes",
     "recipe_ingredients",
     "pantry_items",
+    "prescriptions",
+    "prescription_meals",
+    "prescription_items",
 }
 
 
@@ -40,6 +43,15 @@ def test_excluir_usuario_apaga_os_planos_alimentares():
     # LGPD: exclusão sob demanda precisa levar embora o dado de saúde.
     assert _regra_de_exclusao("meal_plans", "user_id") == "CASCADE"
     assert _regra_de_exclusao("plan_items", "meal_plan_id") == "CASCADE"
+
+
+def test_excluir_nutricionista_apaga_os_planos_que_ela_montou():
+    # O documento é trabalho dela e sai junto com a conta (decisão 9). O plano
+    # que o paciente aceitou não aponta para cá: é uma cópia na conta dele.
+    assert _regra_de_exclusao("prescriptions", "author_id") == "CASCADE"
+    assert _regra_de_exclusao("prescription_meals", "prescription_id") == "CASCADE"
+    assert _regra_de_exclusao("prescription_items", "meal_id") == "CASCADE"
+    assert "prescription_id" not in Base.metadata.tables["meal_plans"].c
 
 
 def test_excluir_usuario_apaga_a_despensa():
