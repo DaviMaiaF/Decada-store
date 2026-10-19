@@ -1039,3 +1039,43 @@ def test_busca_curta_demais_e_recusada(client, marina):
 
 def test_busca_exige_autenticacao(client):
     assert client.get("/products/search?q=aveia").status_code == 401
+
+
+def test_editar_o_produto_depois_de_gerar_a_lista_aparece_na_leitura(
+    client, marina, db_session
+):
+    # O caso que motivou o campo: trocar o produto na aba Dieta e ver o antigo
+    # no Mercado, sem aviso nenhum.
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()["shopping_list"]["id"]
+
+    em_dia = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert em_dia["outdated_items"] == []
+
+    plano = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
+    item_id = plano["items"][0]["id"]
+    queijo = db_session.scalars(
+        select(Product).where(Product.name == "Queijo minas frescal")
+    ).one()
+    client.post(
+        f"/meal-plans/{plano_id}/items/{item_id}/confirmation",
+        headers=_headers(marina),
+        json={"product_id": str(queijo.id)},
+    )
+
+    relida = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+
+    assert relida["outdated_items"] == [
+        {
+            "plan_item_id": item_id,
+            "description": plano["items"][0]["raw_description"],
+            "change": "produto_trocado",
+        }
+    ]
+    # O retrato não muda sozinho: o produto e o total continuam os da geração.
+    assert relida["items"][0]["product"]["id"] == str(frango.id)
+    assert relida["estimated_total"] == em_dia["estimated_total"]

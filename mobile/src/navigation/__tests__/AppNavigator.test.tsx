@@ -103,6 +103,7 @@ beforeEach(() => {
     estimated_total: '174.20',
     calculated_at: '2026-09-27T11:00:00Z',
     items: [],
+    outdated_items: [],
   });
 });
 

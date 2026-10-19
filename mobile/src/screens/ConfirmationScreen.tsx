@@ -85,7 +85,11 @@ export default function ConfirmationScreen({
       setFalhasDoLote(new Set(falhas));
       setMarcados(new Set(falhas));
     },
-    onSettled: () => cliente.invalidateQueries({ queryKey: ['meal-plan', planId] }),
+    onSettled: () => {
+      cliente.invalidateQueries({ queryKey: ['meal-plan', planId] });
+      // A lista já gerada não muda, mas passa a dizer que ficou para trás.
+      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
+    },
   });
 
   function alternar(id: string) {
@@ -243,6 +247,8 @@ function ItemDoPlano({
     onSuccess: () => {
       setAberto(false);
       cliente.invalidateQueries({ queryKey: ['meal-plan', planId] });
+      // A lista já gerada não muda, mas passa a dizer que ficou para trás.
+      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
     },
   });
 

@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
+import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import CheckoutScreen from './CheckoutScreen';
 import {
   ApiError,
@@ -108,7 +109,13 @@ export default function MarketScreen({
   }
 
   if (finalizando) {
-    return <CheckoutScreen lista={lista.data} onVoltar={() => setFinalizando(false)} />;
+    return (
+      <CheckoutScreen
+        lista={lista.data}
+        onVoltar={() => setFinalizando(false)}
+        onGenerated={onGenerated}
+      />
+    );
   }
 
   return (
@@ -116,6 +123,7 @@ export default function MarketScreen({
       lista={lista.data}
       onTrocarRegiao={() => setTrocandoRegiao(true)}
       onFinalizar={() => setFinalizando(true)}
+      onGenerated={onGenerated}
     />
   );
 }
@@ -223,11 +231,14 @@ function ListaCarregada({
   lista,
   onTrocarRegiao,
   onFinalizar,
+  onGenerated,
 }: {
   lista: ShoppingList;
   onTrocarRegiao: () => void;
   /** Abre o checkout simulado. */
   onFinalizar: () => void;
+  /** Lista nova, gerada pelo aviso de plano alterado. */
+  onGenerated: (listId: string) => void;
 }) {
   const cliente = useQueryClient();
   const chave = ['shopping-list', lista.id];
@@ -368,6 +379,10 @@ function ListaCarregada({
           </Text>
         </View>
       </Card>
+
+      {/* Antes do botão de finalizar: quem trocou um produto na Dieta precisa
+          saber disso antes de levar a lista ao mercado. */}
+      <ListaDesatualizada lista={lista} onGenerated={onGenerated} />
 
       {/* Leva ao checkout, que é simulado: o MVP não faz pedido em mercado
           nenhum, e a tela seguinte diz isso antes de qualquer confirmação. */}

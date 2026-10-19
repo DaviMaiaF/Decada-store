@@ -130,6 +130,19 @@ it('confirma o candidato sugerido em um toque', async () => {
   );
 });
 
+it('confirmar faz a lista já gerada ser lida de novo', async () => {
+  // Sem isto, trocar o produto aqui deixava o Mercado com o antigo e sem o
+  // aviso de lista desatualizada até alguém reabrir o app.
+  const invalidar = jest.spyOn(cliente, 'invalidateQueries');
+  await montar();
+
+  await fireEvent.press(await screen.findByText('Confirmar'));
+
+  await waitFor(() =>
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['shopping-list'] }),
+  );
+});
+
 it('abre as outras opções para quem discorda da sugestão', async () => {
   await montar();
 
