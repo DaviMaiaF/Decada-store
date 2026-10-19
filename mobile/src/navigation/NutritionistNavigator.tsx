@@ -1,47 +1,44 @@
 /**
- * Navegação da nutricionista: a lista de receitas e o editor.
+ * Navegação da nutricionista.
  *
  * Sem abas: Dieta, Mercado, Despensa e Economia são do paciente, e o servidor
- * responde 404 a essas rotas para a conta de nutricionista. Duas telas cabem
- * num estado só, como o início do paciente, sem pilha de navegação.
+ * responde 404 a essas rotas para a conta de nutricionista.
  */
 
-import { StyleSheet, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState } from 'react';
 
-import NutritionistRecipesScreen from '../screens/NutritionistRecipesScreen';
-import RecipeEditorScreen from '../screens/RecipeEditorScreen';
-import { colors } from '../theme/tokens';
-import type { Recipe } from '../types/api';
-
-/** Fechado, receita nova ou uma receita salva sendo editada. */
-type Editor = { aberto: false } | { aberto: true; recipe: Recipe | null };
+import { Body, Button } from '../components';
+import { readAccount } from '../services/api';
+import { useAuth } from '../services/auth';
+import { colors, spacing, typography } from '../theme/tokens';
 
 export default function NutritionistNavigator() {
-  const [editor, setEditor] = useState<Editor>({ aberto: false });
+  const { signOut } = useAuth();
+  const conta = useQuery({ queryKey: ['account'], queryFn: readAccount });
 
   return (
     <SafeAreaView edges={['top']} style={styles.tela}>
-      <View style={styles.tela}>
-        {editor.aberto ? (
-          <RecipeEditorScreen
-            // A chave remonta o editor ao trocar de receita, sem herdar o formulário.
-            key={editor.recipe?.id ?? 'nova'}
-            recipe={editor.recipe}
-            onDone={() => setEditor({ aberto: false })}
-          />
-        ) : (
-          <NutritionistRecipesScreen
-            onNew={() => setEditor({ aberto: true, recipe: null })}
-            onEdit={(recipe) => setEditor({ aberto: true, recipe })}
-          />
-        )}
-      </View>
+      <ScrollView contentContainerStyle={styles.conteudo}>
+        <View style={styles.cabecalho}>
+          <Text style={styles.marca}>DÉCADA · NUTRICIONISTA</Text>
+          {conta.data ? (
+            <Body muted>
+              {conta.data.full_name}
+              {conta.data.crn ? ` · ${conta.data.crn}` : ''}
+            </Body>
+          ) : null}
+        </View>
+        <Button label="Sair da conta" variant="ghost" onPress={signOut} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: colors.surface },
+  conteudo: { padding: spacing.margin, gap: spacing.sm, flexGrow: 1 },
+  cabecalho: { gap: spacing.xs },
+  marca: { ...typography.labelSm, color: colors.secondary, letterSpacing: 2 },
 });

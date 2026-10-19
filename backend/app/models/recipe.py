@@ -12,16 +12,9 @@ from app.models.enums import MeasurementUnit
 
 if TYPE_CHECKING:
     from app.models.product import Product
-    from app.models.user import User
 
 
 class Recipe(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Preparo sugerido ao paciente.
-
-    Vem de dois lugares: do seed de desenvolvimento, sem autora, ou de uma
-    nutricionista. As duas aparecem juntas nas sugestões de todo paciente.
-    """
-
     __tablename__ = "recipes"
 
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
@@ -32,14 +25,7 @@ class Recipe(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_fictitious: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    # Nula nas receitas do seed. CASCADE na exclusão da conta (decisão 9): a
-    # receita é trabalho assinado pela pessoa, e só o preço sobrevive à saída
-    # dela. Anonimizar deixaria o paciente lendo um preparo sem saber de quem.
-    author_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
 
-    author: Mapped["User | None"] = relationship()
     ingredients: Mapped[list["RecipeIngredient"]] = relationship(
         back_populates="recipe", cascade="all, delete-orphan"
     )

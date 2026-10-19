@@ -209,12 +209,6 @@ export interface RecipeIngredient {
   optional: boolean;
 }
 
-/** Quem assina a receita. Nunca traz o e-mail. */
-export interface RecipeAuthor {
-  full_name: string | null;
-  crn: string | null;
-}
-
 export interface Recipe {
   id: string;
   slug: string;
@@ -223,23 +217,7 @@ export interface Recipe {
   prep_minutes: number | null;
   instructions: string | null;
   is_fictitious: boolean;
-  /** Nula nas receitas do seed. */
-  author: RecipeAuthor | null;
   ingredients: RecipeIngredient[];
-}
-
-/** Receita como a nutricionista a envia. Serve para criar e para editar. */
-export interface RecipeInput {
-  name: string;
-  instructions: string | null;
-  servings: number | null;
-  prep_minutes: number | null;
-  ingredients: {
-    product_id: string;
-    quantity: string;
-    unit: MeasurementUnit;
-    optional: boolean;
-  }[];
 }
 
 export interface RecipeAvailability {

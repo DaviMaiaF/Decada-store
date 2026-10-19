@@ -19,9 +19,7 @@ import type {
   PantryItem,
   PlanItem,
   ProductSuggestion,
-  Recipe,
   RecipeAvailability,
-  RecipeInput,
   ShoppingList,
   ShoppingListItem,
   ShoppingListSummary,
@@ -248,18 +246,3 @@ export const readRecipeSuggestions = (shoppingListId?: string, minimumPercentage
   return request<RecipeAvailability[]>(`/recipes/suggestions?${parametros.toString()}`);
 };
 
-// --- receitas da nutricionista ---
-
-/** As receitas que esta nutricionista escreveu, em ordem alfabética. */
-export const readOwnRecipes = () => request<Recipe[]>('/nutritionist/recipes');
-
-/** Publica a receita: ela passa a aparecer nas sugestões de todo paciente. */
-export const createRecipe = (recipe: RecipeInput) =>
-  request<Recipe>('/nutritionist/recipes', { method: 'POST', body: recipe });
-
-/** Troca a receita inteira, ingredientes inclusive. */
-export const updateRecipe = (recipeId: string, recipe: RecipeInput) =>
-  request<Recipe>(`/nutritionist/recipes/${recipeId}`, { method: 'PUT', body: recipe });
-
-export const deleteRecipe = (recipeId: string) =>
-  request<void>(`/nutritionist/recipes/${recipeId}`, { method: 'DELETE' });

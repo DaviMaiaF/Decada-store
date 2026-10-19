@@ -7,7 +7,6 @@ from app.api.errors import register_error_handlers
 from app.api.routes import (
     auth,
     meal_plans,
-    nutritionist_recipes,
     pantry,
     products,
     recipes,
@@ -53,7 +52,6 @@ app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
-app.include_router(nutritionist_recipes.router)
 
 
 @app.get("/health", tags=["infra"])
