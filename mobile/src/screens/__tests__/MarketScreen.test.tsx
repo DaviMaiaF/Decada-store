@@ -663,7 +663,7 @@ describe('acrescentar à compra', () => {
 
 describe('checkout simulado', () => {
   // O MVP não compra de verdade: a tela precisa dizer isso antes da
-  // confirmação, e confirmar não pode gravar nada — nem marcar como comprado.
+  // confirmação. Confirmar só marca como comprado o que faltava.
   it('abre a finalização com o aviso de simulação e o total', async () => {
     await montar(lista([item({ id: 'a' })]));
 
@@ -675,19 +675,44 @@ describe('checkout simulado', () => {
     expect(screen.getByText('Peito de frango sem pele')).toBeTruthy();
   });
 
-  it('confirmar não chama a API nem marca itens como comprados', async () => {
-    await montar(lista([item({ id: 'a' })]));
-    const chamadasDeLeitura = lerLista.mock.calls.length;
+  it('confirmar marca como comprados os itens que faltavam', async () => {
+    marcarItem.mockResolvedValue({});
+    await montar(
+      lista([
+        item({ id: 'a' }),
+        item({ id: 'b', product: produto('Banana prata', 'hortifruti'), purchased: true }),
+        item({
+          id: 'c',
+          product: produto('Aveia em flocos', 'mercearia'),
+          dispensed_by_pantry: true,
+        }),
+      ]),
+    );
 
     await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
     await fireEvent.press(screen.getByText('Confirmar compra simulada'));
 
-    expect(await screen.findByText('Compra simulada concluída')).toBeTruthy();
+    expect(await screen.findByText('Compra concluída')).toBeTruthy();
+    expect(screen.getByLabelText('Compra concluída')).toBeTruthy();
     expect(screen.getByText(/nenhum pedido é feito e nada é cobrado/)).toBeTruthy();
-    expect(marcarItem).not.toHaveBeenCalled();
+    // Só o que faltava: o já marcado e o que a despensa dispensou ficam como estão.
+    expect(marcarItem).toHaveBeenCalledTimes(1);
+    expect(marcarItem).toHaveBeenCalledWith('lista-1', 'a', true);
     expect(gerarLista).not.toHaveBeenCalled();
     expect(simular).not.toHaveBeenCalled();
-    expect(lerLista.mock.calls.length).toBe(chamadasDeLeitura);
+  });
+
+  it('se marcar falhar, a compra não aparece como concluída', async () => {
+    marcarItem.mockRejectedValue(new Error('rede'));
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+
+    expect(
+      await screen.findByText(/não foi possível concluir a compra/),
+    ).toBeTruthy();
+    expect(screen.queryByText('Compra concluída')).toBeNull();
   });
 
   it('item dispensado pela despensa fica fora do checkout', async () => {

@@ -5,16 +5,20 @@
  * tela fecha o fluxo para quem chegou à estimativa e quer "comprar", e diz com
  * todas as letras que é uma simulação, com valores estimados ou fictícios.
  *
- * Nada aqui chama a API. Confirmar não marca item como comprado: "comprado" é
- * o que a pessoa pegou na prateleira, e misturar com um pedido de mentira
- * estragaria o progresso real da compra.
+ * Confirmar marca como comprados os itens que faltavam: a pessoa finalizou a
+ * compra com o que escolheu, e deixar a trilha em "9/16" depois disso dizia que
+ * ela ainda estava no corredor. Nenhum pedido sai daqui — a única chamada à
+ * API é a mesma do "Já comprei", item a item.
  */
 
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Body, Button, Card, Chip, SectionTitle } from '../components';
+import { Body, Button, Card, Chip, ErrorNotice, SectionTitle } from '../components';
+import { AnimacaoDeSucesso } from '../components/AnimacaoDeSucesso';
 import { ListaDesatualizada } from '../components/ListaDesatualizada';
+import { setItemPurchased } from '../services/api';
 import { formatMoney, formatQuantity } from '../services/format';
 import { colors, spacing, typography } from '../theme/tokens';
 import type { ShoppingList } from '../types/api';
@@ -32,6 +36,7 @@ export default function CheckoutScreen({
   /** Lista nova, gerada pelo aviso de plano alterado. */
   onGenerated: (listId: string) => void;
 }) {
+  const cliente = useQueryClient();
   const [concluido, setConcluido] = useState(false);
 
   // Mesmo recorte da lista: o que a despensa dispensou não entra na compra.
@@ -39,18 +44,35 @@ export default function CheckoutScreen({
   const semPreco = aComprar.filter((item) => item.estimated_cost === null).length;
   const temFicticio = aComprar.some((item) => item.product.is_fictitious);
 
+  // Só o que ainda não foi marcado: quem já riscou metade no corredor não
+  // precisa de uma chamada repetida para cada item que já estava certo.
+  const confirmacao = useMutation({
+    mutationFn: () =>
+      Promise.all(
+        aComprar
+          .filter((item) => !item.purchased)
+          .map((item) => setItemPurchased(lista.id, item.id, true)),
+      ),
+    onSuccess: () => setConcluido(true),
+    // Mesmo com falha parcial, alguns itens podem ter sido gravados: a lista
+    // é lida de novo nos dois casos, e a trilha acompanha.
+    onSettled: () => cliente.invalidateQueries({ queryKey: ['shopping-list', lista.id] }),
+  });
+
   if (concluido) {
     return (
-      <ScrollView contentContainerStyle={styles.conteudo}>
-        <Text style={styles.titulo}>Compra simulada concluída</Text>
+      <ScrollView contentContainerStyle={[styles.conteudo, styles.conclusao]}>
+        <View style={styles.icone}>
+          <AnimacaoDeSucesso />
+        </View>
+        <Text style={[styles.titulo, styles.centro]}>Compra concluída</Text>
+        <Body muted>
+          {aComprar.length} item(ns) marcados como comprados, por cerca de{' '}
+          {formatMoney(lista.estimated_total)} em {lista.city} · {lista.state_code}.
+        </Body>
         <Card style={styles.aviso}>
           <Body>{AVISO_SIMULACAO}</Body>
         </Card>
-        <Body muted>
-          Se fosse de verdade, seriam {aComprar.length} item(ns) por cerca de{' '}
-          {formatMoney(lista.estimated_total)} em {lista.city} · {lista.state_code}. Sua
-          lista continua como estava.
-        </Body>
         <Button label="Voltar à lista" onPress={onVoltar} />
       </ScrollView>
     );
@@ -97,10 +119,15 @@ export default function CheckoutScreen({
         </View>
       ))}
 
+      {confirmacao.isError ? (
+        <ErrorNotice message="não foi possível concluir a compra; tente de novo" />
+      ) : null}
+
       <View style={styles.acoes}>
         <Button
           label="Confirmar compra simulada"
-          onPress={() => setConcluido(true)}
+          onPress={() => confirmacao.mutate()}
+          loading={confirmacao.isPending}
           disabled={aComprar.length === 0}
         />
         <Button label="Voltar à lista" variant="ghost" onPress={onVoltar} />
@@ -112,6 +139,9 @@ export default function CheckoutScreen({
 const styles = StyleSheet.create({
   conteudo: { padding: spacing.margin, gap: spacing.md, paddingBottom: spacing.xl3 },
   titulo: { ...typography.headlineLg, color: colors.primary },
+  conclusao: { paddingTop: spacing.xl3 },
+  icone: { alignSelf: 'center' },
+  centro: { textAlign: 'center' },
   aviso: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },
