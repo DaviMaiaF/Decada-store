@@ -18,7 +18,11 @@ import type {
   MeasurementUnit,
   PantryItem,
   PlanItem,
+  Prescription,
+  PrescriptionInput,
+  PrescriptionSummary,
   ProductSuggestion,
+  ReceivedPrescription,
   RecipeAvailability,
   ShoppingList,
   ShoppingListItem,
@@ -246,3 +250,57 @@ export const readRecipeSuggestions = (shoppingListId?: string, minimumPercentage
   return request<RecipeAvailability[]>(`/recipes/suggestions?${parametros.toString()}`);
 };
 
+
+// --- plano montado pela nutricionista ---
+
+/** Os planos desta nutricionista, do mexido mais recentemente ao mais antigo. */
+export const readPrescriptions = () => request<PrescriptionSummary[]>('/nutritionist/prescriptions');
+
+export const readPrescription = (id: string) =>
+  request<Prescription>(`/nutritionist/prescriptions/${id}`);
+
+/** Cria como rascunho: ninguém vê até ela enviar. */
+export const createPrescription = (plan: PrescriptionInput) =>
+  request<Prescription>('/nutritionist/prescriptions', { method: 'POST', body: plan });
+
+/** Troca o plano inteiro. Plano já aceito pelo paciente responde 409. */
+export const updatePrescription = (id: string, plan: PrescriptionInput) =>
+  request<Prescription>(`/nutritionist/prescriptions/${id}`, { method: 'PUT', body: plan });
+
+export const deletePrescription = (id: string) =>
+  request<void>(`/nutritionist/prescriptions/${id}`, { method: 'DELETE' });
+
+/**
+ * Envia para o e-mail do paciente. A resposta é a mesma exista ou não conta
+ * com esse e-mail: a tela não tem como, nem deve, dizer qual dos dois.
+ */
+export const sendPrescription = (id: string, patientEmail: string) =>
+  request<Prescription>(`/nutritionist/prescriptions/${id}/send`, {
+    method: 'POST',
+    body: { patient_email: patientEmail },
+  });
+
+/** O PDF do plano, em bytes. Quem salva ou compartilha é `services/download.ts`. */
+export async function downloadPrescriptionPdf(id: string): Promise<ArrayBuffer> {
+  const resposta = await http.get<ArrayBuffer>(`/nutritionist/prescriptions/${id}/pdf`, {
+    responseType: 'arraybuffer',
+    fallbackMessage: 'não foi possível gerar o PDF',
+  });
+  return resposta.data;
+}
+
+// --- planos recebidos pelo paciente ---
+
+/** Planos enviados ao e-mail desta conta, esperando resposta. */
+export const readReceivedPrescriptions = () =>
+  request<ReceivedPrescription[]>('/prescriptions/received');
+
+/** Aceita com consentimento: o plano vira o plano alimentar desta conta. */
+export const acceptPrescription = (id: string, consentAccepted: boolean) =>
+  request<ImportResult>(`/prescriptions/received/${id}/accept`, {
+    method: 'POST',
+    body: { consent_accepted: consentAccepted },
+  });
+
+export const declinePrescription = (id: string) =>
+  request<void>(`/prescriptions/received/${id}/decline`, { method: 'POST' });

@@ -99,6 +99,7 @@ beforeEach(() => {
     nutritionist_crn: null,
     consent_at: '2026-09-27T10:00:00Z',
     consent_version: 'v1',
+    prescribed_meals: null,
     created_at: '2026-09-27T10:00:00Z',
     items: [],
   });
@@ -164,6 +165,7 @@ describe('trilha da jornada', () => {
       nutritionist_crn: null,
       consent_at: '2026-09-27T10:00:00Z',
       consent_version: 'v1',
+      prescribed_meals: null,
       created_at: '2026-09-27T10:00:00Z',
       items: [
         { ...itemDoPlano, id: 'i1', status: 'confirmado' as const },

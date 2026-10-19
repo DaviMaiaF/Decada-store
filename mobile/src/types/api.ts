@@ -51,6 +51,9 @@ export interface MealPlan {
   consent_version: string;
   created_at: string;
   items: PlanItem[];
+  /** Refeições, substituições e orientação do plano montado pela nutricionista
+   * no app. Só para ler: a compra sai de `items`. Nulo no plano vindo de PDF. */
+  prescribed_meals: PrescribedPlan | null;
 }
 
 /** Plano na listagem: sem os itens, que vêm por `readMealPlan`. */
@@ -230,4 +233,82 @@ export interface RecipeAvailability {
   /** Obrigatórios que faltam — é o "falta chia" da tela. */
   missing: RecipeIngredient[];
   missing_optional: RecipeIngredient[];
+}
+
+// --- plano montado pela nutricionista ---
+
+export type PrescriptionStatus = 'rascunho' | 'enviada' | 'aceita' | 'recusada';
+
+export interface PrescriptionItem {
+  food: string;
+  /** "6 colheres de sopa": como se mede em casa. Informativo. */
+  household_measure: string | null;
+  /** Quantidade de compra, que vira item do plano do paciente. */
+  quantity: string;
+  unit: MeasurementUnit;
+}
+
+export interface PrescriptionMeal {
+  name: string;
+  /** "08:30" ou "08:30:00", conforme a origem. */
+  time: string;
+  notes: string | null;
+  /** O que se come: vai para a lista de compras. */
+  items: PrescriptionItem[];
+  /** Cada opção substitui a refeição inteira. Só para ler. */
+  substitutions: PrescriptionItem[][];
+}
+
+export interface PrescribedPlan {
+  notes: string | null;
+  meals: PrescriptionMeal[];
+}
+
+export interface Prescription {
+  id: string;
+  title: string | null;
+  patient_name: string | null;
+  patient_email: string | null;
+  notes: string | null;
+  status: PrescriptionStatus;
+  sent_at: string | null;
+  responded_at: string | null;
+  created_at: string;
+  updated_at: string;
+  meals: PrescriptionMeal[];
+}
+
+export interface PrescriptionSummary {
+  id: string;
+  title: string | null;
+  patient_name: string | null;
+  patient_email: string | null;
+  status: PrescriptionStatus;
+  sent_at: string | null;
+  updated_at: string;
+  meal_count: number;
+}
+
+/** O plano como a nutricionista o envia. Serve para criar e para editar. */
+export interface PrescriptionInput {
+  title: string | null;
+  patient_name: string | null;
+  notes: string | null;
+  meals: {
+    name: string;
+    time: string;
+    notes: string | null;
+    items: PrescriptionItem[];
+    substitutions: PrescriptionItem[][];
+  }[];
+}
+
+/** Plano que a nutricionista enviou ao paciente, esperando resposta. */
+export interface ReceivedPrescription {
+  id: string;
+  title: string | null;
+  notes: string | null;
+  sent_at: string | null;
+  author: { full_name: string | null; crn: string | null };
+  meals: PrescriptionMeal[];
 }
