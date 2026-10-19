@@ -11,9 +11,9 @@ from app.api.deps import CurrentUser, DbSession
 from app.models import MealPlan, Product, ShoppingList, ShoppingListItem
 from app.schemas.shopping_list import (
     ExtraItemIn,
-    OutdatedItemOut,
     GeneratedListOut,
     GenerateListIn,
+    OutdatedItemOut,
     PurchaseIn,
     ShoppingListItemOut,
     ShoppingListOut,
