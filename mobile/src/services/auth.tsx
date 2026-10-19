@@ -1,8 +1,9 @@
 /**
- * Sessão do usuário: quem está logado e como entrar ou sair.
+ * Sessão do usuário: quem está logado, com qual papel, e como entrar ou sair.
  *
  * O token vive no armazenamento seguro; este contexto guarda só se existe uma
- * sessão válida, para a navegação saber qual pilha mostrar.
+ * sessão válida e de que papel ela é, para a raiz saber qual navegação mostrar:
+ * a do paciente, com as quatro abas, ou a da nutricionista, com as receitas.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
@@ -11,15 +12,24 @@ import type { ReactNode } from 'react';
 import * as api from './api';
 import { resetSessionAtivo } from './config';
 import { onSessionExpired } from './http';
-import { clearToken, readToken, saveToken } from './session';
+import { clearToken, readRole, readToken, saveRole, saveToken } from './session';
+import type { Token, UserRole } from '../types/api';
 
 interface AuthValue {
   /** Nulo enquanto o app ainda não leu o armazenamento seguro. */
   signedIn: boolean | null;
+  /** Papel da conta logada. Nulo sem sessão. */
+  role: UserRole | null;
   /** Aviso para a tela de login, quando a sessão caiu sozinha. */
   notice: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, role?: UserRole) => Promise<void>;
   signUp: (email: string, password: string, fullName?: string) => Promise<void>;
+  signUpNutritionist: (
+    email: string,
+    password: string,
+    fullName: string,
+    crn: string,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -27,6 +37,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return onSessionExpired(() => {
       setNotice('sua sessão expirou, entre de novo');
       setSignedIn(false);
+      setRole(null);
     });
   }, []);
 
@@ -50,14 +62,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        await api.readAccount();
-        if (ativo) setSignedIn(true);
+        const conta = await api.readAccount();
+        if (ativo) {
+          setRole(conta.role);
+          setSignedIn(true);
+        }
       } catch (problema) {
         // 401: o interceptor já limpou o token e avisou. Qualquer outra falha
         // (rede fora, servidor desligado) não prova que a sessão caiu, e
-        // deslogar quem só está sem internet seria pior.
+        // deslogar quem só está sem internet seria pior. O papel vem do que
+        // ficou guardado no último login.
         const caiu = problema instanceof api.ApiError && problema.isUnauthorized;
-        if (ativo) setSignedIn(!caiu);
+        const guardado = caiu ? null : await readRole();
+        if (ativo) {
+          setRole(guardado);
+          setSignedIn(!caiu);
+        }
       }
     })();
     return () => {
@@ -65,29 +85,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { access_token } = await api.login(email, password);
-    await saveToken(access_token);
+  const entrar = useCallback(async (token: Token) => {
+    await saveToken(token.access_token);
+    await saveRole(token.role);
     setNotice(null);
+    setRole(token.role);
     setSignedIn(true);
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
-    const { access_token } = await api.register(email, password, fullName);
-    await saveToken(access_token);
-    setNotice(null);
-    setSignedIn(true);
-  }, []);
+  const signIn = useCallback(
+    async (email: string, password: string, papel: UserRole = 'paciente') => {
+      const porta = papel === 'nutricionista' ? api.loginNutritionist : api.login;
+      await entrar(await porta(email, password));
+    },
+    [entrar],
+  );
+
+  const signUp = useCallback(
+    async (email: string, password: string, fullName?: string) => {
+      await entrar(await api.register(email, password, fullName));
+    },
+    [entrar],
+  );
+
+  const signUpNutritionist = useCallback(
+    async (email: string, password: string, fullName: string, crn: string) => {
+      await entrar(await api.registerNutritionist(email, password, fullName, crn));
+    },
+    [entrar],
+  );
 
   const signOut = useCallback(async () => {
     await clearToken();
     setNotice(null);
+    setRole(null);
     setSignedIn(false);
   }, []);
 
   const value = useMemo(
-    () => ({ signedIn, notice, signIn, signUp, signOut }),
-    [signedIn, notice, signIn, signUp, signOut],
+    () => ({ signedIn, role, notice, signIn, signUp, signUpNutritionist, signOut }),
+    [signedIn, role, notice, signIn, signUp, signUpNutritionist, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

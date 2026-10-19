@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentPatient, DbSession
 from app.models import PantryItem, Product
 from app.schemas.pantry import (
     PantryItemIn,
@@ -20,7 +20,7 @@ from app.services.text import normalize_text
 router = APIRouter(prefix="/pantry", tags=["despensa"])
 
 
-def _get_item(session: DbSession, user: CurrentUser, item_id: uuid.UUID) -> PantryItem:
+def _get_item(session: DbSession, user: CurrentPatient, item_id: uuid.UUID) -> PantryItem:
     item = session.scalars(
         select(PantryItem)
         .where(PantryItem.id == item_id, PantryItem.user_id == user.id)
@@ -44,14 +44,14 @@ def _get_product(session: DbSession, product_id: uuid.UUID | None) -> Product | 
 
 
 @router.get("", response_model=list[PantryItemOut])
-def read_pantry(session: DbSession, user: CurrentUser) -> list[PantryItem]:
+def read_pantry(session: DbSession, user: CurrentPatient) -> list[PantryItem]:
     """A despensa do usuário, do item mais recente ao mais antigo."""
     return user_pantry(session, user.id)
 
 
 @router.post("", response_model=PantryItemOut, status_code=status.HTTP_201_CREATED)
 def add_pantry_item(
-    session: DbSession, user: CurrentUser, payload: PantryItemIn
+    session: DbSession, user: CurrentPatient, payload: PantryItemIn
 ) -> PantryItem:
     """Guarda um item na despensa.
 
@@ -77,7 +77,7 @@ def add_pantry_item(
 @router.patch("/{item_id}", response_model=PantryItemOut)
 def update_pantry_item(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     item_id: uuid.UUID,
     payload: PantryItemUpdate,
 ) -> PantryItem:
@@ -104,7 +104,7 @@ def update_pantry_item(
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_pantry_item(session: DbSession, user: CurrentUser, item_id: uuid.UUID) -> Response:
+def remove_pantry_item(session: DbSession, user: CurrentPatient, item_id: uuid.UUID) -> Response:
     """Tira um item da despensa."""
     session.delete(_get_item(session, user, item_id))
     session.commit()
@@ -113,7 +113,7 @@ def remove_pantry_item(session: DbSession, user: CurrentUser, item_id: uuid.UUID
 
 @router.get("/{item_id}/candidates", response_model=list[ProductSuggestionOut])
 def read_pantry_candidates(
-    session: DbSession, user: CurrentUser, item_id: uuid.UUID
+    session: DbSession, user: CurrentPatient, item_id: uuid.UUID
 ) -> list:
     """Produtos do catálogo parecidos com o que a pessoa digitou.
 

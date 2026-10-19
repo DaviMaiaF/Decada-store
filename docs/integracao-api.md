@@ -88,7 +88,7 @@ Sem isso, um token velho deixava a pessoa presa em telas que só devolviam
 
 ## O que o app consome
 
-Das 23 rotas de domínio, o app consome 22. A que falta é
+Das 35 rotas de domínio, o app consome 34. A que falta é
 `GET /pantry/{item_id}/candidates` — a tela de despensa resolve a busca de
 produto por `/products/search`. O `/health` existe para saber se o servidor está
 de pé; o app não o usa.
@@ -99,6 +99,8 @@ de pé; o app não o usa.
 |---|---|---|
 | POST | `/auth/register` | `register` |
 | POST | `/auth/login` | `login` |
+| POST | `/auth/nutritionist/register` | `registerNutritionist` |
+| POST | `/auth/nutritionist/login` | `loginNutritionist` |
 | GET | `/auth/me` | `readAccount` |
 | DELETE | `/auth/me` | `deleteAccount` |
 
@@ -135,14 +137,45 @@ de pé; o app não o usa.
 | GET | `/products/search` | `searchProducts` |
 | GET | `/recipes/suggestions` | `readRecipeSuggestions` |
 
+### Plano montado pela nutricionista
+
+| Método | Rota | Função |
+|---|---|---|
+| GET | `/nutritionist/prescriptions` | `readPrescriptions` |
+| POST | `/nutritionist/prescriptions` | `createPrescription` |
+| GET | `/nutritionist/prescriptions/{id}` | `readPrescription` |
+| PUT | `/nutritionist/prescriptions/{id}` | `updatePrescription` — 409 se o paciente já aceitou |
+| DELETE | `/nutritionist/prescriptions/{id}` | `deletePrescription` |
+| POST | `/nutritionist/prescriptions/{id}/send` | `sendPrescription` |
+| GET | `/nutritionist/prescriptions/{id}/pdf` | `downloadPrescriptionPdf` — bytes, ver abaixo |
+
+### Planos recebidos pelo paciente
+
+| Método | Rota | Função |
+|---|---|---|
+| GET | `/prescriptions/received` | `readReceivedPrescriptions` |
+| POST | `/prescriptions/received/{id}/accept` | `acceptPrescription` — devolve o mesmo corpo do import |
+| POST | `/prescriptions/received/{id}/decline` | `declinePrescription` |
+
+**O papel escolhe a navegação; quem barra é o servidor.** O login devolve `role` junto
+com o token, e a sessão guarda o papel (`session.ts`) para o app abrir na navegação certa
+mesmo sem rede. A rota do outro papel responde 404, e é essa resposta que vale, não o que
+o app escondeu.
+
+**O PDF do plano vem pela instância do axios**, com `responseType: 'arraybuffer'` e o
+token no cabeçalho, como qualquer chamada. Não é um link aberto no navegador porque o
+token teria de ir na URL. Quem entrega o arquivo é `services/download.ts`: no navegador,
+um link de download; no celular, `expo-file-system` grava no cache e `expo-sharing` abre
+a folha de compartilhar.
+
 ## Erro: o que cada status significa na tela
 
 | Status | O que é | O que a tela faz |
 |---|---|---|
 | `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor em `http://…:8000` — …", com o endereço que o app tentou. Não é bug do app nem do backend |
-| `401` | Sessão expirada, token adulterado ou conta excluída | Apaga o token, volta para o login e avisa "sua sessão expirou, entre de novo". No login e no cadastro, o `401` é só senha errada: a mensagem aparece no formulário e nada é apagado |
-| `404` | Recurso que não existe **ou que é de outra pessoa** | Trata como inexistente |
-| `409` | Conflito — produto que já está na lista | Mostra a mensagem do servidor |
+| `401` | Sessão expirada, token adulterado ou conta excluída | Apaga o token, volta para o login e avisa "sua sessão expirou, entre de novo". No login e no cadastro, o `401` é só senha errada — ou conta do outro papel, que responde igual de propósito: a mensagem aparece no formulário e nada é apagado |
+| `404` | Recurso que não existe, **que é de outra pessoa**, ou rota do outro papel | Trata como inexistente |
+| `409` | Conflito — produto que já está na lista, ou plano que o paciente já aceitou | Mostra a mensagem do servidor |
 | `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista | Mostra a mensagem do servidor |
 
 O `0` não é um status HTTP: é a marca de que não houve resposta. Sem ele, "o

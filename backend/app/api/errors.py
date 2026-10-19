@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
+from app.services.prescriptions import PrescriptionLockedError
 from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
 from app.services.units import IncompatibleUnitError
 
@@ -29,6 +30,8 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (ProductAlreadyInListError, status.HTTP_409_CONFLICT),
     # Tirar da lista um item prescrito: o pedido é compreensível e recusado.
     (PrescribedItemError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    # Plano já aceito pelo paciente: o pedido entra em conflito com o estado dele.
+    (PrescriptionLockedError, status.HTTP_409_CONFLICT),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )

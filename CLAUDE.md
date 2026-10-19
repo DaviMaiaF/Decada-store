@@ -80,7 +80,12 @@ decada/
 - **ShoppingList (lista de compras)**: resultado final — produtos escolhidos,
   quantidades e custo estimado.
 - **Recipe (receita)**: preparo que consome ingredientes presentes na lista
-  ou na despensa.
+  ou na despensa. Não confundir com a "receita" da nutricionista, que é a
+  prescrição — no código, `Prescription`.
+- **Prescription (plano da nutricionista)**: plano alimentar que a nutricionista
+  monta no app, no formato do Dietbox: refeições com horário, alimentos com
+  quantidade e medida caseira, substituições e orientação. Chega ao paciente
+  pelo e-mail ou em PDF — ver decisão 12.
 
 ## Decisões já tomadas (não reabrir sem discutir)
 
@@ -94,9 +99,10 @@ decada/
    consentimento explícito, minimização e exclusão sob demanda são requisitos.
 6. A marca é **DÉCADA** (feminina: *a* DÉCADA). Tabelas, colunas e enums seguem
    em inglês, como sempre.
-7. Import de plano é **PDF com texto**. OCR da *prescrição* por foto está fora do
-   MVP — errar ali faz comida sumir da dieta de alguém. Não confundir com a
-   decisão 11, que é foto de comida, não de documento.
+7. Import de plano é **PDF com texto** — ou o plano que a nutricionista monta no
+   app (decisão 12). OCR da *prescrição* por foto está fora do MVP — errar ali
+   faz comida sumir da dieta de alguém. Não confundir com a decisão 11, que é
+   foto de comida, não de documento.
 8. Substituição de alimento só existe se veio da nutricionista. O app pode comparar
    preços do mesmo item; não pode trocar o alimento prescrito por outro.
 9. Autenticação é JWT assinado; senha é hash bcrypt. Exclusão de conta apaga a
@@ -109,6 +115,14 @@ decada/
     identificado, nunca entra sozinho. **A imagem não é guardada** — o app extrai os
     itens e descarta o arquivo (decisão 5, minimização). Isso enche a despensa; não
     forma preço, que continua sendo a decisão 3.
+12. Há dois papéis de conta, **paciente e nutricionista** (`users.role`), cada um
+    com sua porta de login; a rota do outro papel responde 404. A nutricionista
+    **monta o plano alimentar** no app e o entrega **pelo e-mail do paciente** ou
+    **em PDF** que o import lê de volta. O envio responde igual exista conta ou
+    não (decisão 10). O plano só vira do paciente quando ele **aceita, com
+    consentimento**, e o que ele recebe é uma **cópia**: sobrevive à nutricionista
+    excluir a conta, e o plano aceito não muda mais. Só a opção principal de cada
+    refeição vai para a compra; substituições e orientação são para ler.
 
 ## Design
 

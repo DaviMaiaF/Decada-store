@@ -10,16 +10,22 @@ jest.mock('../../services/session', () => ({
   readToken: jest.fn().mockResolvedValue(null),
   saveToken: jest.fn().mockResolvedValue(undefined),
   clearToken: jest.fn().mockResolvedValue(undefined),
+  saveRole: jest.fn().mockResolvedValue(undefined),
+  readRole: jest.fn().mockResolvedValue('paciente'),
 }));
 
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   login: jest.fn(),
   register: jest.fn(),
+  loginNutritionist: jest.fn(),
+  registerNutritionist: jest.fn(),
 }));
 
 const loginFalso = api.login as jest.Mock;
 const registerFalso = api.register as jest.Mock;
+const loginNutricionistaFalso = api.loginNutritionist as jest.Mock;
+const registerNutricionistaFalso = api.registerNutritionist as jest.Mock;
 
 /**
  * O `render` da RNTL 14 é assíncrono e as consultas vêm do `screen`, não do
@@ -37,7 +43,7 @@ async function montar() {
 beforeEach(() => jest.clearAllMocks());
 
 it('entra com e-mail e senha', async () => {
-  loginFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer' });
+  loginFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer', role: 'paciente' });
   await montar();
 
   await fireEvent.changeText(screen.getByLabelText('E-mail'), 'marina@example.com');
@@ -84,7 +90,7 @@ it('alterna para cadastro e exige senha mínima', async () => {
 });
 
 it('cadastra quando a senha tem tamanho suficiente', async () => {
-  registerFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer' });
+  registerFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer', role: 'paciente' });
   await montar();
 
   await fireEvent.press(screen.getByText('Criar uma conta'));
@@ -95,4 +101,83 @@ it('cadastra quando a senha tem tamanho suficiente', async () => {
   await waitFor(() =>
     expect(registerFalso).toHaveBeenCalledWith('nova@example.com', 'senha-bem-boa', undefined),
   );
+});
+
+// --- nutricionista ---
+
+const TOKEN_NUTRICIONISTA = { access_token: 'token', token_type: 'bearer', role: 'nutricionista' };
+
+it('paciente é o papel padrão e entra pela porta dele', async () => {
+  loginFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer', role: 'paciente' });
+  await montar();
+
+  expect(screen.getByRole('radio', { name: 'Sou paciente' }).props.accessibilityState.checked).toBe(
+    true,
+  );
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'marina@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.press(screen.getByText('Entrar'));
+
+  await waitFor(() => expect(loginFalso).toHaveBeenCalled());
+  expect(loginNutricionistaFalso).not.toHaveBeenCalled();
+});
+
+it('nutricionista entra pela porta dela', async () => {
+  loginNutricionistaFalso.mockResolvedValue(TOKEN_NUTRICIONISTA);
+  await montar();
+
+  await fireEvent.press(screen.getByText('Sou nutricionista'));
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'camila@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.press(screen.getByText('Entrar'));
+
+  await waitFor(() =>
+    expect(loginNutricionistaFalso).toHaveBeenCalledWith('camila@example.com', 'senha-bem-boa'),
+  );
+  expect(loginFalso).not.toHaveBeenCalled();
+});
+
+it('o cadastro de paciente não pede CRN', async () => {
+  await montar();
+
+  await fireEvent.press(screen.getByText('Criar uma conta'));
+
+  expect(screen.queryByLabelText('CRN')).toBeNull();
+});
+
+it('cadastro de nutricionista exige nome e CRN', async () => {
+  await montar();
+
+  await fireEvent.press(screen.getByText('Sou nutricionista'));
+  await fireEvent.press(screen.getByText('Criar uma conta'));
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'camila@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.changeText(screen.getByLabelText('Nome completo'), 'Camila Fernandes');
+  await fireEvent.press(screen.getByText('Criar conta'));
+
+  expect(await screen.findByText('preencha nome e CRN')).toBeTruthy();
+  expect(registerNutricionistaFalso).not.toHaveBeenCalled();
+});
+
+it('cadastra a nutricionista com nome e CRN', async () => {
+  registerNutricionistaFalso.mockResolvedValue(TOKEN_NUTRICIONISTA);
+  await montar();
+
+  await fireEvent.press(screen.getByText('Sou nutricionista'));
+  await fireEvent.press(screen.getByText('Criar uma conta'));
+  await fireEvent.changeText(screen.getByLabelText('Nome completo'), ' Camila Fernandes ');
+  await fireEvent.changeText(screen.getByLabelText('CRN'), 'CRN-3 48291');
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'camila@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.press(screen.getByText('Criar conta'));
+
+  await waitFor(() =>
+    expect(registerNutricionistaFalso).toHaveBeenCalledWith(
+      'camila@example.com',
+      'senha-bem-boa',
+      'Camila Fernandes',
+      'CRN-3 48291',
+    ),
+  );
+  expect(registerFalso).not.toHaveBeenCalled();
 });

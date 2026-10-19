@@ -11,7 +11,15 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Checkbox, Chip, ErrorNotice } from '../components';
-import { ApiError, confirmItem, readCandidates, readMealPlan } from '../services/api';
+import { PlanoPrescrito } from '../components/PlanoPrescrito';
+import { RECEIVED_KEY } from '../components/PlanosRecebidos';
+import {
+  ApiError,
+  confirmItem,
+  readCandidates,
+  readMealPlan,
+  readReceivedPrescriptions,
+} from '../services/api';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { Candidate, PlanItem } from '../types/api';
 
@@ -42,6 +50,10 @@ export default function ConfirmationScreen({
     queryKey: ['meal-plan', planId],
     queryFn: () => readMealPlan(planId),
   });
+  // Plano novo enviado pela nutricionista: a pessoa está aqui, no plano atual,
+  // e não veria o aviso que fica na tela de envio.
+  const recebidos = useQuery({ queryKey: RECEIVED_KEY, queryFn: readReceivedPrescriptions });
+  const [planoAberto, setPlanoAberto] = useState(false);
 
   const itens = plano.data?.items ?? [];
   const pendentes = itens.filter((item) => item.status !== 'confirmado');
@@ -140,6 +152,29 @@ export default function ConfirmationScreen({
             label={`${confirmados} de ${itens.length} confirmados`}
             tone={confirmados === itens.length ? 'success' : 'neutral'}
           />
+          {recebidos.data?.length ? (
+            <Card style={styles.planoNovo}>
+              <Body>Sua nutricionista enviou um plano novo.</Body>
+              <Button label="Ver plano novo" variant="secondary" onPress={onNewPlan} />
+            </Card>
+          ) : null}
+          {plano.data.prescribed_meals ? (
+            <Card style={styles.planoNovo}>
+              <Pressable accessibilityRole="button" onPress={() => setPlanoAberto((a) => !a)}>
+                <Text style={styles.verPlano}>
+                  {planoAberto
+                    ? 'Ocultar refeições e substituições'
+                    : 'Ver refeições e substituições'}
+                </Text>
+              </Pressable>
+              {planoAberto ? (
+                <PlanoPrescrito
+                  meals={plano.data.prescribed_meals.meals}
+                  notes={plano.data.prescribed_meals.notes}
+                />
+              ) : null}
+            </Card>
+          ) : null}
           {sugestoes.size > 0 ? (
             <View style={styles.lote}>
               <Pressable
@@ -392,6 +427,8 @@ function ItemDoPlano({
 }
 
 const styles = StyleSheet.create({
+  planoNovo: { gap: spacing.sm },
+  verPlano: { ...typography.labelLg, color: colors.primary },
   conteudo: { padding: spacing.margin, gap: spacing.sm, paddingBottom: spacing.xl3 },
   cabecalho: { gap: spacing.xs, marginBottom: spacing.sm },
   titulo: { ...typography.headlineLg, color: colors.primary },

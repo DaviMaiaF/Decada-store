@@ -2,9 +2,11 @@
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, StringConstraints
 
+from app.models.enums import UserRole
 from app.schemas.common import ApiModel
 from app.services.security import MINIMUM_PASSWORD_LENGTH
 
@@ -16,6 +18,21 @@ class RegisterIn(BaseModel):
     full_name: str | None = Field(default=None, max_length=255)
 
 
+# Sem espaço em volta, para "  " não passar por CRN preenchido.
+_TextoObrigatorio = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
+class NutritionistRegisterIn(RegisterIn):
+    """Cadastro de nutricionista: nome e CRN deixam de ser opcionais.
+
+    São eles que aparecem como autoria da receita para o paciente.
+    """
+
+    full_name: Annotated[_TextoObrigatorio, Field(max_length=255)]
+    # Texto livre, pelo mesmo motivo do CRN no plano: o formato muda por região.
+    crn: Annotated[_TextoObrigatorio, Field(max_length=50)]
+
+
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
@@ -24,6 +41,8 @@ class LoginIn(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Para o app saber qual navegação abrir sem uma ida extra a /auth/me.
+    role: UserRole
 
 
 class UserOut(ApiModel):
@@ -32,6 +51,8 @@ class UserOut(ApiModel):
     id: uuid.UUID
     email: str
     full_name: str | None = None
+    role: UserRole
+    crn: str | None = None
     created_at: datetime
 
 
@@ -42,5 +63,7 @@ class DeletionReceiptOut(BaseModel):
     meal_plans_deleted: int
     pantry_items_deleted: int
     shopping_lists_deleted: int
+    # Planos que a nutricionista montou. Zero para paciente.
+    prescriptions_deleted: int
     # Preços continuam existindo, sem vínculo com a pessoa.
     price_records_anonymized: int

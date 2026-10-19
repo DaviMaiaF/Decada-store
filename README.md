@@ -144,6 +144,10 @@ A resposta traz `access_token`. Mande-o em toda rota de domínio:
 curl -H "Authorization: Bearer <token>" http://localhost:8000/pantry
 ```
 
+Nutricionista tem porta própria — `/auth/nutritionist/register`, com `full_name` e
+`crn` obrigatórios, e `/auth/nutritionist/login`. Cada porta só aceita contas do seu
+papel, e a rota do outro papel responde 404.
+
 Senha é guardada como hash bcrypt, nunca em texto. O token é um JWT assinado com
 `SECRET_KEY` — **gere uma chave própria fora de desenvolvimento**, e saiba que
 trocá-la invalida todos os tokens já emitidos.
@@ -154,6 +158,8 @@ trocá-la invalida todos os tokens já emitidos.
 |---|---|---|
 | `POST` | `/auth/register` | Cria a conta e devolve o token |
 | `POST` | `/auth/login` | Troca e-mail e senha por um token |
+| `POST` | `/auth/nutritionist/register` | Cria a conta de nutricionista (nome e CRN obrigatórios) |
+| `POST` | `/auth/nutritionist/login` | Entrada da nutricionista |
 | `GET` | `/auth/me` | A conta de quem está autenticado |
 | `DELETE` | `/auth/me` | Apaga a conta e todos os dados pessoais (LGPD) |
 | `POST` | `/meal-plans` | Importa o plano do PDF (multipart: `file` + `consent_accepted`) |
@@ -174,6 +180,13 @@ trocá-la invalida todos os tokens já emitidos.
 | `GET` | `/pantry/{id}/candidates` | Produtos parecidos com um item já salvo |
 | `GET` | `/products/search` | Produtos parecidos com um texto livre (`?q=`) |
 | `GET` | `/recipes/suggestions` | Receitas ordenadas por disponibilidade |
+| `GET` `POST` | `/nutritionist/prescriptions` | Planos que a nutricionista montou; cria um rascunho |
+| `GET` `PUT` `DELETE` | `/nutritionist/prescriptions/{id}` | Lê, troca inteiro ou apaga. Plano já aceito responde 409 ao `PUT` |
+| `POST` | `/nutritionist/prescriptions/{id}/send` | Envia ao e-mail do paciente. Responde igual exista conta ou não |
+| `GET` | `/nutritionist/prescriptions/{id}/pdf` | O plano em PDF com texto, que o import lê de volta |
+| `GET` | `/prescriptions/received` | Planos enviados ao e-mail do paciente, esperando resposta |
+| `POST` | `/prescriptions/received/{id}/accept` | Aceita com `consent_accepted`: o plano vira dele |
+| `POST` | `/prescriptions/received/{id}/decline` | Recusa. Nada é gravado |
 
 Valores decimais viajam como **string** no JSON (`"12.90"`), não como número: é o que
 preserva a precisão de dinheiro no cliente.

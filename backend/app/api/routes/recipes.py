@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentPatient, DbSession
 from app.models import MealPlan, ShoppingList, ShoppingListItem
 from app.schemas.recipe import RecipeAvailabilityOut
 from app.services.recipes import suggest_recipes
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/recipes", tags=["receitas"])
 @router.get("/suggestions", response_model=list[RecipeAvailabilityOut])
 def read_suggestions(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     shopping_list_id: uuid.UUID | None = Query(
         default=None,
         description=(

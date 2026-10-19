@@ -12,6 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, Field, SectionTitle } from '../components';
+import { PlanosRecebidos } from '../components/PlanosRecebidos';
 import { ApiError, importMealPlan } from '../services/api';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ImportResult } from '../types/api';
@@ -78,6 +79,10 @@ export default function UploadScreen({
           lista de compras.
         </Body>
       </View>
+
+      {/* O plano enviado pelo e-mail vem antes do PDF: se a nutricionista já
+          mandou, é só ler e aceitar. */}
+      <PlanosRecebidos onAccepted={onImported} />
 
       <Card style={styles.avisoEtico}>
         <Text style={styles.avisoTitulo}>Cuidado ético e respeito profissional</Text>

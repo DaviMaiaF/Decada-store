@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentPatient, DbSession
 from app.models import MealPlan, Product, ShoppingList, ShoppingListItem
 from app.schemas.shopping_list import (
     ExtraItemIn,
@@ -32,7 +32,7 @@ from app.services.simulation import simulate_item
 router = APIRouter(tags=["listas de compras"])
 
 
-def _get_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> MealPlan:
+def _get_plan(session: DbSession, user: CurrentPatient, plan_id: uuid.UUID) -> MealPlan:
     """Plano do usuário, com os itens, ou 404.
 
     Plano de outra pessoa também devolve 404: dizer "existe, mas não é seu" já
@@ -56,7 +56,7 @@ def _get_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> Meal
 )
 def create_shopping_list(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     plan_id: uuid.UUID,
     payload: GenerateListIn,
 ) -> GeneratedListOut:
@@ -91,7 +91,7 @@ def create_shopping_list(
     response_model=list[ShoppingListSummaryOut],
 )
 def read_shopping_lists(
-    session: DbSession, user: CurrentUser, plan_id: uuid.UUID
+    session: DbSession, user: CurrentPatient, plan_id: uuid.UUID
 ) -> list[ShoppingList]:
     """Listas já geradas para o plano, da mais recente à mais antiga.
 
@@ -114,7 +114,7 @@ def read_shopping_lists(
 
 
 def _get_item(
-    session: DbSession, user: CurrentUser, list_id: uuid.UUID, item_id: uuid.UUID
+    session: DbSession, user: CurrentPatient, list_id: uuid.UUID, item_id: uuid.UUID
 ) -> ShoppingListItem:
     """Item da lista do usuário, ou 404.
 
@@ -138,7 +138,7 @@ def _get_item(
     return item
 
 
-def _get_list(session: DbSession, user: CurrentUser, list_id: uuid.UUID) -> ShoppingList:
+def _get_list(session: DbSession, user: CurrentPatient, list_id: uuid.UUID) -> ShoppingList:
     """Lista do usuário, com os itens e os produtos deles, ou 404."""
     shopping_list = session.scalars(
         select(ShoppingList)
@@ -155,7 +155,7 @@ def _get_list(session: DbSession, user: CurrentUser, list_id: uuid.UUID) -> Shop
 
 @router.get("/shopping-lists/{list_id}", response_model=ShoppingListOut)
 def read_shopping_list(
-    session: DbSession, user: CurrentUser, list_id: uuid.UUID
+    session: DbSession, user: CurrentPatient, list_id: uuid.UUID
 ) -> ShoppingListOut:
     """A lista com seus itens e o retrato do preço de cada um.
 
@@ -188,7 +188,7 @@ def read_shopping_list(
 )
 def add_item(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     list_id: uuid.UUID,
     payload: ExtraItemIn,
 ) -> ShoppingListItem:
@@ -223,7 +223,7 @@ def add_item(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_item(
-    session: DbSession, user: CurrentUser, list_id: uuid.UUID, item_id: uuid.UUID
+    session: DbSession, user: CurrentPatient, list_id: uuid.UUID, item_id: uuid.UUID
 ) -> None:
     """Tira da lista um item avulso.
 
@@ -244,7 +244,7 @@ def delete_item(
 )
 def set_item_purchased(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     list_id: uuid.UUID,
     item_id: uuid.UUID,
     payload: PurchaseIn,
@@ -276,7 +276,7 @@ def set_item_purchased(
 @router.post("/shopping-lists/{list_id}/simulation", response_model=list[SimulatedItemOut])
 def simulate_shopping_list(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     list_id: uuid.UUID,
     payload: SimulationIn,
 ) -> list[SimulatedItemOut]:

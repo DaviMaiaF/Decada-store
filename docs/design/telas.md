@@ -20,12 +20,16 @@ Legenda:
 > O app em `mobile/` implementa a jornada principal: login, upload, confirmação,
 > lista de compras e despensa — esta com as receitas ordenadas por
 > disponibilidade dentro dela, e Economia. As quatro abas têm tela.
+>
+> Há também a **área da nutricionista** (seção 6), que nenhum protótipo previu: o
+> login escolhe o papel, e a conta de nutricionista monta planos alimentares no
+> formato do Dietbox e os entrega ao paciente.
 
 ## O que já está pronto no backend
 
 | Camada | O que tem |
 |---|---|
-| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient`, `PantryItem` |
+| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient`, `PantryItem`, `Prescription`, `PrescriptionMeal`, `PrescriptionItem` |
 | `services/text.py` | normalização de texto para comparação |
 | `services/units.py` | conversão para a unidade base do produto (kg, l, unidade) |
 | `services/parsing.py` | leitura de uma linha do plano: quantidade + unidade + descrição |
@@ -39,6 +43,8 @@ Legenda:
 | `POST` · `DELETE` em `/shopping-lists/{id}/items` | item avulso: entra na compra, e só ele pode sair |
 | `services/import_plan.py` | PDF → plano alimentar, com consentimento e relatório do descarte |
 | `GET /meal-plans` · `GET /meal-plans/{id}/shopping-lists` | o que o usuário já tem, sem os itens: é como o app reabre onde parou |
+| `services/prescriptions.py` | plano da nutricionista: edição, envio, aceite com cópia para o paciente, texto do documento |
+| `services/pdf_writer.py` | PDF com texto, de várias páginas, no formato que o import lê |
 
 ---
 
@@ -48,11 +54,12 @@ Legenda:
 
 | A tela mostra | Backend | Observação |
 |---|---|---|
+| Plano enviado pela nutricionista | ✅ | Aparece **antes** do envio de PDF, só quando há algum: quem assinou, o plano inteiro para ler, o mesmo termo de consentimento e os botões de aceitar e recusar. Aceitar segue para a confirmação, como depois de um import. Ver seção 6 |
 | Escolher PDF | ✅ | `import_plan.import_plan_from_pdf` (etapa 8) |
 | Tirar foto | ⛔ | Exige OCR **da prescrição**. **O botão não entra no MVP** — some da tela ou fica desabilitado com aviso. Não confundir com a foto da despensa (seção 4), que é foto de comida, não de documento |
 | Nome e CRN da nutricionista | ✅ | `nutritionist_name` e `nutritionist_crn` são campos opcionais da tela de upload, informados por quem importa — nenhum dos dois é detectado no PDF |
 | "Plano de 4 semanas • Foco: Energia" | ⛔ | Não há duração nem objetivo no modelo |
-| "5 refeições diárias organizadas" | ⛔ | Depende de `Meal`, que está fora do MVP |
+| "5 refeições diárias organizadas" | ⛔ | O plano importado por PDF continua sem refeições. O montado no app as tem, mas só para ler (`prescribed_meals`) |
 | "28 itens mapeados" | ✅ | `ImportedPlan.items_matched` |
 | "100% válido" | ✅ | `ImportedPlan.items_unidentified == 0` |
 | "Custo semanal estimado R$ 168,50" | ✅ | `pricing.price_shopping_list` — mas veja as divergências abaixo |
@@ -89,7 +96,7 @@ viraria comida sumindo do plano sem a pessoa saber.
 | Linha do dia com horário e "Feito/Pendente" | ⛔ | Depende de `Meal` |
 | Texto de cada refeição | ✅ | `PlanItem.raw_description` |
 | "Tudo disponível na sua despensa!" | ✅ | `pantry.coverage`, campo `fully_covered` |
-| Substituições autorizadas | ⛔ | Ver divergência 3 |
+| Substituições autorizadas | ✅ | Só no plano montado pela nutricionista no app: "Ver refeições e substituições" na confirmação. Vêm dela, então aparecem (decisão 8); não vão para a compra. No plano por PDF, o import as descarta e elas não aparecem |
 | Card "Mercado Inteligente · ~ R$ 42,80" | ✅ | `ShoppingList.estimated_total` |
 
 **No MVP esta tela vira a lista dos itens prescritos do plano ativo**, sem horário, sem
@@ -329,6 +336,34 @@ poupou".
 
 ---
 
+## 6. Área da nutricionista
+
+**Sem protótipo.** Montada com os cartões, campos e chips do sistema de design.
+
+O login tem "Sou paciente / Sou nutricionista" no topo; o cadastro da nutricionista pede
+nome e CRN, que assinam o plano. A conta dela não tem abas — Dieta, Mercado, Despensa e
+Economia são do paciente — e abre na lista de planos.
+
+| A tela mostra | Backend | Observação |
+|---|---|---|
+| Lista de planos com paciente e situação | ✅ | `GET /nutritionist/prescriptions`. Rascunho, enviado, aceito ou recusado |
+| Editor no formato do Dietbox | ✅ | Refeição com horário obrigatório; alimento com quantidade de compra, unidade e medida caseira; orientação da refeição e geral; substituições para a refeição inteira |
+| Enviar pelo e-mail do paciente | ✅ | Salva antes e envia a versão da tela. A mensagem é a mesma exista ou não conta com o e-mail (decisão 10) |
+| Baixar PDF | ✅ | Salva antes. O paciente importa o arquivo pelo envio de PDF de sempre, e o import rende os mesmos itens que o aceite pelo e-mail |
+| Plano aceito | ✅ | Só leitura: o paciente tem uma cópia, e os dois não podem divergir. Ainda dá para baixar o PDF |
+
+**Por que o editor tem os limites que tem.** Nome de alimento com até 45 caracteres,
+sem " - " e começando por letra; medida caseira até 25; nome de refeição até 40,
+começando por letra. Não é estética: com eles a linha do PDF fica abaixo de 90
+caracteres, que é onde o import passa a lê-la como parágrafo. O editor checa antes de
+enviar (`services/prescriptionForm.ts`) e diz em qual refeição está o problema.
+
+**O que vai para a compra.** Só os alimentos principais de cada refeição viram itens do
+plano do paciente, casados com o catálogo como no import, e ele confirma um a um. As
+substituições e a orientação ele lê.
+
+---
+
 ## Divergências entre o protótipo e as decisões do projeto
 
 Eram cinco pontos em que o protótipo contrariava decisões já tomadas. **Todos foram
@@ -405,9 +440,11 @@ item a item; import de plano por PDF com texto, com aceite na tela; o plano e a 
 reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso quando
 ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas com
 percentual de disponibilidade; aba Economia com o que a despensa poupou; trilha da
-jornada; simulação de compra sem um item.
+jornada; simulação de compra sem um item; **conta de nutricionista**, que monta o plano
+alimentar com refeições e substituições e o entrega pelo e-mail do paciente ou em PDF.
 
-**Fica fora:** refeições com horário e status, hidratação, carrossel semanal, OCR da
+**Fica fora:** status e registro de consumo das refeições, refeições do plano importado
+por PDF, hidratação, carrossel semanal, OCR da
 prescrição por foto, projeção mensal, métricas de desperdício, dicas de substituição
 geradas pelo app, validade de item da despensa, exportação para WhatsApp e fotos de
 receita.

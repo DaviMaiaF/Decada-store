@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.models.enums import MeasurementUnit, PlanItemStatus
 from app.schemas.common import ApiModel, ProductOut
+from app.schemas.prescription import PrescribedPlanOut
 
 
 class PlanItemOut(ApiModel):
@@ -36,6 +37,9 @@ class MealPlanOut(ApiModel):
     consent_version: str
     created_at: datetime
     items: list[PlanItemOut]
+    # Refeições, substituições e orientação, quando o plano foi montado pela
+    # nutricionista no app. Só leitura: a compra sai de `items`. Nulo no PDF.
+    prescribed_meals: PrescribedPlanOut | None = None
 
 
 class MealPlanSummaryOut(ApiModel):

@@ -5,6 +5,8 @@ teste precise importar de outro — o que o ruff acusa e que faz um teste quebra
 por causa de uma mudança no vizinho.
 """
 
+import copy
+
 from app.models import User
 
 # O mesmo gerador que produz o PDF de demonstração, para o teste exercitar
@@ -12,7 +14,14 @@ from app.models import User
 from app.seeds.demo_plan import build_pdf
 from app.services.security import create_access_token
 
-__all__ = ["build_pdf", "auth_headers", "importar_plano", "plano_confirmado", "PLANO_REALISTA"]
+__all__ = [
+    "build_pdf",
+    "auth_headers",
+    "importar_plano",
+    "plano_confirmado",
+    "plano_da_nutricionista",
+    "PLANO_REALISTA",
+]
 
 
 def auth_headers(user: User) -> dict[str, str]:
@@ -73,3 +82,52 @@ def plano_confirmado(client, user: User, db_session, produto_nome="Peito de fran
         json={"product_id": str(produto.id)},
     )
     return plano["meal_plan"]["id"], produto
+
+
+# Plano montado pela nutricionista no app: refeições com horário, medida
+# caseira e uma substituição.
+PLANO_DA_NUTRICIONISTA = {
+    "title": "Plano de outubro",
+    "patient_name": "Paciente Fictícia",
+    "notes": "Beba dois litros de água por dia.",
+    "meals": [
+        {
+            "name": "Café da manhã",
+            "time": "08:30",
+            "notes": "Evite açúcar no café.",
+            "items": [
+                {
+                    "food": "Pão francês",
+                    "household_measure": "1 unidade média",
+                    "quantity": "50",
+                    "unit": "g",
+                },
+                {"food": "Ovos de galinha", "quantity": "2", "unit": "unidade"},
+            ],
+            "substitutions": [
+                [
+                    {"food": "Tapioca", "household_measure": "2 colheres de sopa",
+                     "quantity": "35", "unit": "g"},
+                    {"food": "Banana prata", "quantity": "1", "unit": "unidade"},
+                ]
+            ],
+        },
+        {
+            "name": "Almoço",
+            "time": "12:30",
+            "items": [
+                {"food": "Arroz branco cozido", "household_measure": "6 colheres de sopa",
+                 "quantity": "150", "unit": "g"},
+                {"food": "Feijão cozido", "household_measure": "1 concha pequena",
+                 "quantity": "50", "unit": "g"},
+            ],
+        },
+    ],
+}
+
+
+def plano_da_nutricionista(**mudancas) -> dict:
+    """Corpo de um plano montado no app, no formato do Dietbox. Dados inventados."""
+    corpo = copy.deepcopy(PLANO_DA_NUTRICIONISTA)
+    corpo.update(mudancas)
+    return corpo

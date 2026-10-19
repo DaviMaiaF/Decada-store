@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import User
+from app.models import User, UserRole
 from app.services.security import InvalidTokenError, read_access_token
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -54,3 +54,26 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _require_role(role: UserRole):
+    """Dependência que só deixa passar contas de um papel.
+
+    Conta do outro papel recebe 404, e não 403, pela mesma regra dos recursos de
+    outra pessoa (decisão 10): para a nutricionista, a rota do plano alimentar
+    simplesmente não existe — e vice-versa.
+    """
+
+    def dependency(user: CurrentUser) -> User:
+        if user.role != role:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
+        return user
+
+    return dependency
+
+
+# Rotas do plano, da despensa, da lista e das sugestões: dado de saúde de quem
+# segue um plano. Nutricionista não tem plano, então não tem o que ver ali.
+CurrentPatient = Annotated[User, Depends(_require_role(UserRole.PACIENTE))]
+# Rotas de trabalho da nutricionista, como o cadastro de receitas.
+CurrentNutritionist = Annotated[User, Depends(_require_role(UserRole.NUTRICIONISTA))]

@@ -63,3 +63,23 @@ class PriceConfidence(str, Enum):
     ATUAL = "atual"
     RECENTE = "recente"
     ESTIMATIVA = "estimativa"
+
+
+class UserRole(str, Enum):
+    """Papel da conta: quem segue um plano ou quem escreve receitas."""
+
+    PACIENTE = "paciente"
+    NUTRICIONISTA = "nutricionista"
+
+
+class PrescriptionStatus(str, Enum):
+    """Onde está o plano que a nutricionista montou.
+
+    Só `aceita` trava a edição: a partir dali o paciente tem uma cópia dele, e
+    mudar o original faria os dois divergirem sem ninguém perceber.
+    """
+
+    RASCUNHO = "rascunho"
+    ENVIADA = "enviada"
+    ACEITA = "aceita"
+    RECUSADA = "recusada"

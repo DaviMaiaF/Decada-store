@@ -4,7 +4,16 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
-from app.api.routes import auth, meal_plans, pantry, products, recipes, shopping_lists
+from app.api.routes import (
+    auth,
+    meal_plans,
+    nutritionist_prescriptions,
+    pantry,
+    products,
+    received_prescriptions,
+    recipes,
+    shopping_lists,
+)
 from app.core.config import Settings, get_settings
 
 app = FastAPI(
@@ -15,7 +24,9 @@ app = FastAPI(
         "estima o custo da compra e sugere receitas com os itens da lista.\n\n"
         "Cadastre-se em `/auth/register` ou entre em `/auth/login` e mande o "
         "token no cabeçalho `Authorization: Bearer <token>`. Para apagar todos "
-        "os seus dados, `DELETE /auth/me`."
+        "os seus dados, `DELETE /auth/me`.\n\n"
+        "Nutricionistas têm porta própria: `/auth/nutritionist/register` e "
+        "`/auth/nutritionist/login`. Cada porta só aceita contas do seu papel."
     ),
 )
 
@@ -43,6 +54,8 @@ app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
+app.include_router(nutritionist_prescriptions.router)
+app.include_router(received_prescriptions.router)
 
 
 @app.get("/health", tags=["infra"])

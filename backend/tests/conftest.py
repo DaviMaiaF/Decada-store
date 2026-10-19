@@ -24,7 +24,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import Base, Product, User
+from app.models import Base, Product, User, UserRole
 from app.seeds.catalog import PRODUCTS
 from app.services.security import hash_password
 from app.services.text import normalize_text
@@ -159,6 +159,20 @@ def marina(db_session) -> User:
 @pytest.fixture
 def outra_pessoa(db_session) -> User:
     pessoa = novo_usuario("outra@example.com")
+    db_session.add(pessoa)
+    db_session.commit()
+    return pessoa
+
+
+@pytest.fixture
+def camila(db_session) -> User:
+    """Nutricionista de teste, com o CRN que o cadastro dela exige."""
+    pessoa = novo_usuario(
+        "camila@example.com",
+        full_name="Camila Fernandes",
+        role=UserRole.NUTRICIONISTA,
+        crn="CRN-3 48291",
+    )
     db_session.add(pessoa)
     db_session.commit()
     return pessoa

@@ -15,6 +15,7 @@ import type { Candidate, MealPlan, PlanItem } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
+  readReceivedPrescriptions: jest.fn(() => Promise.resolve([])),
   readMealPlan: jest.fn(),
   readCandidates: jest.fn(),
   confirmItem: jest.fn(),
@@ -46,6 +47,7 @@ function plano(itens: PlanItem[]): MealPlan {
     nutritionist_crn: null,
     consent_at: '2026-09-27T10:00:00Z',
     consent_version: 'v1',
+    prescribed_meals: null,
     created_at: '2026-09-27T10:00:00Z',
     items: itens,
   };
@@ -344,4 +346,52 @@ describe('edição de item confirmado', () => {
     await screen.findByText('Editar');
     expect(screen.queryByText(/Selecionar sugeridos/)).toBeNull();
   });
+});
+
+// --- plano montado pela nutricionista ---
+
+it('plano vindo da nutricionista mostra refeições e substituições para ler', async () => {
+  lerPlano.mockResolvedValue({
+    ...plano([item({ id: 'item-1' })]),
+    prescribed_meals: {
+      notes: null,
+      meals: [
+        {
+          name: 'Café da manhã',
+          time: '08:30',
+          notes: null,
+          items: [{ food: 'Pão francês', household_measure: null, quantity: '50', unit: 'g' }],
+          substitutions: [
+            [{ food: 'Tapioca', household_measure: '2 colheres', quantity: '35', unit: 'g' }],
+          ],
+        },
+      ],
+    },
+  });
+  await montar();
+
+  await fireEvent.press(await screen.findByText('Ver refeições e substituições'));
+
+  expect(screen.getByText('08:30 · Café da manhã')).toBeTruthy();
+  expect(screen.getByText('Substituição 1')).toBeTruthy();
+  expect(screen.getByText('Tapioca · 35 g (2 colheres)')).toBeTruthy();
+});
+
+it('plano vindo de PDF não tem o que mostrar', async () => {
+  await montar();
+
+  await screen.findByText('Confirme os produtos');
+  expect(screen.queryByText('Ver refeições e substituições')).toBeNull();
+});
+
+it('avisa de plano novo enviado pela nutricionista', async () => {
+  (api.readReceivedPrescriptions as jest.Mock).mockResolvedValueOnce([
+    { id: 'r1', title: null, notes: null, sent_at: null, author: { full_name: null, crn: null }, meals: [] },
+  ]);
+  const onNewPlan = jest.fn();
+  await montar(jest.fn(), onNewPlan);
+
+  await fireEvent.press(await screen.findByText('Ver plano novo'));
+
+  expect(onNewPlan).toHaveBeenCalled();
 });
