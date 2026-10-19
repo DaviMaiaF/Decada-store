@@ -28,7 +28,7 @@ CADASTRO = {
 
 
 def _cadastrar_nutricionista(client, **campos) -> dict:
-    resposta = client.post("/auth/nutricionista/register", json={**CADASTRO, **campos})
+    resposta = client.post("/auth/nutritionist/register", json={**CADASTRO, **campos})
     assert resposta.status_code == 201, resposta.text
     return resposta.json()
 
@@ -76,14 +76,14 @@ def test_o_cadastro_de_paciente_ignora_papel_mandado_no_corpo(client, db_session
 def test_nutricionista_sem_crn_ou_nome_e_recusada(client, campo):
     sem_campo = {k: v for k, v in CADASTRO.items() if k != campo}
 
-    resposta = client.post("/auth/nutricionista/register", json=sem_campo)
+    resposta = client.post("/auth/nutritionist/register", json=sem_campo)
 
     assert resposta.status_code == 422
 
 
 @pytest.mark.parametrize("campo", ["crn", "full_name"])
 def test_crn_ou_nome_so_com_espaco_e_recusado(client, campo):
-    resposta = client.post("/auth/nutricionista/register", json={**CADASTRO, campo: "   "})
+    resposta = client.post("/auth/nutritionist/register", json={**CADASTRO, campo: "   "})
 
     assert resposta.status_code == 422
 
@@ -97,7 +97,7 @@ def test_crn_e_guardado_sem_espaco_em_volta(client):
 
 def test_email_de_paciente_nao_vira_conta_de_nutricionista(client, marina):
     resposta = client.post(
-        "/auth/nutricionista/register", json={**CADASTRO, "email": "marina@example.com"}
+        "/auth/nutritionist/register", json={**CADASTRO, "email": "marina@example.com"}
     )
 
     assert resposta.status_code == 409
@@ -117,7 +117,7 @@ def test_o_banco_recusa_nutricionista_sem_crn(db_session):
 
 def test_nutricionista_entra_pela_porta_dela(client, camila):
     resposta = client.post(
-        "/auth/nutricionista/login",
+        "/auth/nutritionist/login",
         json={"email": "camila@example.com", "password": SENHA_DE_TESTE},
     )
 
@@ -127,11 +127,11 @@ def test_nutricionista_entra_pela_porta_dela(client, camila):
 
 def test_paciente_na_porta_da_nutricionista_parece_senha_errada(client, marina):
     porta_errada = client.post(
-        "/auth/nutricionista/login",
+        "/auth/nutritionist/login",
         json={"email": "marina@example.com", "password": SENHA_DE_TESTE},
     )
     email_inexistente = client.post(
-        "/auth/nutricionista/login",
+        "/auth/nutritionist/login",
         json={"email": "ninguem@example.com", "password": SENHA_DE_TESTE},
     )
 
@@ -155,7 +155,7 @@ def test_nutricionista_na_porta_do_paciente_parece_senha_errada(client, camila):
 
 def test_senha_errada_de_nutricionista_nao_entra(client, camila):
     resposta = client.post(
-        "/auth/nutricionista/login",
+        "/auth/nutritionist/login",
         json={"email": "camila@example.com", "password": "outra-coisa"},
     )
 

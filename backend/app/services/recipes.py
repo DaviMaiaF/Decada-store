@@ -148,7 +148,8 @@ def suggest_recipes(
 
     recipes = session.scalars(
         select(Recipe).options(
-            selectinload(Recipe.ingredients).selectinload(RecipeIngredient.product)
+            selectinload(Recipe.author),
+            selectinload(Recipe.ingredients).selectinload(RecipeIngredient.product),
         )
     ).all()
 

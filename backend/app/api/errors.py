@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
+from app.services.recipe_authoring import UnknownProductError
 from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
 from app.services.units import IncompatibleUnitError
 
@@ -29,6 +30,9 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (ProductAlreadyInListError, status.HTTP_409_CONFLICT),
     # Tirar da lista um item prescrito: o pedido é compreensível e recusado.
     (PrescribedItemError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    # Ingrediente com produto fora do catálogo: o corpo do pedido está errado,
+    # não falta um recurso na URL — por isso 422, e não 404.
+    (UnknownProductError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )

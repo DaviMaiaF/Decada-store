@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.models import MealPlan, PantryItem, PriceRecord, ShoppingList, User, UserRole
+from app.models import MealPlan, PantryItem, PriceRecord, Recipe, ShoppingList, User, UserRole
 from app.schemas.auth import (
     DeletionReceiptOut,
     LoginIn,
@@ -73,7 +73,7 @@ def login(session: DbSession, payload: LoginIn) -> TokenOut:
 
 
 @router.post(
-    "/nutricionista/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED
+    "/nutritionist/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED
 )
 def register_nutritionist(session: DbSession, payload: NutritionistRegisterIn) -> TokenOut:
     """Cria a conta de nutricionista, com nome e CRN obrigatórios."""
@@ -89,7 +89,7 @@ def register_nutritionist(session: DbSession, payload: NutritionistRegisterIn) -
     )
 
 
-@router.post("/nutricionista/login", response_model=TokenOut)
+@router.post("/nutritionist/login", response_model=TokenOut)
 def login_nutritionist(session: DbSession, payload: LoginIn) -> TokenOut:
     """Entrada da nutricionista. Conta de paciente não passa por aqui."""
     return _login(session, payload, UserRole.NUTRICIONISTA)
@@ -105,8 +105,9 @@ def read_me(user: CurrentUser) -> User:
 def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
     """Apaga a conta e todos os dados pessoais dela (LGPD, exclusão sob demanda).
 
-    Vão embora: a conta, os planos alimentares com seus itens, a despensa e as
-    listas de compras — por cascata declarada no modelo.
+    Vão embora: a conta, os planos alimentares com seus itens, a despensa, as
+    listas de compras e, para nutricionista, as receitas que ela escreveu — por
+    cascata declarada no modelo.
 
     Ficam: os registros de preço que a pessoa contribuiu, com `user_id` nulo.
     Preço coletado de nota fiscal é informação sobre o mercado, não sobre quem
@@ -132,6 +133,10 @@ def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
             .where(MealPlan.user_id == user.id)
         )
         or 0,
+        "recipes": session.scalar(
+            select(func.count()).select_from(Recipe).where(Recipe.author_id == user.id)
+        )
+        or 0,
         "price_records": session.scalar(
             select(func.count()).select_from(PriceRecord).where(PriceRecord.user_id == user.id)
         )
@@ -151,5 +156,6 @@ def delete_me(session: DbSession, user: CurrentUser) -> DeletionReceiptOut:
         meal_plans_deleted=counts["meal_plans"],
         pantry_items_deleted=counts["pantry_items"],
         shopping_lists_deleted=counts["shopping_lists"],
+        recipes_deleted=counts["recipes"],
         price_records_anonymized=counts["price_records"],
     )
