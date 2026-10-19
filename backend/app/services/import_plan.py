@@ -28,15 +28,17 @@ o documento inteiro:
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models import MealPlan, PlanItem, Product, User
-from app.models.enums import PlanItemStatus
+from app.models.enums import MeasurementUnit, PlanItemStatus
 from app.services.matching import MINIMUM_SCORE, find_candidates
 from app.services.parsing import parse_item_line
 from app.services.pdf import extract_lines
@@ -181,6 +183,38 @@ def _discard_reasons(lines: list[str]) -> list[str | None]:
     return reasons
 
 
+def add_plan_item(
+    plan: MealPlan,
+    catalog: Sequence[Product],
+    *,
+    raw: str,
+    description: str,
+    quantity: Decimal,
+    unit: MeasurementUnit,
+) -> bool:
+    """Acrescenta o item ao plano já com o casamento sugerido.
+
+    Devolve se algum candidato passou do score mínimo. Sugerido, nunca
+    confirmado: `product_id` continua nulo, e quem escolhe é o usuário. É o
+    mesmo caminho para o item lido do PDF e para o item do plano que a
+    nutricionista montou no app.
+    """
+    candidates = find_candidates(description, quantity, unit, catalog)
+    identified = bool(candidates) and candidates[0].score >= MINIMUM_SCORE
+
+    plan.items.append(
+        PlanItem(
+            position=len(plan.items) + 1,
+            raw_description=raw,
+            normalized_description=normalize_text(description),
+            quantity=quantity,
+            unit=unit,
+            status=PlanItemStatus.PENDENTE if identified else PlanItemStatus.NAO_IDENTIFICADO,
+        )
+    )
+    return identified
+
+
 def import_plan_from_pdf(
     session: Session,
     user: User,
@@ -222,7 +256,6 @@ def import_plan_from_pdf(
     discarded: list[DiscardedLine] = []
     matched = 0
     unidentified = 0
-    position = 0
 
     for line, reason in zip(lines, _discard_reasons(lines), strict=True):
         if reason is not None:
@@ -235,33 +268,24 @@ def import_plan_from_pdf(
             discarded.append(DiscardedLine(text=line, reason="não foi possível ler a linha"))
             continue
 
-        candidates = find_candidates(parsed.description, parsed.quantity, parsed.unit, catalog)
-        identified = bool(candidates) and candidates[0].score >= MINIMUM_SCORE
-
+        identified = add_plan_item(
+            plan,
+            catalog,
+            raw=parsed.raw,
+            description=parsed.description,
+            quantity=parsed.quantity,
+            unit=parsed.unit,
+        )
         if identified:
             matched += 1
         else:
             unidentified += 1
 
-        position += 1
-        plan.items.append(
-            PlanItem(
-                position=position,
-                raw_description=parsed.raw,
-                normalized_description=normalize_text(parsed.description),
-                quantity=parsed.quantity,
-                unit=parsed.unit,
-                # Sugerido, nunca confirmado: product_id continua nulo, e quem
-                # escolhe entre os candidatos é o usuário.
-                status=PlanItemStatus.PENDENTE if identified else PlanItemStatus.NAO_IDENTIFICADO,
-            )
-        )
-
     session.flush()
 
     return ImportedPlan(
         meal_plan=plan,
-        items_created=position,
+        items_created=len(plan.items),
         items_matched=matched,
         items_unidentified=unidentified,
         discarded=discarded,

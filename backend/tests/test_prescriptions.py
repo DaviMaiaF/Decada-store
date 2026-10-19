@@ -4,7 +4,6 @@ O exemplo segue a forma de um plano do Dietbox — refeições com horário, ite
 medida caseira e gramas, substituições e orientação —, com dados inventados.
 """
 
-import copy
 import uuid
 from datetime import time
 from decimal import Decimal
@@ -18,54 +17,9 @@ from app.models.prescription import PrescriptionItem, PrescriptionMeal
 from app.services.prescriptions import item_line, prescription_lines
 from tests.conftest import novo_usuario
 from tests.helpers import auth_headers
+from tests.helpers import plano_da_nutricionista as plano
 
 ROTA = "/nutritionist/prescriptions"
-
-PLANO = {
-    "title": "Plano de outubro",
-    "patient_name": "Paciente Fictícia",
-    "notes": "Beba dois litros de água por dia.",
-    "meals": [
-        {
-            "name": "Café da manhã",
-            "time": "08:30",
-            "notes": "Evite açúcar no café.",
-            "items": [
-                {
-                    "food": "Pão francês",
-                    "household_measure": "1 unidade média",
-                    "quantity": "50",
-                    "unit": "g",
-                },
-                {"food": "Ovos de galinha", "quantity": "2", "unit": "unidade"},
-            ],
-            "substitutions": [
-                [
-                    {"food": "Tapioca", "household_measure": "2 colheres de sopa",
-                     "quantity": "35", "unit": "g"},
-                    {"food": "Banana prata", "quantity": "1", "unit": "unidade"},
-                ]
-            ],
-        },
-        {
-            "name": "Almoço",
-            "time": "12:30",
-            "items": [
-                {"food": "Arroz branco cozido", "household_measure": "6 colheres de sopa",
-                 "quantity": "150", "unit": "g"},
-                {"food": "Feijão cozido", "household_measure": "1 concha pequena",
-                 "quantity": "50", "unit": "g"},
-            ],
-        },
-    ],
-}
-
-
-def plano(**mudancas) -> dict:
-    corpo = copy.deepcopy(PLANO)
-    corpo.update(mudancas)
-    return corpo
-
 
 @pytest.fixture
 def beatriz(db_session) -> User:

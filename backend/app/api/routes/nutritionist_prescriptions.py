@@ -12,10 +12,12 @@ from app.schemas.prescription import (
     PrescriptionIn,
     PrescriptionOut,
     PrescriptionSummaryOut,
+    SendIn,
 )
 from app.services.prescriptions import (
     create_prescription,
     meal_structure,
+    send_prescription,
     update_prescription,
 )
 
@@ -103,6 +105,24 @@ def replace_prescription(
     """Troca o plano inteiro. Plano já aceito pelo paciente responde 409."""
     prescription = _get_prescription(session, user, prescription_id)
     return to_out(update_prescription(session, prescription, payload))
+
+
+@router.post("/{prescription_id}/send", response_model=PrescriptionOut)
+def send(
+    session: DbSession,
+    user: CurrentNutritionist,
+    prescription_id: uuid.UUID,
+    payload: SendIn,
+) -> PrescriptionOut:
+    """Envia o plano para o e-mail do paciente.
+
+    A resposta é a mesma exista ou não conta com esse e-mail (decisão 10). O
+    paciente encontra o plano na aba Dieta quando entrar com ele, e só ali,
+    aceitando com consentimento, o plano passa a ser dele.
+    """
+    prescription = _get_prescription(session, user, prescription_id)
+    send_prescription(session, prescription, payload.patient_email)
+    return to_out(prescription)
 
 
 @router.delete("/{prescription_id}", status_code=status.HTTP_204_NO_CONTENT)

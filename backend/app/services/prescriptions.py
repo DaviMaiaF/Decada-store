@@ -21,13 +21,17 @@ itens principais: o import descarta o bloco "Substituição N" até a refeição
 seguinte, e é isso que as mantém fora da lista de compras.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Prescription, PrescriptionItem, PrescriptionMeal, User
+from app.core.config import get_settings
+from app.models import MealPlan, Prescription, PrescriptionItem, PrescriptionMeal, Product, User
 from app.models.enums import MeasurementUnit, PrescriptionStatus
 from app.schemas.prescription import PrescriptionIn, PrescriptionItemIn
+from app.services.import_plan import ImportedPlan, add_plan_item
 
 # Prefixo que o import reconhece como bloco de orientação, até a próxima
 # substituição ou refeição. Sem ele, uma orientação curta viraria item.
@@ -111,6 +115,99 @@ def update_prescription(
     session.commit()
     session.refresh(prescription)
     return prescription
+
+
+def send_prescription(session: Session, prescription: Prescription, patient_email: str) -> None:
+    """Endereça o plano a um e-mail. Reenviar troca o destino e zera a resposta.
+
+    Não consulta se existe conta com o e-mail, e quem chama responde igual nos
+    dois casos (decisão 10): dizer "esse paciente não tem conta" entregaria a
+    lista de quem usa o app — e aqui ter conta é ter um plano alimentar. A
+    pessoa vê o plano quando entrar com esse e-mail, agora ou depois de criar
+    a conta.
+    """
+    ensure_editable(prescription)
+    prescription.patient_email = patient_email.lower()
+    prescription.status = PrescriptionStatus.ENVIADA
+    prescription.sent_at = datetime.now(timezone.utc)
+    prescription.responded_at = None
+    session.commit()
+
+
+def received_prescriptions(session: Session, patient: User) -> list[Prescription]:
+    """Planos enviados para o e-mail desta conta que ainda esperam resposta."""
+    return list(
+        session.scalars(
+            select(Prescription)
+            .where(
+                Prescription.patient_email == patient.email.lower(),
+                Prescription.status == PrescriptionStatus.ENVIADA,
+            )
+            .order_by(Prescription.sent_at.desc())
+        )
+    )
+
+
+def accept_prescription(
+    session: Session, prescription: Prescription, patient: User, *, consent_at: datetime
+) -> ImportedPlan:
+    """Grava no paciente uma cópia do plano, como se ele tivesse importado o PDF.
+
+    `consent_at` é obrigatório pelo mesmo motivo do import: sem aceite do termo
+    não existe plano gravado (decisão 5). Os itens que vão para a compra são só
+    os da opção principal de cada refeição; refeições, substituições e
+    orientação ficam em `prescribed_meals`, para ler.
+
+    Não confirma a transação: quem chama decide quando fazer commit.
+    """
+    author = prescription.author
+    plan = MealPlan(
+        user=patient,
+        title=prescription.title,
+        # O texto do documento, o mesmo do PDF: é o que o paciente aceitou.
+        source_text="\n".join(prescription_lines(prescription, author)),
+        nutritionist_name=author.full_name,
+        nutritionist_crn=author.crn,
+        consent_at=consent_at,
+        consent_version=get_settings().consent_version,
+        prescribed_meals=prescription_structure(prescription),
+    )
+    session.add(plan)
+
+    catalog = session.scalars(select(Product)).all()
+    matched = 0
+    for meal in prescription.meals:
+        for item in meal.items:
+            if item.option != 0:
+                continue
+            if add_plan_item(
+                plan,
+                catalog,
+                raw=item_line(item),
+                description=item.food,
+                quantity=item.quantity,
+                unit=item.unit,
+            ):
+                matched += 1
+
+    prescription.status = PrescriptionStatus.ACEITA
+    prescription.responded_at = consent_at
+    session.flush()
+
+    return ImportedPlan(
+        meal_plan=plan,
+        items_created=len(plan.items),
+        items_matched=matched,
+        items_unidentified=len(plan.items) - matched,
+        discarded=[],
+    )
+
+
+def decline_prescription(session: Session, prescription: Prescription) -> None:
+    """O paciente não quer o plano. A nutricionista vê a recusa e pode reenviar."""
+    prescription.status = PrescriptionStatus.RECUSADA
+    prescription.responded_at = datetime.now(timezone.utc)
+    session.commit()
 
 
 # --- estrutura e texto do documento ---

@@ -10,6 +10,7 @@ from app.api.routes import (
     nutritionist_prescriptions,
     pantry,
     products,
+    received_prescriptions,
     recipes,
     shopping_lists,
 )
@@ -54,6 +55,7 @@ app.include_router(pantry.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
 app.include_router(nutritionist_prescriptions.router)
+app.include_router(received_prescriptions.router)
 
 
 @app.get("/health", tags=["infra"])
