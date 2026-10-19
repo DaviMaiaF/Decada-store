@@ -6,14 +6,17 @@
  * e leva direto para a aba que resolve a próxima etapa.
  *
  * A próxima etapa vem da mesma trilha que fica no topo, para as duas nunca
- * discordarem sobre onde a pessoa parou.
+ * discordarem sobre onde a pessoa parou. Abaixo dela, um card por aba para quem
+ * quer ir direto a outro lugar sem seguir a ordem.
  */
 
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { ComponentType } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, SectionTitle } from '../components';
+import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
 import { type EtapaDaTrilha, etapasUltrapassadas } from '../components/Trilha';
-import { colors, spacing, typography } from '../theme/tokens';
+import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 
 export type AbaDeDestino = 'Dieta' | 'Mercado' | 'Despensa' | 'Economia';
 
@@ -57,6 +60,18 @@ const CONCLUIDO: ProximoPasso = {
   aba: 'Economia',
 };
 
+/** Os atalhos, na ordem da barra de abas. Os ícones são os mesmos dela. */
+const ATALHOS: {
+  aba: AbaDeDestino;
+  texto: string;
+  Icone: ComponentType<{ color: string; size?: number }>;
+}[] = [
+  { aba: 'Dieta', texto: 'Plano e produtos', Icone: IconeDieta },
+  { aba: 'Mercado', texto: 'Lista e compra', Icone: IconeMercado },
+  { aba: 'Despensa', texto: 'O que há em casa', Icone: IconeDespensa },
+  { aba: 'Economia', texto: 'Custo e economia', Icone: IconeEconomia },
+];
+
 export function proximoPasso(etapas: EtapaDaTrilha[]): ProximoPasso & { detalhe?: string } {
   const atual = etapasUltrapassadas(etapas).findIndex((ultrapassada) => !ultrapassada);
   if (atual === -1) return CONCLUIDO;
@@ -89,6 +104,25 @@ export default function HomeScreen({
           <Button label={passo.botao} onPress={() => onIr(passo.aba)} />
         </View>
       </Card>
+
+      <SectionTitle>Ir para</SectionTitle>
+      <View style={styles.grade}>
+        {ATALHOS.map(({ aba, texto, Icone }) => (
+          <Pressable
+            key={aba}
+            accessibilityRole="button"
+            accessibilityLabel={`Ir para ${aba}`}
+            onPress={() => onIr(aba)}
+            style={({ pressed }) => [styles.atalho, pressed && styles.atalhoPressionado]}
+          >
+            <View style={styles.atalhoIcone}>
+              <Icone color={colors.onPrimaryFixedVariant} size={24} />
+            </View>
+            <Text style={styles.atalhoNome}>{aba}</Text>
+            <Text style={styles.atalhoTexto}>{texto}</Text>
+          </Pressable>
+        ))}
+      </View>
     </ScrollView>
   );
 }
@@ -100,4 +134,29 @@ const styles = StyleSheet.create({
   rotulo: { ...typography.labelSm, color: colors.onSurfaceVariant },
   detalhe: { ...typography.labelLg, color: colors.primary },
   acao: { marginTop: spacing.xs },
+
+  // Duas colunas: quatro cards cabem numa tela de celular sem rolar.
+  grade: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  atalho: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minHeight: MIN_TOUCH_HEIGHT * 2,
+    padding: spacing.md,
+    gap: spacing.xs2,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+  },
+  atalhoPressionado: { transform: [{ scale: 0.98 }], opacity: 0.85 },
+  atalhoIcone: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryFixed,
+  },
+  atalhoNome: { ...typography.labelLg, color: colors.onSurface },
+  atalhoTexto: { ...typography.labelSm, color: colors.onSurfaceVariant },
 });

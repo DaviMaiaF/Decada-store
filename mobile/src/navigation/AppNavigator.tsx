@@ -15,13 +15,14 @@ import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   IconeDespensa,
   IconeDieta,
   IconeEconomia,
+  IconeInicio,
   IconeMercado,
 } from '../components/TabIcons';
 import ConfirmationScreen from '../screens/ConfirmationScreen';
@@ -37,7 +38,7 @@ import {
   readShoppingList,
   readShoppingLists,
 } from '../services/api';
-import { colors, typography } from '../theme/tokens';
+import { MIN_TOUCH_HEIGHT, colors, spacing, typography } from '../theme/tokens';
 
 type Abas = {
   Dieta: undefined;
@@ -123,16 +124,31 @@ export default function AppNavigator() {
     );
   }
 
-  const trilha = (
-    <SafeAreaView edges={['top']} style={styles.topo}>
-      <Trilha etapas={etapas} />
+  // Nas abas, o topo ganha o caminho de volta ao início; no próprio início ele
+  // não teria para onde levar.
+  const topo = (comInicio: boolean) => (
+    <SafeAreaView edges={['top']} style={[styles.topo, styles.topoLinha]}>
+      {comInicio ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Voltar ao início"
+          onPress={() => setNoInicio(true)}
+          style={({ pressed }) => [styles.botaoInicio, pressed && styles.botaoInicioPressionado]}
+        >
+          <IconeInicio color={colors.primary} size={20} />
+          <Text style={styles.botaoInicioTexto}>Início</Text>
+        </Pressable>
+      ) : null}
+      <View style={styles.trilha}>
+        <Trilha etapas={etapas} />
+      </View>
     </SafeAreaView>
   );
 
   if (noInicio) {
     return (
       <View style={styles.inicio}>
-        {trilha}
+        {topo(false)}
         <HomeScreen
           etapas={etapas}
           onIr={(aba) => {
@@ -148,7 +164,7 @@ export default function AppNavigator() {
     <NavigationContainer ref={navegacao}>
       {/* A trilha fica no lugar do cabeçalho, que só repetia o nome da aba —
           cada tela já abre com o próprio título. */}
-      {trilha}
+      {topo(true)}
 
       <Tab.Navigator
         initialRouteName={abaInicial}
@@ -237,6 +253,17 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   topo: { backgroundColor: colors.surface },
+  topoLinha: { flexDirection: 'row', alignItems: 'center' },
+  trilha: { flex: 1 },
+  botaoInicio: {
+    minWidth: MIN_TOUCH_HEIGHT,
+    minHeight: MIN_TOUCH_HEIGHT,
+    paddingLeft: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botaoInicioPressionado: { opacity: 0.6 },
+  botaoInicioTexto: { ...typography.labelSm, color: colors.primary },
   inicio: { flex: 1, backgroundColor: colors.surface },
   carregando: {
     flex: 1,

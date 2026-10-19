@@ -390,8 +390,9 @@ passou da confirmação. O progresso parcial ("9/16") só aparece na etapa em an
 
 O app abre numa tela de início (`HomeScreen`), **fora das quatro abas**: ela não é mais
 um lugar para navegar, e sim a porta de entrada. Mostra a próxima etapa da trilha e um
-botão que leva à aba que a resolve. A compra concluída volta para ela, que então aponta a
-aba Economia.
+botão que leva à aba que a resolve e, abaixo, um card para cada aba, para quem quer ir
+direto a outro lugar. A compra concluída volta para ela, que então aponta a aba Economia.
+Nas abas, o botão **Início** ao lado da trilha volta a ela a qualquer momento.
 
 ---
 

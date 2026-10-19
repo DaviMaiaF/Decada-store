@@ -96,3 +96,14 @@ export function IconeEconomia(props: IconeProps) {
     </Moldura>
   );
 }
+
+/** Início: casa. Não é aba — é o botão que volta à tela de início. */
+export function IconeInicio(props: IconeProps) {
+  return (
+    <Moldura {...props}>
+      <Path d="M3.5 11 12 4l8.5 7" />
+      <Path d="M6 9.5V20h12V9.5" />
+      <Path d="M10 20v-5h4v5" />
+    </Moldura>
+  );
+}
