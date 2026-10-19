@@ -15,6 +15,7 @@ import type { MealPlanSummary, ShoppingListSummary } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
+  readReceivedPrescriptions: jest.fn(() => Promise.resolve([])),
   readMealPlans: jest.fn(),
   readShoppingLists: jest.fn(),
   readMealPlan: jest.fn(),

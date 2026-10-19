@@ -10,6 +10,12 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import UploadScreen from '../UploadScreen';
 
+// Sem plano enviado pela nutricionista: a tela é só a do PDF.
+jest.mock('../../services/api', () => ({
+  ...jest.requireActual('../../services/api'),
+  readReceivedPrescriptions: jest.fn(() => Promise.resolve([])),
+}));
+
 let cliente: QueryClient;
 
 beforeEach(() => {
