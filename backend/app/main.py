@@ -15,7 +15,9 @@ app = FastAPI(
         "estima o custo da compra e sugere receitas com os itens da lista.\n\n"
         "Cadastre-se em `/auth/register` ou entre em `/auth/login` e mande o "
         "token no cabeçalho `Authorization: Bearer <token>`. Para apagar todos "
-        "os seus dados, `DELETE /auth/me`."
+        "os seus dados, `DELETE /auth/me`.\n\n"
+        "Nutricionistas têm porta própria: `/auth/nutricionista/register` e "
+        "`/auth/nutricionista/login`. Cada porta só aceita contas do seu papel."
     ),
 )
 

@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentPatient, DbSession
 from app.models import MealPlan, PlanItem, Product
 from app.models.enums import PlanItemStatus
 from app.schemas.meal_plan import (
@@ -26,7 +26,7 @@ from app.services.parsing import parse_item_line
 router = APIRouter(prefix="/meal-plans", tags=["planos alimentares"])
 
 
-def _get_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> MealPlan:
+def _get_plan(session: DbSession, user: CurrentPatient, plan_id: uuid.UUID) -> MealPlan:
     """Plano do usuário, ou 404.
 
     Plano de outra pessoa também devolve 404, e não 403: dizer "existe, mas não
@@ -53,7 +53,7 @@ def _get_item(plan: MealPlan, item_id: uuid.UUID) -> PlanItem:
 @router.post("", response_model=ImportResultOut, status_code=status.HTTP_201_CREATED)
 def import_meal_plan(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     file: Annotated[UploadFile, File(description="PDF do plano alimentar, com texto")],
     consent_accepted: Annotated[
         bool,
@@ -91,7 +91,7 @@ def import_meal_plan(
 
 
 @router.get("", response_model=list[MealPlanSummaryOut])
-def read_meal_plans(session: DbSession, user: CurrentUser) -> list[MealPlanSummaryOut]:
+def read_meal_plans(session: DbSession, user: CurrentPatient) -> list[MealPlanSummaryOut]:
     """Planos do usuário, do mais recente ao mais antigo.
 
     É por aqui que o app reencontra o plano depois de ser fechado. Sem esta
@@ -129,7 +129,7 @@ def read_meal_plans(session: DbSession, user: CurrentUser) -> list[MealPlanSumma
 
 
 @router.get("/{plan_id}", response_model=MealPlanOut)
-def read_meal_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) -> MealPlan:
+def read_meal_plan(session: DbSession, user: CurrentPatient, plan_id: uuid.UUID) -> MealPlan:
     """O plano alimentar com seus itens, na ordem em que vieram do PDF."""
     return _get_plan(session, user, plan_id)
 
@@ -137,7 +137,7 @@ def read_meal_plan(session: DbSession, user: CurrentUser, plan_id: uuid.UUID) ->
 @router.get("/{plan_id}/items/{item_id}/candidates", response_model=list[CandidateOut])
 def read_candidates(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     plan_id: uuid.UUID,
     item_id: uuid.UUID,
 ) -> list:
@@ -156,7 +156,7 @@ def read_candidates(
 @router.post("/{plan_id}/items/{item_id}/confirmation", response_model=PlanItemOut)
 def confirm_item(
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentPatient,
     plan_id: uuid.UUID,
     item_id: uuid.UUID,
     confirmation: ConfirmationIn,

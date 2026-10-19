@@ -63,3 +63,10 @@ class PriceConfidence(str, Enum):
     ATUAL = "atual"
     RECENTE = "recente"
     ESTIMATIVA = "estimativa"
+
+
+class UserRole(str, Enum):
+    """Papel da conta: quem segue um plano ou quem escreve receitas."""
+
+    PACIENTE = "paciente"
+    NUTRICIONISTA = "nutricionista"

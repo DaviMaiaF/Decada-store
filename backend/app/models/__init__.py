@@ -11,6 +11,7 @@ from app.models.enums import (
     PlanItemStatus,
     PriceConfidence,
     PriceOrigin,
+    UserRole,
 )
 from app.models.market import Market
 from app.models.meal_plan import MealPlan, PlanItem
@@ -39,4 +40,5 @@ __all__ = [
     "ShoppingList",
     "ShoppingListItem",
     "User",
+    "UserRole",
 ]

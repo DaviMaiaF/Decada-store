@@ -6,47 +6,93 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.models import MealPlan, PantryItem, PriceRecord, ShoppingList, User
-from app.schemas.auth import DeletionReceiptOut, LoginIn, RegisterIn, TokenOut, UserOut
+from app.models import MealPlan, PantryItem, PriceRecord, ShoppingList, User, UserRole
+from app.schemas.auth import (
+    DeletionReceiptOut,
+    LoginIn,
+    NutritionistRegisterIn,
+    RegisterIn,
+    TokenOut,
+    UserOut,
+)
 from app.services.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["conta"])
 
 
-@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
-def register(session: DbSession, payload: RegisterIn) -> TokenOut:
-    """Cria a conta e já devolve o token, para o app não pedir a senha duas vezes."""
-    email = payload.email.lower()
-
-    if session.scalars(select(User).where(User.email == email)).first() is not None:
+def _create_account(session: DbSession, user: User) -> TokenOut:
+    """Grava a conta e devolve o token, para o app não pedir a senha duas vezes."""
+    if session.scalars(select(User).where(User.email == user.email)).first() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "já existe uma conta com este e-mail")
 
-    user = User(
-        email=email,
-        password_hash=hash_password(payload.password),
-        full_name=payload.full_name,
-    )
     session.add(user)
     session.commit()
     session.refresh(user)
 
-    return TokenOut(access_token=create_access_token(user.id))
+    return TokenOut(access_token=create_access_token(user.id), role=user.role)
+
+
+def _login(session: DbSession, payload: LoginIn, role: UserRole) -> TokenOut:
+    """Troca e-mail e senha por um token, se a conta for do papel desta porta.
+
+    E-mail inexistente, senha errada e conta do outro papel devolvem a mesma
+    resposta de propósito: distinguir os casos entregaria de graça a lista de
+    quem tem conta — e aqui ter conta de paciente significa ter um plano
+    alimentar guardado.
+    """
+    user = session.scalars(select(User).where(User.email == payload.email.lower())).first()
+
+    if (
+        user is None
+        or not verify_password(payload.password, user.password_hash)
+        or user.role != role
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "e-mail ou senha inválidos")
+
+    return TokenOut(access_token=create_access_token(user.id), role=user.role)
+
+
+@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
+def register(session: DbSession, payload: RegisterIn) -> TokenOut:
+    """Cria a conta de paciente."""
+    return _create_account(
+        session,
+        User(
+            email=payload.email.lower(),
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name,
+            role=UserRole.PACIENTE,
+        ),
+    )
 
 
 @router.post("/login", response_model=TokenOut)
 def login(session: DbSession, payload: LoginIn) -> TokenOut:
-    """Troca e-mail e senha por um token de acesso.
+    """Entrada do paciente."""
+    return _login(session, payload, UserRole.PACIENTE)
 
-    E-mail inexistente e senha errada devolvem a mesma resposta de propósito:
-    distinguir os dois casos entregaria de graça a lista de quem tem conta —
-    e aqui ter conta significa ter um plano alimentar guardado.
-    """
-    user = session.scalars(select(User).where(User.email == payload.email.lower())).first()
 
-    if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "e-mail ou senha inválidos")
+@router.post(
+    "/nutricionista/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED
+)
+def register_nutritionist(session: DbSession, payload: NutritionistRegisterIn) -> TokenOut:
+    """Cria a conta de nutricionista, com nome e CRN obrigatórios."""
+    return _create_account(
+        session,
+        User(
+            email=payload.email.lower(),
+            password_hash=hash_password(payload.password),
+            full_name=payload.full_name,
+            role=UserRole.NUTRICIONISTA,
+            crn=payload.crn,
+        ),
+    )
 
-    return TokenOut(access_token=create_access_token(user.id))
+
+@router.post("/nutricionista/login", response_model=TokenOut)
+def login_nutritionist(session: DbSession, payload: LoginIn) -> TokenOut:
+    """Entrada da nutricionista. Conta de paciente não passa por aqui."""
+    return _login(session, payload, UserRole.NUTRICIONISTA)
 
 
 @router.get("/me", response_model=UserOut)
