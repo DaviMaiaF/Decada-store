@@ -21,10 +21,22 @@ export type EtapaDaTrilha = {
   detalhe?: string;
 };
 
+/**
+ * Etapa ultrapassada: cumprida, ou com alguma etapa seguinte já cumprida.
+ *
+ * Quem gerou a lista com 9 de 16 itens confirmados já passou da confirmação —
+ * deixar o círculo apagado dizia que a pessoa ainda estava lá. O "9/16" some
+ * junto: ele só aparece na etapa em andamento.
+ */
+export function etapasUltrapassadas(etapas: EtapaDaTrilha[]): boolean[] {
+  return etapas.map((_, indice) => etapas.slice(indice).some((etapa) => etapa.cumprida));
+}
+
 export function Trilha({ etapas }: { etapas: EtapaDaTrilha[] }) {
-  // A etapa atual é a primeira que ainda não foi cumprida. Marcar várias como
-  // "atual" tiraria da trilha justamente o que ela serve para dizer: onde parei.
-  const atual = etapas.findIndex((etapa) => !etapa.cumprida);
+  const ultrapassadas = etapasUltrapassadas(etapas);
+  // A etapa atual é a primeira que ainda não foi ultrapassada. Marcar várias
+  // como "atual" tiraria da trilha justamente o que ela serve para dizer: onde parei.
+  const atual = ultrapassadas.findIndex((ultrapassada) => !ultrapassada);
   const numeroDaAtual = atual === -1 ? etapas.length : atual + 1;
 
   return (
@@ -39,30 +51,31 @@ export function Trilha({ etapas }: { etapas: EtapaDaTrilha[] }) {
     >
       {etapas.map((etapa, indice) => {
         const eAtual = indice === atual;
+        const feita = ultrapassadas[indice];
 
         return (
           <View key={etapa.rotulo} style={styles.etapa}>
             <View
               style={[
                 styles.marca,
-                etapa.cumprida && styles.marcaCumprida,
+                feita && styles.marcaCumprida,
                 eAtual && styles.marcaAtual,
               ]}
             >
               <Text
                 style={[
                   styles.numero,
-                  etapa.cumprida && styles.numeroCumprido,
+                  feita && styles.numeroCumprido,
                   eAtual && styles.numeroAtual,
                 ]}
               >
-                {etapa.cumprida ? '✓' : indice + 1}
+                {feita ? '✓' : indice + 1}
               </Text>
             </View>
 
             <Text
               numberOfLines={1}
-              style={[styles.rotulo, (etapa.cumprida || eAtual) && styles.rotuloAtivo]}
+              style={[styles.rotulo, (feita || eAtual) && styles.rotuloAtivo]}
             >
               {etapa.rotulo}
             </Text>
@@ -101,11 +114,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  marcaCumprida: { backgroundColor: colors.primaryContainer, borderColor: colors.primaryContainer },
+  // Mesmo verde do chip de sucesso: o primaryContainer é tão escuro que, num
+  // círculo de 24 px, a etapa cumprida parecia preta.
+  marcaCumprida: { backgroundColor: colors.primaryFixed, borderColor: colors.primaryFixedDim },
   marcaAtual: { borderColor: colors.primary, borderWidth: 2 },
 
   numero: { ...typography.labelSm, color: colors.onSurfaceVariant },
-  numeroCumprido: { color: colors.onPrimary },
+  numeroCumprido: { color: colors.onPrimaryFixedVariant },
   numeroAtual: { color: colors.primary },
 
   rotulo: { ...typography.labelSm, color: colors.onSurfaceVariant },
