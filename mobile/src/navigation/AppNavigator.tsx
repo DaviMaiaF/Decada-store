@@ -26,6 +26,7 @@ import {
 } from '../components/TabIcons';
 import ConfirmationScreen from '../screens/ConfirmationScreen';
 import EconomyScreen from '../screens/EconomyScreen';
+import HomeScreen, { type AbaDeDestino } from '../screens/HomeScreen';
 import MarketScreen from '../screens/MarketScreen';
 import PantryScreen from '../screens/PantryScreen';
 import UploadScreen from '../screens/UploadScreen';
@@ -57,6 +58,10 @@ export default function AppNavigator() {
   const [etapaEscolhida, setEtapa] = useState<Etapa | null>(null);
   const [planoDaSessao, setPlanoDaSessao] = useState<string | null>(null);
   const [listaDaSessao, setListaDaSessao] = useState<string | null>(null);
+  // O app abre no início, e a compra concluída volta para ele. Sair do início
+  // monta as abas já na aba escolhida.
+  const [noInicio, setNoInicio] = useState(true);
+  const [abaInicial, setAbaInicial] = useState<AbaDeDestino>('Dieta');
 
   const planos = useQuery({ queryKey: ['meal-plans'], queryFn: readMealPlans });
   const planId = planoDaSessao ?? planos.data?.[0]?.id ?? null;
@@ -118,15 +123,35 @@ export default function AppNavigator() {
     );
   }
 
+  const trilha = (
+    <SafeAreaView edges={['top']} style={styles.topo}>
+      <Trilha etapas={etapas} />
+    </SafeAreaView>
+  );
+
+  if (noInicio) {
+    return (
+      <View style={styles.inicio}>
+        {trilha}
+        <HomeScreen
+          etapas={etapas}
+          onIr={(aba) => {
+            setAbaInicial(aba);
+            setNoInicio(false);
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer ref={navegacao}>
       {/* A trilha fica no lugar do cabeçalho, que só repetia o nome da aba —
           cada tela já abre com o próprio título. */}
-      <SafeAreaView edges={['top']} style={styles.topo}>
-        <Trilha etapas={etapas} />
-      </SafeAreaView>
+      {trilha}
 
       <Tab.Navigator
+        initialRouteName={abaInicial}
         screenOptions={{
           headerShown: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.outlineVariant },
@@ -175,7 +200,12 @@ export default function AppNavigator() {
           }}
         >
           {() => (
-            <MarketScreen planId={planId} listId={listId} onGenerated={setListaDaSessao} />
+            <MarketScreen
+              planId={planId}
+              listId={listId}
+              onGenerated={setListaDaSessao}
+              onCompraConcluida={() => setNoInicio(true)}
+            />
           )}
         </Tab.Screen>
 
@@ -207,6 +237,7 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   topo: { backgroundColor: colors.surface },
+  inicio: { flex: 1, backgroundColor: colors.surface },
   carregando: {
     flex: 1,
     backgroundColor: colors.surface,

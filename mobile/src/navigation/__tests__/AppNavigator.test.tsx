@@ -69,12 +69,19 @@ const itemDoPlano = {
 
 let cliente: QueryClient;
 
-async function montar() {
+/** Monta o app, que abre na tela de início. */
+async function abrir() {
   await render(
     <QueryClientProvider client={cliente}>
       <AppNavigator />
     </QueryClientProvider>,
   );
+}
+
+/** Monta o app e sai do início pela próxima etapa, como a pessoa faria. */
+async function montar() {
+  await abrir();
+  await fireEvent.press(await screen.findByText(/^(Enviar o plano|Confirmar produtos|Gerar a lista|Ir ao mercado)$/));
 }
 
 beforeEach(() => {
@@ -110,6 +117,25 @@ beforeEach(() => {
 afterEach(() => {
   cliente.clear();
   cliente.unmount();
+});
+
+describe('tela de início', () => {
+  it('o app abre no início, com a próxima etapa', async () => {
+    await abrir();
+
+    expect(await screen.findByText('Olá!')).toBeTruthy();
+    expect(screen.getByText('Envie o plano da sua nutricionista')).toBeTruthy();
+    expect(screen.queryByText('Importe sua prescrição')).toBeNull();
+  });
+
+  it('com plano, o início leva à confirmação dos produtos', async () => {
+    lerPlanos.mockResolvedValue([planoSalvo()]);
+
+    await abrir();
+    await fireEvent.press(await screen.findByText('Confirmar produtos'));
+
+    expect(await screen.findByText('Confirme os produtos')).toBeTruthy();
+  });
 });
 
 describe('trilha da jornada', () => {
