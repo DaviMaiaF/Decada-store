@@ -131,7 +131,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
-| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` só na tela, com aviso de valores fictícios; não chama a API nem marca item como comprado |
+| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Confirmar marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
 | Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
@@ -381,6 +381,17 @@ A trilha **não é clicável**, de propósito: a barra de abas logo abaixo já n
 lugares diferentes para a mesma navegação confundiriam em vez de guiar. Ela também tomou
 o lugar do cabeçalho, que só repetia o nome da aba enquanto cada tela já abre com o
 próprio título.
+
+Etapa com alguma seguinte cumprida aparece **ultrapassada** (círculo verde com ✓), mesmo
+sem ter sido cumprida por inteiro: quem gerou a lista com 9 de 16 itens confirmados já
+passou da confirmação. O progresso parcial ("9/16") só aparece na etapa em andamento.
+
+### Tela de início
+
+O app abre numa tela de início (`HomeScreen`), **fora das quatro abas**: ela não é mais
+um lugar para navegar, e sim a porta de entrada. Mostra a próxima etapa da trilha e um
+botão que leva à aba que a resolve. A compra concluída volta para ela, que então aponta a
+aba Economia.
 
 ---
 

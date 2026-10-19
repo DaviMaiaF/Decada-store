@@ -117,7 +117,8 @@ backend estão em [`docs/design/`](docs/design/). Antes de implementar qualquer 
 ou endpoint que a alimente, leia [`docs/design/telas.md`](docs/design/telas.md): ele
 diz o que já existe, o que falta e o que ficou fora do MVP.
 
-A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**. O app vive em
+A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**, e uma tela de
+início fora delas, onde o app abre e para onde a compra concluída leva. O app vive em
 `mobile/`; os tokens do sistema de design estão em `mobile/src/theme/tokens.ts` e
 vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
 
