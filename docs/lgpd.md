@@ -9,12 +9,20 @@ documento reúne, cada uma com o teste que a sustenta.
 | Dado | Onde | Por que precisa existir |
 |---|---|---|
 | E-mail e nome | `users` | Identificar a conta |
+| Papel e CRN | `users.role`, `users.crn` | Abrir a navegação certa; o CRN assina o plano que a nutricionista monta. Declarado, não verificado |
 | Hash da senha | `users.password_hash` | Autenticar. A senha em si nunca é guardada |
 | Plano alimentar e seus itens | `meal_plans`, `plan_items` | É o serviço |
-| Texto integral do PDF | `meal_plans.source_text` | Auditoria: permite conferir depois o que o parser leu errado |
+| Texto integral do PDF | `meal_plans.source_text` | Auditoria: permite conferir depois o que o parser leu errado. No plano aceito pelo e-mail, é o mesmo texto do PDF que a nutricionista geraria |
+| Refeições e substituições do plano aceito | `meal_plans.prescribed_meals` | O paciente consultar o que a nutricionista prescreveu além do que vai para a compra |
+| Plano montado pela nutricionista | `prescriptions` e filhas | É o trabalho dela. Guarda o nome e o e-mail do paciente para o cabeçalho do PDF e para o envio |
 | O que a pessoa tem em casa | `pantry_items` | Descontar da compra |
 | Listas de compras | `shopping_lists` | Histórico de custo |
 | Preços que a pessoa contribuiu | `price_records.user_id` | Creditar a coleta — e é o único campo que sobrevive à exclusão, anonimizado |
+
+O plano que a nutricionista monta é dado de saúde do paciente **tratado pela
+profissional de saúde**, no exercício da profissão (art. 11, II, *f*). Ele só passa a ser
+dado do paciente *no aplicativo* quando ele aceita, com consentimento — antes disso, nada
+é gravado na conta dele.
 
 **O que não é guardado:** CPF, endereço, telefone, data de nascimento, peso,
 altura, condição clínica, restrição alimentar em campo próprio. Nada disso é
@@ -35,9 +43,15 @@ Na API, o cliente manda um booleano de aceite e **o servidor carimba a hora**.
 Aceitar o horário informado pelo cliente seria usar como prova de consentimento
 um dado que o cliente controla.
 
+O plano enviado pela nutricionista segue a mesma regra. Aceitar exige o mesmo aceite do
+PDF, carimbado no servidor; sem ele a resposta é 422 e nada é gravado. Recusar não grava
+nada na conta do paciente.
+
 > Testes: `test_import_plan.py::test_grava_consentimento_com_data_e_versao`,
 > `::test_nao_da_para_importar_sem_informar_o_consentimento`,
-> `test_api.py::test_sem_aceite_do_termo_nao_grava_plano`.
+> `test_api.py::test_sem_aceite_do_termo_nao_grava_plano`,
+> `test_prescription_delivery.py::test_sem_consentimento_nada_e_gravado`,
+> `::test_recusar_nao_grava_nada`.
 
 ## Minimização
 
@@ -46,7 +60,13 @@ usa produto, região e data. A sugestão de receitas usa a despensa e a lista. E
 nenhum ponto o sistema pede ou infere condição de saúde.
 
 O aplicativo **não prescreve dieta** — ele operacionaliza uma prescrição que já
-existe. Substituição de alimento só aparece se veio da nutricionista.
+existe. Substituição de alimento só aparece se veio da nutricionista. No plano montado
+no app, quem prescreve é a nutricionista, com nome e CRN; o app só leva as substituições
+dela até o paciente, para ler, e não as põe na compra.
+
+O paciente vê do plano recebido só o nome e o CRN de quem o assinou — nunca o e-mail
+da nutricionista. A nutricionista vê do paciente só o que ela mesma digitou e se ele
+aceitou ou recusou.
 
 ## Exclusão sob demanda
 
@@ -55,6 +75,12 @@ existe. Substituição de alimento só aparece se veio da nutricionista.
 **Vai embora:** a linha em `users`, com e-mail e hash da senha; os planos
 alimentares e seus itens; a despensa; as listas de compras e seus itens. Tudo
 por cascata declarada no modelo, não por código que pode esquecer uma tabela.
+
+**Da nutricionista, vão também** os planos que ela montou, com refeições e itens. Plano
+enviado e ainda sem resposta deixa de aparecer para o paciente. O plano que um paciente
+**já aceitou fica com ele**: é uma cópia na conta dele, e é dado dele. A recíproca vale:
+o paciente excluir a conta não apaga o documento da nutricionista, que é registro
+profissional dela.
 
 **Fica:** os registros de preço que a pessoa contribuiu, com `user_id` nulo.
 Preço coletado de nota fiscal é informação sobre o mercado, não sobre quem
@@ -71,11 +97,15 @@ O token de quem foi excluído para de funcionar na requisição seguinte, porque
 > Testes: `test_auth.py::test_a_exclusao_leva_embora_os_dados_pessoais`,
 > `::test_o_preco_sobrevive_anonimizado`,
 > `::test_o_token_para_de_funcionar_depois_da_exclusao`,
-> `::test_a_exclusao_nao_atinge_outras_pessoas`.
+> `::test_a_exclusao_nao_atinge_outras_pessoas`,
+> `test_prescriptions.py::test_excluir_a_conta_leva_os_planos_dela`,
+> `test_prescription_delivery.py::test_o_plano_aceito_sobrevive_a_nutricionista_sair`,
+> `::test_plano_pendente_some_quando_a_nutricionista_sai`,
+> `::test_paciente_sair_nao_apaga_o_documento_da_nutricionista`.
 
 ## Não confirmar o que não precisa ser confirmado
 
-Três respostas da API são deliberadamente iguais entre si:
+Estas respostas da API são deliberadamente iguais entre si:
 
 - **Senha errada e e-mail inexistente** devolvem o mesmo 401 e o mesmo corpo.
   Diferenciar entregaria a lista de quem tem conta — e ter conta aqui significa
@@ -84,10 +114,20 @@ Três respostas da API são deliberadamente iguais entre si:
   401. O último caso é o que mais importa: confirmar que uma conta existiu
   contraria o próprio pedido de exclusão.
 - **Recurso de outra pessoa** devolve 404, não 403. Responder "existe, mas não é
-  seu" já revelaria que aquela pessoa tem um plano alimentar.
+  seu" já revelaria que aquela pessoa tem um plano alimentar. Vale também entre
+  nutricionistas: o plano de outra é 404.
+- **Conta do outro papel na porta de login errada** devolve o mesmo 401 da senha
+  errada. Dizer "essa conta é de paciente" confirmaria que a pessoa tem um plano
+  guardado. A rota do outro papel responde 404, como recurso que não existe.
+- **Enviar o plano a um e-mail com conta e a um sem conta** dá a mesma resposta. Se
+  desse diferente, o envio viraria um jeito de descobrir quem usa o app.
 
 > Testes: `test_auth.py::test_senha_errada_e_email_inexistente_respondem_igual`,
-> `test_api.py::test_plano_de_outra_pessoa_devolve_404`.
+> `test_api.py::test_plano_de_outra_pessoa_devolve_404`,
+> `test_nutritionist_auth.py::test_paciente_na_porta_da_nutricionista_parece_senha_errada`,
+> `::test_nutricionista_nao_enxerga_rotas_do_paciente`,
+> `test_prescription_delivery.py::test_envio_nao_revela_se_o_email_tem_conta`,
+> `test_prescriptions.py::test_plano_de_outra_nutricionista_responde_404`.
 
 ## O que falta para valer em produção
 
@@ -98,4 +138,7 @@ Este é um projeto acadêmico e o MVP não cobre:
 - portabilidade (art. 18, V): exportar os dados num formato legível por máquina;
 - registro de operações de tratamento e prazo de retenção definido;
 - revogação de token antes de expirar, que exigiria sessões no banco;
-- consentimento granular por finalidade — hoje é um aceite único.
+- consentimento granular por finalidade — hoje é um aceite único;
+- verificação do CRN junto ao conselho — hoje ele é só declarado;
+- prazo de retenção do plano que a nutricionista guarda depois de o paciente excluir a
+  conta: hoje o documento dela, com nome e e-mail do paciente, fica até ela o apagar.
