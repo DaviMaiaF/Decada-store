@@ -1,5 +1,6 @@
 /**
- * Raiz do aplicativo: provedores, fontes e a escolha entre login e app.
+ * Raiz do aplicativo: provedores, fontes e a escolha entre login, app do
+ * paciente e área da nutricionista.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +9,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import NutritionistNavigator from './src/navigation/NutritionistNavigator';
 import LoginScreen from './src/screens/LoginScreen';
 import { AuthProvider, useAuth } from './src/services/auth';
 import { useAppFonts } from './src/theme/fonts';
@@ -24,7 +26,7 @@ const queryClient = new QueryClient({
 });
 
 function Raiz() {
-  const { signedIn } = useAuth();
+  const { signedIn, role } = useAuth();
   const fontesCarregadas = useAppFonts();
 
   // `signedIn` é nulo enquanto o token guardado ainda está sendo lido: mostrar
@@ -37,7 +39,9 @@ function Raiz() {
     );
   }
 
-  return signedIn ? <AppNavigator /> : <LoginScreen />;
+  if (!signedIn) return <LoginScreen />;
+  // O papel só escolhe a navegação; quem barra a rota do outro papel é o servidor.
+  return role === 'nutricionista' ? <NutritionistNavigator /> : <AppNavigator />;
 }
 
 export default function App() {

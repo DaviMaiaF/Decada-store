@@ -680,6 +680,13 @@ function CartaoDeReceita({
         {recipe.servings ? ` · rende ${recipe.servings}` : ''}
       </Text>
 
+      {recipe.author ? (
+        <Text style={styles.receitaDetalhe}>
+          Receita de {recipe.author.full_name}
+          {recipe.author.crn ? ` · ${recipe.author.crn}` : ''}
+        </Text>
+      ) : null}
+
       {missing.length > 0 ? (
         <>
           <Text style={styles.faltando}>

@@ -65,6 +65,7 @@ function receita(over: Partial<Recipe> & { id: string }): Recipe {
     prep_minutes: 10,
     instructions: 'Amasse a banana e misture com a aveia.',
     is_fictitious: true,
+    author: null,
     ingredients: [],
     ...over,
   };
@@ -350,6 +351,31 @@ describe('receitas', () => {
     expect(await screen.findByText('Panqueca de aveia e banana')).toBeTruthy();
     expect(screen.getByText('100% disponível')).toBeTruthy();
     expect(screen.getByText('Dá para fazer com o que você já tem.')).toBeTruthy();
+  });
+
+  it('assina a receita escrita por uma nutricionista', async () => {
+    lerReceitas.mockResolvedValue([
+      disponibilidade({
+        recipe: receita({
+          id: 'receita-2',
+          is_fictitious: false,
+          author: { full_name: 'Camila Fernandes', crn: 'CRN-3 48291' },
+        }),
+      }),
+    ]);
+
+    await montar();
+
+    expect(await screen.findByText('Receita de Camila Fernandes · CRN-3 48291')).toBeTruthy();
+  });
+
+  it('receita do seed não tem assinatura', async () => {
+    lerReceitas.mockResolvedValue([disponibilidade()]);
+
+    await montar();
+
+    await screen.findByText('Panqueca de aveia e banana');
+    expect(screen.queryByText(/^Receita de /)).toBeNull();
   });
 
   it('nomeia o que falta', async () => {

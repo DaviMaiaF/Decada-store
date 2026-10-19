@@ -19,7 +19,9 @@ import type {
   PantryItem,
   PlanItem,
   ProductSuggestion,
+  Recipe,
   RecipeAvailability,
+  RecipeInput,
   ShoppingList,
   ShoppingListItem,
   ShoppingListSummary,
@@ -58,6 +60,27 @@ export const register = (email: string, password: string, fullName?: string) =>
 
 export const login = (email: string, password: string) =>
   request<Token>('/auth/login', { method: 'POST', anonymous: true, body: { email, password } });
+
+/** Nome e CRN são obrigatórios: são a assinatura das receitas dela. */
+export const registerNutritionist = (
+  email: string,
+  password: string,
+  fullName: string,
+  crn: string,
+) =>
+  request<Token>('/auth/nutritionist/register', {
+    method: 'POST',
+    anonymous: true,
+    body: { email, password, full_name: fullName, crn },
+  });
+
+/** Porta da nutricionista. Conta de paciente aqui recebe o mesmo 401 de senha errada. */
+export const loginNutritionist = (email: string, password: string) =>
+  request<Token>('/auth/nutritionist/login', {
+    method: 'POST',
+    anonymous: true,
+    body: { email, password },
+  });
 
 export const readAccount = () => request<Account>('/auth/me');
 
@@ -224,3 +247,19 @@ export const readRecipeSuggestions = (shoppingListId?: string, minimumPercentage
   if (shoppingListId) parametros.set('shopping_list_id', shoppingListId);
   return request<RecipeAvailability[]>(`/recipes/suggestions?${parametros.toString()}`);
 };
+
+// --- receitas da nutricionista ---
+
+/** As receitas que esta nutricionista escreveu, em ordem alfabética. */
+export const readOwnRecipes = () => request<Recipe[]>('/nutritionist/recipes');
+
+/** Publica a receita: ela passa a aparecer nas sugestões de todo paciente. */
+export const createRecipe = (recipe: RecipeInput) =>
+  request<Recipe>('/nutritionist/recipes', { method: 'POST', body: recipe });
+
+/** Troca a receita inteira, ingredientes inclusive. */
+export const updateRecipe = (recipeId: string, recipe: RecipeInput) =>
+  request<Recipe>(`/nutritionist/recipes/${recipeId}`, { method: 'PUT', body: recipe });
+
+export const deleteRecipe = (recipeId: string) =>
+  request<void>(`/nutritionist/recipes/${recipeId}`, { method: 'DELETE' });

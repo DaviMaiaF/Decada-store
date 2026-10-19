@@ -1,6 +1,6 @@
 /** Testes da sessão: o que decide entre login e app na abertura. */
 
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 import { ApiError } from '../api';
@@ -12,11 +12,15 @@ jest.mock('../session', () => ({
   readToken: jest.fn(),
   saveToken: jest.fn().mockResolvedValue(undefined),
   clearToken: jest.fn().mockResolvedValue(undefined),
+  saveRole: jest.fn().mockResolvedValue(undefined),
+  readRole: jest.fn().mockResolvedValue('paciente'),
 }));
 
 jest.mock('../api', () => ({
   ...jest.requireActual('../api'),
   readAccount: jest.fn(),
+  login: jest.fn(),
+  loginNutritionist: jest.fn(),
 }));
 
 const mockConfig = { reset: false };
@@ -25,16 +29,22 @@ jest.mock('../config', () => ({
   resetSessionAtivo: () => mockConfig.reset,
 }));
 
-const { readToken, clearToken } = jest.requireMock('../session');
+const { readToken, clearToken, readRole, saveRole } = jest.requireMock('../session');
 const readAccountFalso = api.readAccount as jest.Mock;
 
 function Estado() {
-  const { signedIn, notice } = useAuth();
+  const { signedIn, role, notice, signIn } = useAuth();
   return (
-    <Text>
-      {signedIn === null ? 'carregando' : signedIn ? 'logado' : 'deslogado'}
-      {notice ? ` | ${notice}` : ''}
-    </Text>
+    <>
+      <Text>
+        {signedIn === null ? 'carregando' : signedIn ? 'logado' : 'deslogado'}
+        {notice ? ` | ${notice}` : ''}
+      </Text>
+      <Text>papel: {role ?? 'nenhum'}</Text>
+      <Text onPress={() => signIn('camila@example.com', 'senha-boa', 'nutricionista')}>
+        entrar como nutricionista
+      </Text>
+    </>
   );
 }
 
@@ -116,4 +126,42 @@ it('com RESET_SESSION ligado, apaga o token e abre no login', async () => {
   expect(await screen.findByText('deslogado')).toBeTruthy();
   expect(clearToken).toHaveBeenCalled();
   expect(readAccountFalso).not.toHaveBeenCalled();
+});
+
+// --- papel da conta ---
+
+it('o papel vem da conta, na abertura', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'c@b.com', role: 'nutricionista' });
+  await montar();
+
+  expect(await screen.findByText('papel: nutricionista')).toBeTruthy();
+});
+
+it('sem rede, o papel vem do que ficou guardado no último login', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readRole.mockResolvedValueOnce('nutricionista');
+  readAccountFalso.mockRejectedValue(new ApiError(0, 'sem rede'));
+  await montar();
+
+  expect(await screen.findByText('papel: nutricionista')).toBeTruthy();
+  expect(screen.getByText('logado')).toBeTruthy();
+});
+
+it('entrar como nutricionista usa a porta dela e guarda o papel', async () => {
+  readToken.mockResolvedValue(null);
+  (api.loginNutritionist as jest.Mock).mockResolvedValue({
+    access_token: 't',
+    token_type: 'bearer',
+    role: 'nutricionista',
+  });
+  await montar();
+  await screen.findByText('deslogado');
+
+  await fireEvent.press(screen.getByText('entrar como nutricionista'));
+
+  expect(await screen.findByText('papel: nutricionista')).toBeTruthy();
+  expect(api.loginNutritionist).toHaveBeenCalledWith('camila@example.com', 'senha-boa');
+  expect(api.login).not.toHaveBeenCalled();
+  expect(saveRole).toHaveBeenCalledWith('nutricionista');
 });

@@ -13,8 +13,11 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import type { UserRole } from '../types/api';
+
 const CHAVE_TOKEN = 'decada.access_token';
 const CHAVE_REGIAO = 'decada.user_region';
+const CHAVE_PAPEL = 'decada.user_role';
 
 export interface UserRegion {
   stateCode: string;
@@ -43,12 +46,39 @@ export async function readToken(): Promise<string | null> {
   return SecureStore.getItemAsync(CHAVE_TOKEN);
 }
 
+/** Sai da sessão: o papel guardado vai junto, porque só vale com o token. */
 export async function clearToken(): Promise<void> {
   if (Platform.OS === 'web') {
     localStorage.removeItem(CHAVE_TOKEN);
+    localStorage.removeItem(CHAVE_PAPEL);
     return;
   }
   await SecureStore.deleteItemAsync(CHAVE_TOKEN);
+  await SecureStore.deleteItemAsync(CHAVE_PAPEL);
+}
+
+// --- papel da conta ---
+
+/**
+ * O papel fica guardado para o app abrir na navegação certa mesmo sem rede,
+ * quando `/auth/me` não responde. Não decide permissão nenhuma: quem decide é
+ * o servidor, que responde 404 à rota do outro papel.
+ */
+export async function saveRole(role: UserRole): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(CHAVE_PAPEL, role);
+    return;
+  }
+  await SecureStore.setItemAsync(CHAVE_PAPEL, role);
+}
+
+/** Sessão de antes da conta de nutricionista não tem papel guardado: era paciente. */
+export async function readRole(): Promise<UserRole> {
+  const valor =
+    Platform.OS === 'web'
+      ? localStorage.getItem(CHAVE_PAPEL)
+      : await SecureStore.getItemAsync(CHAVE_PAPEL);
+  return valor === 'nutricionista' ? 'nutricionista' : 'paciente';
 }
 
 // --- região do usuário (estado e cidade) ---

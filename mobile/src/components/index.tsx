@@ -131,6 +131,7 @@ export function Checkbox({
 export function Field({
   label,
   error,
+  style,
   ...props
 }: TextInputProps & { label: string; error?: string | null }) {
   return (
@@ -139,8 +140,9 @@ export function Field({
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={colors.outline}
-        style={[styles.input, error ? styles.inputError : null]}
         {...props}
+        // O estilo de quem chama soma ao do campo, em vez de apagar borda e fundo.
+        style={[styles.input, error ? styles.inputError : null, style]}
       />
       {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>

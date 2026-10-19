@@ -12,6 +12,8 @@ export type BaseUnit = 'kg' | 'l' | 'unidade';
 export type PlanItemStatus = 'pendente' | 'confirmado' | 'nao_identificado';
 export type PriceOrigin = 'nfce' | 'scraping' | 'usuario' | 'seed';
 export type PriceConfidence = 'atual' | 'recente' | 'estimativa';
+/** Um papel por conta: quem segue um plano ou quem escreve receitas. */
+export type UserRole = 'paciente' | 'nutricionista';
 
 export interface Product {
   id: string;
@@ -187,12 +189,17 @@ export interface Account {
   id: string;
   email: string;
   full_name: string | null;
+  role: UserRole;
+  /** Só a nutricionista tem. */
+  crn: string | null;
   created_at: string;
 }
 
 export interface Token {
   access_token: string;
   token_type: string;
+  /** Diz qual navegação abrir, sem uma ida extra a `/auth/me`. */
+  role: UserRole;
 }
 
 export interface RecipeIngredient {
@@ -200,6 +207,12 @@ export interface RecipeIngredient {
   quantity: string;
   unit: MeasurementUnit;
   optional: boolean;
+}
+
+/** Quem assina a receita. Nunca traz o e-mail. */
+export interface RecipeAuthor {
+  full_name: string | null;
+  crn: string | null;
 }
 
 export interface Recipe {
@@ -210,7 +223,23 @@ export interface Recipe {
   prep_minutes: number | null;
   instructions: string | null;
   is_fictitious: boolean;
+  /** Nula nas receitas do seed. */
+  author: RecipeAuthor | null;
   ingredients: RecipeIngredient[];
+}
+
+/** Receita como a nutricionista a envia. Serve para criar e para editar. */
+export interface RecipeInput {
+  name: string;
+  instructions: string | null;
+  servings: number | null;
+  prep_minutes: number | null;
+  ingredients: {
+    product_id: string;
+    quantity: string;
+    unit: MeasurementUnit;
+    optional: boolean;
+  }[];
 }
 
 export interface RecipeAvailability {
