@@ -138,6 +138,27 @@ describe('tela de início', () => {
   });
 });
 
+describe('voltar ao início', () => {
+  it('das abas dá para voltar ao início a qualquer momento', async () => {
+    lerPlanos.mockResolvedValue([planoSalvo()]);
+
+    await abrir();
+    await fireEvent.press(await screen.findByLabelText('Ir para Despensa'));
+    expect(screen.queryByText('Olá!')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('Voltar ao início'));
+
+    expect(await screen.findByText('Olá!')).toBeTruthy();
+  });
+
+  it('no próprio início não há botão de voltar a ele', async () => {
+    await abrir();
+
+    await screen.findByText('Olá!');
+    expect(screen.queryByLabelText('Voltar ao início')).toBeNull();
+  });
+});
+
 describe('trilha da jornada', () => {
   it('sem plano, a etapa atual é enviar', async () => {
     await montar();
