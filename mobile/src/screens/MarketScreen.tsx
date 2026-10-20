@@ -363,8 +363,19 @@ function ListaCarregada({
       <Text style={styles.titulo}>Lista de Mercado</Text>
 
       <Card style={styles.resumo}>
-        <Text style={styles.resumoRotulo}>ESTIMATIVA DA COMPRA</Text>
-        <Text style={styles.total}>{formatMoney(lista.estimated_total)}</Text>
+        <Text style={styles.resumoRotulo}>
+          {simulando ? 'SIMULANDO A COMPRA' : 'ESTIMATIVA DA COMPRA'}
+        </Text>
+        {/* Na simulação o card de cima é quem muda: o total simulado ficava em
+            outro card, abaixo da dobra, e parecia que nada tinha acontecido. */}
+        <Text style={styles.total}>
+          {formatMoney(simulando ? totalSimulado : lista.estimated_total)}
+        </Text>
+        {simulando ? (
+          <Text style={styles.resumoRegiao}>
+            salva: <Text style={styles.totalSalvo}>{formatMoney(totalOriginal)}</Text>
+          </Text>
+        ) : null}
         <Text style={styles.resumoRegiao}>
           {lista.city} · {lista.state_code}
         </Text>
@@ -399,7 +410,6 @@ function ListaCarregada({
       {simulando ? (
         <Card style={styles.simulacao}>
           <SectionTitle>Simulando a compra</SectionTitle>
-          <Text style={styles.totalSimulado}>{formatMoney(totalSimulado)}</Text>
           <Body muted>{descreverSimulacao(foraDaSimulacao.length, diferenca)}</Body>
           <Body muted>
             É só uma conta nesta tela. Sua lista continua inteira, e o plano da sua
@@ -804,7 +814,7 @@ const styles = StyleSheet.create({
 
   avisoRegiao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
   simulacao: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
-  totalSimulado: { ...typography.currency, color: colors.primary },
+  totalSalvo: { textDecorationLine: 'line-through' },
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },
   trocarRegiao: { minHeight: MIN_TOUCH_HEIGHT, justifyContent: 'center' },

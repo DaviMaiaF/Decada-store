@@ -56,7 +56,10 @@ export default function CheckoutScreen({
           .filter((item) => !item.purchased)
           .map((item) => setItemPurchased(lista.id, item.id, true)),
       ),
-    onSuccess: () => setConcluido(true),
+    // Otimista: a tela de conclusão entra no toque, sem esperar uma chamada por
+    // item. Se alguma falhar, a pessoa volta ao checkout com o erro à vista.
+    onMutate: () => setConcluido(true),
+    onError: () => setConcluido(false),
     // Mesmo com falha parcial, alguns itens podem ter sido gravados: a lista
     // é lida de novo nos dois casos, e a trilha acompanha.
     onSettled: () => cliente.invalidateQueries({ queryKey: ['shopping-list', lista.id] }),

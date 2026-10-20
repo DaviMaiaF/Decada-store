@@ -315,6 +315,123 @@ def test_produto_embalado_cobra_a_embalagem_fechada(db_session, usuario, catalog
 
 
 # --------------------------------------------------------------------------
+# o mesmo produto em duas refeições
+# --------------------------------------------------------------------------
+
+def test_mesmo_produto_em_duas_refeicoes_vira_uma_linha_somada(
+    db_session, usuario, catalogo_carregado
+):
+    queijo = catalogo_carregado(QUEIJO)
+    plano = _plano(
+        usuario,
+        _item(1, "150 g de queijo minas", "150", G, queijo),
+        _item(2, "150 g de queijo minas", "150", G, queijo),
+    )
+    db_session.add(plano)
+    db_session.flush()
+
+    resultado = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
+
+    assert len(resultado.shopping_list.items) == 1
+    item = resultado.shopping_list.items[0]
+    assert item.quantity == Decimal("0.300")
+    assert resultado.items_to_buy == 1
+    assert resultado.items_skipped == 0
+
+
+def test_a_despensa_abate_uma_vez_so_do_total_somado(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    _guardar(db_session, PantryItem(raw_description="frango", product=frango,
+                                    quantity=Decimal("0.5"), unit=KG), usuario)
+    plano = _plano(
+        usuario,
+        _item(1, "600 g de frango", "600", G, frango),
+        _item(2, "600 g de frango", "600", G, frango),
+    )
+    db_session.add(plano)
+    db_session.flush()
+
+    item = generate_shopping_list(
+        db_session, plano, "DF", "Brasília", reference=AGORA
+    ).shopping_list.items[0]
+
+    # 1,2 kg pedidos, 0,5 em casa: leva 0,7. Abater por linha daria 0,2.
+    assert item.quantity == Decimal("0.700")
+    assert item.quantity_from_pantry == Decimal("0.500")
+
+
+def test_soma_converte_unidades_diferentes_do_mesmo_produto(
+    db_session, usuario, catalogo_carregado
+):
+    frango = catalogo_carregado(FRANGO)
+    plano = _plano(
+        usuario,
+        _item(1, "500 g de frango", "500", G, frango),
+        _item(2, "1 kg de frango", "1", KG, frango),
+    )
+    db_session.add(plano)
+    db_session.flush()
+
+    resultado = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
+
+    assert [i.quantity for i in resultado.shopping_list.items] == [Decimal("1.500")]
+
+
+def test_linha_somada_nao_deixa_a_lista_desatualizada(db_session, usuario, catalogo_carregado):
+    queijo = catalogo_carregado(QUEIJO)
+    plano = _plano(
+        usuario,
+        _item(1, "150 g de queijo minas", "150", G, queijo),
+        _item(2, "150 g de queijo minas", "150", G, queijo),
+    )
+    db_session.add(plano)
+    db_session.flush()
+    lista = generate_shopping_list(
+        db_session, plano, "DF", "Brasília", reference=AGORA
+    ).shopping_list
+
+    assert outdated_items(lista) == []
+
+
+def test_desconfirmar_so_a_segunda_ocorrencia_desatualiza_a_lista(
+    db_session, usuario, catalogo_carregado
+):
+    queijo = catalogo_carregado(QUEIJO)
+    segundo = _item(2, "150 g de queijo minas", "150", G, queijo)
+    plano = _plano(usuario, _item(1, "150 g de queijo minas", "150", G, queijo), segundo)
+    db_session.add(plano)
+    db_session.flush()
+    lista = generate_shopping_list(
+        db_session, plano, "DF", "Brasília", reference=AGORA
+    ).shopping_list
+
+    segundo.status = PlanItemStatus.PENDENTE
+    db_session.flush()
+
+    assert [(c.plan_item, c.change) for c in outdated_items(lista)] == [
+        (segundo, PlanChange.NAO_CONFIRMADO)
+    ]
+
+
+def test_item_pendente_do_mesmo_produto_nao_desatualiza_quem_nunca_o_somou(
+    db_session, usuario, catalogo_carregado
+):
+    queijo = catalogo_carregado(QUEIJO)
+    plano = _plano(
+        usuario,
+        _item(1, "150 g de queijo minas", "150", G, queijo),
+        _item(2, "150 g de queijo minas", "150", G, queijo, PlanItemStatus.PENDENTE),
+    )
+    db_session.add(plano)
+    db_session.flush()
+    lista = generate_shopping_list(
+        db_session, plano, "DF", "Brasília", reference=AGORA
+    ).shopping_list
+
+    assert outdated_items(lista) == []
+
+
+# --------------------------------------------------------------------------
 # a lista fica gravada
 # --------------------------------------------------------------------------
 

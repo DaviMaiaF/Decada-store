@@ -46,20 +46,20 @@ export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
           Animated.parallel([
             Animated.timing(circulo, {
               toValue: 1,
-              duration: 600,
+              duration: 350,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: false,
             }),
             Animated.spring(escala, {
               toValue: 1,
-              friction: 4,
-              tension: 80,
+              friction: 6,
+              tension: 140,
               useNativeDriver: false,
             }),
           ]),
           Animated.timing(check, {
             toValue: 1,
-            duration: 400,
+            duration: 250,
             easing: Easing.out(Easing.quad),
             useNativeDriver: false,
           }),
