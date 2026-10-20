@@ -178,6 +178,7 @@ trocá-la invalida todos os tokens já emitidos.
 | `PATCH` | `/pantry/{id}` | Vincula o produto ou mede um item já salvo |
 | `DELETE` | `/pantry/{id}` | Remove item da despensa |
 | `GET` | `/pantry/{id}/candidates` | Produtos parecidos com um item já salvo |
+| `POST` | `/pantry/photo` | Alimentos reconhecidos na foto, com os produtos candidatos. Só propõe |
 | `GET` | `/products/search` | Produtos parecidos com um texto livre (`?q=`) |
 | `GET` | `/recipes/suggestions` | Receitas ordenadas por disponibilidade |
 | `GET` `POST` | `/nutritionist/prescriptions` | Planos que a nutricionista montou; cria um rascunho |
@@ -302,6 +303,8 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 | `CONSENT_VERSION` | `v1` | Versão vigente do termo de consentimento (LGPD) |
 | `SECRET_KEY` | valor de desenvolvimento | Assina os tokens. **Troque em produção** |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | Validade do token, em minutos (7 dias) |
+| `ANTHROPIC_API_KEY` | vazio | Chave da API do Claude para a despensa por foto. Sem ela, só a foto fica indisponível (503). Crie em console.anthropic.com → API Keys; **nunca versione** |
+| `VISION_MODEL` | `claude-haiku-5-5` | Modelo que reconhece os alimentos na foto |
 | `POSTGRES_USER` | `decada` | Usuário do banco |
 | `POSTGRES_PASSWORD` | `decada` | Senha do banco (só desenvolvimento) |
 | `POSTGRES_DB` | `decada` | Nome do banco |

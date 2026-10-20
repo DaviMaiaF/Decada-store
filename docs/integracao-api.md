@@ -134,6 +134,7 @@ de pé; o app não o usa.
 | POST | `/pantry` | `addPantryItem` |
 | PATCH | `/pantry/{id}` | `updatePantryItem` |
 | DELETE | `/pantry/{id}` | `removePantryItem` |
+| POST | `/pantry/photo` | `recognizePantryPhoto` — multipart, só propõe; ver abaixo |
 | GET | `/products/search` | `searchProducts` |
 | GET | `/recipes/suggestions` | `readRecipeSuggestions` |
 
@@ -176,7 +177,9 @@ a folha de compartilhar.
 | `401` | Sessão expirada, token adulterado ou conta excluída | Apaga o token, volta para o login e avisa "sua sessão expirou, entre de novo". No login e no cadastro, o `401` é só senha errada — ou conta do outro papel, que responde igual de propósito: a mensagem aparece no formulário e nada é apagado |
 | `404` | Recurso que não existe, **que é de outra pessoa**, ou rota do outro papel | Trata como inexistente |
 | `409` | Conflito — produto que já está na lista, ou plano que o paciente já aceitou | Mostra a mensagem do servidor |
-| `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista | Mostra a mensagem do servidor |
+| `413` | Foto da despensa acima de 10 MB | Mostra a mensagem do servidor |
+| `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista, foto sem aceite | Mostra a mensagem do servidor |
+| `503` | O reconhecimento da foto não respondeu, recusou a foto ou não está configurado (sem `ANTHROPIC_API_KEY`) | Mostra a mensagem do servidor. Não é erro de quem enviou: vale tentar de novo ou digitar o item |
 
 O `0` não é um status HTTP: é a marca de que não houve resposta. Sem ele, "o
 servidor recusou" e "o servidor não respondeu" chegariam iguais na tela.
@@ -197,6 +200,16 @@ ler o conteúdo e enviar um `Blob`. Errar isso faz o servidor receber a string
 `"[object Object]"` e recusar o envio.
 
 O token continua vindo do interceptor, como em qualquer outra chamada.
+
+**A foto da despensa segue o mesmo caminho**, em `recognizePantryPhoto`: multipart, com
+a diferença entre web e nativo tratada do mesmo jeito, e `consent_accepted` no
+formulário. O tempo limite é de 90 s, porque além de subir a foto a requisição espera o
+reconhecimento. A resposta é `{ items: [{ name, identified, candidates }] }` e não muda
+nada no servidor: cada item que a pessoa confirma vai depois pelo `addPantryItem`.
+
+A foto vem do `expo-image-picker`, com `quality: 0.7` e `exif: false`. O servidor não
+confia nisso: confere o formato pelo conteúdo (JPEG, PNG ou WebP; o resto é 400) e
+regrava a imagem antes de enviá-la.
 
 ## Como verificar que funciona
 
