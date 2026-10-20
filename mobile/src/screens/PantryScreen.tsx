@@ -30,6 +30,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { DespensaPorFoto } from '../components/DespensaPorFoto';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import {
   ApiError,
@@ -295,6 +296,8 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                 )}
               </Pressable>
             </View>
+
+            <DespensaPorFoto onAdicionado={recarregar} />
 
             {escolhendo !== null ? (
               <View style={styles.escolha}>

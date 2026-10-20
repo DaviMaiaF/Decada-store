@@ -180,6 +180,21 @@ export interface ProductSuggestion {
   score: string;
 }
 
+/**
+ * Um alimento que a foto mostrou. É proposta, não item da despensa: só vira
+ * item quando a pessoa confirma, pelo mesmo `addPantryItem` do cadastro manual.
+ */
+export interface PhotoProposal {
+  name: string;
+  /** Falso quando nenhum produto do catálogo chega perto: a tela mostra à parte. */
+  identified: boolean;
+  candidates: ProductSuggestion[];
+}
+
+export interface PhotoRecognition {
+  items: PhotoProposal[];
+}
+
 export interface PantryItem {
   id: string;
   raw_description: string;
