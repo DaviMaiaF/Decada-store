@@ -265,6 +265,24 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
     products_in_list = {
         item.product_id for item in shopping_list.items if item.plan_item_id is not None
     }
+    # O que a linha cobria é o que ela compra mais o que veio da despensa.
+    covered_by_row = {
+        item.product_id: item.quantity + item.quantity_from_pantry
+        for item in shopping_list.items
+        if item.plan_item_id is not None
+    }
+    # O que o plano confirma hoje por produto, na unidade base.
+    confirmed_now: dict[uuid.UUID, Decimal] = {}
+    for plan_item in shopping_list.meal_plan.items:
+        if plan_item.product is None or plan_item.status is not PlanItemStatus.CONFIRMADO:
+            continue
+        try:
+            needed = to_base_quantity(
+                plan_item.quantity, plan_item.unit, plan_item.product.base_unit
+            )
+        except IncompatibleUnitError:
+            continue
+        confirmed_now[plan_item.product_id] = confirmed_now.get(plan_item.product_id, 0) + needed
     changes: list[OutdatedItem] = []
 
     for plan_item in shopping_list.meal_plan.items:
@@ -284,5 +302,14 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
             and base_unit_of(plan_item.unit) is plan_item.product.base_unit
         ):
             changes.append(OutdatedItem(plan_item, PlanChange.NOVO_CONFIRMADO))
+        elif (
+            not confirmed
+            and plan_item.product_id in covered_by_row
+            # Só quem foi somado na linha: o item que nunca foi confirmado não
+            # tirou nada da conta, e o plano ainda confirma o que ela cobria.
+            and confirmed_now.get(plan_item.product_id, Decimal("0")).quantize(Decimal("0.001"))
+            < covered_by_row[plan_item.product_id]
+        ):
+            changes.append(OutdatedItem(plan_item, PlanChange.NAO_CONFIRMADO))
 
     return changes
