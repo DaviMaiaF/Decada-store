@@ -65,9 +65,12 @@ services:
     volumes:
       - ./mobile:/app
       - mobile_node_modules:/app/node_modules
+      # Login do Expo CLI: sem este volume, ele some a cada recriação do container.
+      - mobile_expo_home:/root/.expo
     stdin_open: true
     tty: true
 
 volumes:
   decada_pgdata:
   mobile_node_modules:
+  mobile_expo_home:
