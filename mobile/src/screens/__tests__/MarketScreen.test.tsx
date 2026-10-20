@@ -242,6 +242,9 @@ describe('simulação de cenário', () => {
     await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
 
     expect(await screen.findByText('R$ 5,42')).toBeTruthy();
+    // É o card de resumo, no topo, que passa a mostrar o total simulado.
+    expect(screen.getByText('SIMULANDO A COMPRA')).toBeTruthy();
+    expect(screen.queryByText('ESTIMATIVA DA COMPRA')).toBeNull();
     expect(screen.getByText('1 item fora da simulação · R$ 12,31 a menos')).toBeTruthy();
   });
 
@@ -252,7 +255,7 @@ describe('simulação de cenário', () => {
 
     // Decisão 8: o app não altera a prescrição. A simulação é uma conta de tela.
     expect(marcarItem).not.toHaveBeenCalled();
-    expect(screen.getByText('R$ 174,20')).toBeTruthy();
+    expect(screen.getByText(/salva:/)).toBeTruthy();
   });
 
   it('devolver o item desfaz a simulação', async () => {
@@ -726,6 +729,17 @@ describe('checkout simulado', () => {
     await fireEvent.press(await screen.findByText('Ir para o início'));
 
     expect(onCompraConcluida).toHaveBeenCalledTimes(1);
+  });
+
+  it('a conclusão aparece sem esperar o servidor responder', async () => {
+    // Promessa que nunca resolve: se a tela dependesse da resposta, travaria.
+    marcarItem.mockReturnValue(new Promise(() => {}));
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+
+    expect(await screen.findByText('Compra concluída')).toBeTruthy();
   });
 
   it('se marcar falhar, a compra não aparece como concluída', async () => {
