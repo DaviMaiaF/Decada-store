@@ -252,3 +252,141 @@ def test_erro_da_api_vira_indisponivel():
 def test_sem_chave_o_reconhecimento_fica_indisponivel(chave):
     with pytest.raises(RecognitionUnavailableError):
         build_recognizer(chave, "claude-haiku-5-5")
+
+
+# --- Rota POST /pantry/photo -----------------------------------------------------
+
+
+class ReconhecedorFalso:
+    """Devolve nomes fixos e conta quantas fotos recebeu."""
+
+    def __init__(self, nomes: list[str] | None = None, erro: Exception | None = None):
+        self.nomes = nomes or []
+        self.erro = erro
+        self.chamadas = 0
+
+    def recognize(self, jpeg: bytes) -> list[str]:
+        self.chamadas += 1
+        if self.erro is not None:
+            raise self.erro
+        return self.nomes
+
+
+@pytest.fixture
+def reconhecedor(client):
+    """Troca o reconhecedor da rota por um falso; nenhum teste chama o Claude."""
+    from app.api.routes.pantry import get_food_recognizer
+    from app.main import app
+
+    falso = ReconhecedorFalso(["banana", "ovos", "kiwi"])
+    app.dependency_overrides[get_food_recognizer] = lambda: falso
+    return falso
+
+
+def enviar_foto(client, user, conteudo: bytes | None = None, consentimento: bool = True):
+    from tests.helpers import auth_headers
+
+    return client.post(
+        "/pantry/photo",
+        headers=auth_headers(user),
+        files={"file": ("foto.jpg", conteudo if conteudo is not None else foto(), "image/jpeg")},
+        data={"consent_accepted": "true" if consentimento else "false"},
+    )
+
+
+@pytest.mark.db
+def test_rota_propoe_os_alimentos_da_foto(client, marina, reconhecedor):
+    resposta = enviar_foto(client, marina)
+
+    assert resposta.status_code == 200
+    itens = resposta.json()["items"]
+    assert [item["name"] for item in itens] == ["banana", "ovos", "kiwi"]
+    assert itens[0]["identified"] is True
+    assert itens[0]["candidates"][0]["product"]["name"].startswith("Banana")
+    assert itens[1]["candidates"][0]["product"]["name"] == "Ovos de galinha"
+    assert itens[2]["identified"] is False
+
+
+@pytest.mark.db
+def test_rota_nao_grava_nada_na_despensa(client, db_session, marina, reconhecedor):
+    from sqlalchemy import func, select
+
+    from app.models import PantryItem
+
+    antes = db_session.scalar(select(func.count()).select_from(PantryItem))
+    enviar_foto(client, marina)
+
+    assert db_session.scalar(select(func.count()).select_from(PantryItem)) == antes
+
+
+@pytest.mark.db
+def test_sem_consentimento_a_foto_nem_e_enviada(client, marina, reconhecedor):
+    resposta = enviar_foto(client, marina, consentimento=False)
+
+    assert resposta.status_code == 422
+    assert reconhecedor.chamadas == 0
+
+
+@pytest.mark.db
+def test_foto_sem_alimento_devolve_lista_vazia(client, marina, reconhecedor):
+    reconhecedor.nomes = []
+
+    resposta = enviar_foto(client, marina)
+
+    assert resposta.status_code == 200
+    assert resposta.json() == {"items": []}
+
+
+@pytest.mark.db
+def test_arquivo_que_nao_e_imagem_responde_400(client, marina, reconhecedor):
+    resposta = enviar_foto(client, marina, b"%PDF-1.7 nao e foto")
+
+    assert resposta.status_code == 400
+    assert reconhecedor.chamadas == 0
+
+
+@pytest.mark.db
+def test_foto_grande_demais_responde_413(client, marina, reconhecedor):
+    resposta = enviar_foto(client, marina, b"\0" * (MAX_UPLOAD_BYTES + 1))
+
+    assert resposta.status_code == 413
+    assert reconhecedor.chamadas == 0
+
+
+@pytest.mark.db
+def test_reconhecimento_fora_do_ar_responde_503(client, marina, reconhecedor):
+    reconhecedor.erro = RecognitionUnavailableError("fora do ar")
+
+    resposta = enviar_foto(client, marina)
+
+    assert resposta.status_code == 503
+
+
+@pytest.mark.db
+def test_sem_chave_configurada_responde_503(client, marina, monkeypatch):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
+
+    resposta = enviar_foto(client, marina)
+
+    assert resposta.status_code == 503
+
+
+@pytest.mark.db
+def test_nutricionista_nao_tem_despensa(client, camila, reconhecedor):
+    resposta = enviar_foto(client, camila)
+
+    assert resposta.status_code == 404
+    assert reconhecedor.chamadas == 0
+
+
+@pytest.mark.db
+def test_sem_login_responde_401(client, reconhecedor):
+    resposta = client.post(
+        "/pantry/photo",
+        files={"file": ("foto.jpg", foto(), "image/jpeg")},
+        data={"consent_accepted": "true"},
+    )
+
+    assert resposta.status_code == 401
