@@ -10,7 +10,8 @@ Regras que este módulo faz valer:
   - o que veio de casa fica registrado, para a tela poder explicar o desconto;
   - item coberto por inteiro continua na lista, com quantidade zero;
   - a despensa nunca abate mais do que o item pedia;
-  - o mesmo produto não entra duas vezes na lista;
+  - o mesmo produto não entra duas vezes na lista: itens do plano que pedem o
+    mesmo produto são somados numa linha, e a despensa abate uma vez só;
   - item vindo da prescrição não pode ser removido; item avulso pode;
   - a lista não se corrige quando o plano muda: ela diz o que divergiu.
 
@@ -24,6 +25,7 @@ volta para a unidade da prescrição só reintroduziria arredondamento; quem exi
 "0,300 kg" como "300 g" é a interface.
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -39,7 +41,12 @@ from app.services.pricing import (
     price_item,
     price_shopping_list,
 )
-from app.services.units import IncompatibleUnitError, base_unit_of, measurement_unit_of
+from app.services.units import (
+    IncompatibleUnitError,
+    base_unit_of,
+    measurement_unit_of,
+    to_base_quantity,
+)
 
 
 class ProductAlreadyInListError(Exception):
@@ -95,6 +102,10 @@ def generate_shopping_list(
     session.add(shopping_list)
 
     skipped = 0
+    # Mesmo produto em duas refeições vira uma linha só: o plano pede o arroz no
+    # almoço e no jantar, mas no mercado é um pacote que serve aos dois.
+    # Chave: produto; valor: itens do plano e a soma na unidade base.
+    grupos: dict[uuid.UUID, tuple[list[PlanItem], Decimal]] = {}
 
     for plan_item in meal_plan.items:
         # Produto e status: a confirmação é um ato do usuário, e sem ela não há
@@ -106,7 +117,7 @@ def generate_shopping_list(
         product = plan_item.product
 
         try:
-            covered = coverage(plan_item.quantity, plan_item.unit, product, pantry_items)
+            needed = to_base_quantity(plan_item.quantity, plan_item.unit, product.base_unit)
         except IncompatibleUnitError:
             # A unidade do plano não é da mesma grandeza que a do produto. O
             # casamento não deveria ter permitido, mas se chegou aqui o item
@@ -114,16 +125,30 @@ def generate_shopping_list(
             skipped += 1
             continue
 
+        itens, soma = grupos.get(product.id, ([], Decimal("0")))
+        itens.append(plan_item)
+        grupos[product.id] = (itens, soma + needed)
+
+    for itens, soma in grupos.values():
+        primeiro = itens[0]
+        product = primeiro.product
+        unit = measurement_unit_of(product.base_unit)
+        # A despensa é descontada uma vez, do total: abater por linha gastaria
+        # o mesmo estoque duas vezes.
+        covered = coverage(soma, unit, product, pantry_items)
+
         shopping_list.items.append(
             ShoppingListItem(
-                plan_item=plan_item,
+                # A linha aponta para o primeiro item do plano; os demais do
+                # mesmo produto são reconhecidos por `outdated_items`.
+                plan_item=primeiro,
                 product=product,
                 quantity=covered.to_buy,
-                unit=measurement_unit_of(product.base_unit),
+                unit=unit,
                 # A despensa abate no máximo o que o item pedia: ter três quilos
                 # em casa não faz o plano ter pedido três quilos.
                 quantity_from_pantry=min(covered.available, covered.needed),
-                match_score=plan_item.match_score,
+                match_score=primeiro.match_score,
             )
         )
 
@@ -236,6 +261,10 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
     in_list = {
         item.plan_item_id: item for item in shopping_list.items if item.plan_item_id is not None
     }
+    # Itens do plano somados na mesma linha: só a primeira aponta para ela.
+    products_in_list = {
+        item.product_id for item in shopping_list.items if item.plan_item_id is not None
+    }
     changes: list[OutdatedItem] = []
 
     for plan_item in shopping_list.meal_plan.items:
@@ -249,7 +278,11 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
                 changes.append(OutdatedItem(plan_item, PlanChange.NAO_CONFIRMADO))
             elif list_item.product_id != plan_item.product_id:
                 changes.append(OutdatedItem(plan_item, PlanChange.PRODUTO_TROCADO))
-        elif confirmed and base_unit_of(plan_item.unit) is plan_item.product.base_unit:
+        elif (
+            confirmed
+            and plan_item.product_id not in products_in_list
+            and base_unit_of(plan_item.unit) is plan_item.product.base_unit
+        ):
             changes.append(OutdatedItem(plan_item, PlanChange.NOVO_CONFIRMADO))
 
     return changes
