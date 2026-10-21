@@ -6,33 +6,16 @@
  * escolhe, o item não entra na lista de compras.
  */
 
-import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Checkbox, Chip, ErrorNotice } from '../components';
 import { PlanoPrescrito } from '../components/PlanoPrescrito';
-import { RECEIVED_KEY } from '../viewmodels/useReceivedPrescriptionsViewModel';
-import {
-  ApiError,
-  confirmItem,
-  readCandidates,
-  readMealPlan,
-  readReceivedPrescriptions,
-} from '../services/api';
 import { colors, radius, spacing, typography } from '../theme/tokens';
-import type { Candidate, PlanItem } from '../types/api';
-
-/**
- * Só entra no lote o item cuja sugestão dá para aceitar de olhos fechados: o
- * import o deixou "a confirmar" (sugestão acima do score mínimo), e ela mede na
- * mesma unidade da prescrição. Item "não encontrado" também tem candidatos, só
- * que fracos — no lote, viravam "Tapioca → Filé de tilápia" num toque só.
- * Esses, os de unidade diferente e os sem sugestão pedem o toque individual.
- */
-function entraNoLote(item: PlanItem, sugestao: Candidate | null): sugestao is Candidate {
-  return item.status === 'pendente' && sugestao !== null && sugestao.unit_compatible;
-}
+import type { PlanItem } from '../types/api';
+import {
+  useConfirmationViewModel,
+  usePlanItemViewModel,
+} from '../viewmodels/useConfirmationViewModel';
 
 export default function ConfirmationScreen({
   planId,
@@ -45,95 +28,19 @@ export default function ConfirmationScreen({
    * passou a ser reencontrado na partida, então precisa ter porta de saída. */
   onNewPlan: () => void;
 }) {
-  const cliente = useQueryClient();
-  const plano = useQuery({
-    queryKey: ['meal-plan', planId],
-    queryFn: () => readMealPlan(planId),
-  });
-  // Plano novo enviado pela nutricionista: a pessoa está aqui, no plano atual,
-  // e não veria o aviso que fica na tela de envio.
-  const recebidos = useQuery({ queryKey: RECEIVED_KEY, queryFn: readReceivedPrescriptions });
-  const [planoAberto, setPlanoAberto] = useState(false);
+  const vm = useConfirmationViewModel(planId);
 
-  const itens = plano.data?.items ?? [];
-  const pendentes = itens.filter((item) => item.status !== 'confirmado');
+  if (vm.carregando) return <Body muted>Carregando o plano…</Body>;
 
-  // Mesma chave que cada item usa: o React Query faz uma busca só, e a tela
-  // fica sabendo da sugestão de todos para montar o lote.
-  const buscas = useQueries({
-    queries: pendentes.map((item) => ({
-      queryKey: ['candidates', planId, item.id],
-      queryFn: () => readCandidates(planId, item.id),
-    })),
-  });
-
-  const sugestoes = new Map<string, Candidate>();
-  pendentes.forEach((item, indice) => {
-    const sugestao = buscas[indice]?.data?.[0] ?? null;
-    if (entraNoLote(item, sugestao)) sugestoes.set(item.id, sugestao);
-  });
-
-  const [marcados, setMarcados] = useState<ReadonlySet<string>>(new Set());
-  const [falhasDoLote, setFalhasDoLote] = useState<ReadonlySet<string>>(new Set());
-
-  // Item que saiu do lote (confirmado, ou cuja sugestão mudou) deixa de contar
-  // mesmo que a marca tenha ficado no estado.
-  const selecionados = [...marcados].filter((id) => sugestoes.has(id));
-  const todosMarcados = sugestoes.size > 0 && selecionados.length === sugestoes.size;
-
-  const lote = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // Uma chamada por item, e uma falha não derruba as outras: quem confirmou
-      // dez de doze não precisa refazer as dez.
-      const resultados = await Promise.allSettled(
-        ids.map((id) => {
-          const sugestao = sugestoes.get(id)!;
-          return confirmItem(planId, id, sugestao.product.id, sugestao.score);
-        }),
-      );
-      return ids.filter((_, indice) => resultados[indice].status === 'rejected');
-    },
-    onSuccess: (falhas) => {
-      setFalhasDoLote(new Set(falhas));
-      setMarcados(new Set(falhas));
-    },
-    onSettled: () => {
-      cliente.invalidateQueries({ queryKey: ['meal-plan', planId] });
-      // A lista já gerada não muda, mas passa a dizer que ficou para trás.
-      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
-    },
-  });
-
-  function alternar(id: string) {
-    setMarcados((antes) => {
-      const depois = new Set(antes);
-      if (depois.has(id)) depois.delete(id);
-      else depois.add(id);
-      return depois;
-    });
-  }
-
-  function alternarTodos() {
-    setMarcados(todosMarcados ? new Set() : new Set(sugestoes.keys()));
-  }
-
-  if (plano.isPending) return <Body muted>Carregando o plano…</Body>;
-
-  if (plano.isError) {
+  if (vm.erro) {
     return (
       <View style={styles.conteudo}>
-        <ErrorNotice
-          message={
-            plano.error instanceof ApiError
-              ? plano.error.message
-              : 'não foi possível carregar o plano'
-          }
-        />
+        <ErrorNotice message={vm.erro} />
       </View>
     );
   }
 
-  const confirmados = itens.filter((item) => item.status === 'confirmado').length;
+  const { itens, confirmados } = vm;
 
   return (
     <FlatList
@@ -152,54 +59,54 @@ export default function ConfirmationScreen({
             label={`${confirmados} de ${itens.length} confirmados`}
             tone={confirmados === itens.length ? 'success' : 'neutral'}
           />
-          {recebidos.data?.length ? (
+          {vm.temPlanoNovo ? (
             <Card style={styles.planoNovo}>
               <Body>Sua nutricionista enviou um plano novo.</Body>
               <Button label="Ver plano novo" variant="secondary" onPress={onNewPlan} />
             </Card>
           ) : null}
-          {plano.data.prescribed_meals ? (
+          {vm.refeicoes ? (
             <Card style={styles.planoNovo}>
-              <Pressable accessibilityRole="button" onPress={() => setPlanoAberto((a) => !a)}>
+              <Pressable accessibilityRole="button" onPress={vm.alternarPlano}>
                 <Text style={styles.verPlano}>
-                  {planoAberto
+                  {vm.planoAberto
                     ? 'Ocultar refeições e substituições'
                     : 'Ver refeições e substituições'}
                 </Text>
               </Pressable>
-              {planoAberto ? (
+              {vm.planoAberto ? (
                 <PlanoPrescrito
-                  meals={plano.data.prescribed_meals.meals}
-                  notes={plano.data.prescribed_meals.notes}
+                  meals={vm.refeicoes.meals}
+                  notes={vm.refeicoes.notes}
                 />
               ) : null}
             </Card>
           ) : null}
-          {sugestoes.size > 0 ? (
+          {vm.tamanhoDoLote > 0 ? (
             <View style={styles.lote}>
               <Pressable
                 accessibilityRole="none"
-                onPress={alternarTodos}
+                onPress={vm.alternarTodos}
                 style={styles.selecionarTodos}
               >
                 <Checkbox
                   label="Selecionar sugeridos"
-                  checked={todosMarcados}
-                  onPress={alternarTodos}
+                  checked={vm.todosMarcados}
+                  onPress={vm.alternarTodos}
                 />
                 {/* O "de N" mostra que o lote é parte da lista de propósito: com
                     "Selecionar todos (1)" num plano de 50 itens, parecia defeito. */}
                 <Text style={styles.selecionarTodosTexto}>
-                  Selecionar sugeridos ({sugestoes.size} de {pendentes.length})
+                  Selecionar sugeridos ({vm.tamanhoDoLote} de {vm.pendentes})
                 </Text>
               </Pressable>
               <Button
-                label={`Confirmar selecionados (${selecionados.length})`}
-                onPress={() => lote.mutate(selecionados)}
-                disabled={selecionados.length === 0}
-                loading={lote.isPending}
+                label={`Confirmar selecionados (${vm.selecionados})`}
+                onPress={vm.confirmarSelecionados}
+                disabled={vm.selecionados === 0}
+                loading={vm.confirmandoLote}
               />
-              {pendentes.length > sugestoes.size ? (
+              {vm.pendentes > vm.tamanhoDoLote ? (
                 <Body muted>
                   Itens não encontrados, com unidade diferente ou sem sugestão ficam fora
                   do lote: confirme esses um a um.
@@ -213,13 +120,13 @@ export default function ConfirmationScreen({
         <ItemDoPlano
           planId={planId}
           item={item}
-          noLote={sugestoes.has(item.id)}
-          marcado={marcados.has(item.id)}
-          onAlternar={() => alternar(item.id)}
-          falhouNoLote={falhasDoLote.has(item.id)}
+          noLote={vm.noLote(item.id)}
+          marcado={vm.marcado(item.id)}
+          onAlternar={() => vm.alternar(item.id)}
+          falhouNoLote={vm.falhouNoLote(item.id)}
         />
       )}
-      extraData={[marcados, falhasDoLote, sugestoes.size]}
+      extraData={vm.extraData}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       ListFooterComponent={
         <View style={styles.rodape}>
@@ -257,35 +164,18 @@ function ItemDoPlano({
   onAlternar: () => void;
   falhouNoLote: boolean;
 }) {
-  // Em item pendente, abre as outras opções; em item confirmado, é a edição.
-  const [aberto, setAberto] = useState(false);
-  const cliente = useQueryClient();
-
-  const confirmado = item.status === 'confirmado';
-
-  // Busca assim que o item aparece, e não só quando a pessoa abre. São 120
-  // produtos comparados por item, o que parecia caro — medido, dá 15 ms por
-  // item, e o custo real era outro: confirmar um plano de 15 itens pedia três
-  // toques em cada um. Item já confirmado só busca quando a pessoa pede para
-  // editar.
-  const candidatos = useQuery({
-    queryKey: ['candidates', planId, item.id],
-    queryFn: () => readCandidates(planId, item.id),
-    enabled: !confirmado || aberto,
-  });
-
-  const sugestao = candidatos.data?.[0] ?? null;
-
-  const confirmacao = useMutation({
-    mutationFn: ({ productId, score }: { productId: string; score: string | null }) =>
-      confirmItem(planId, item.id, productId, score),
-    onSuccess: () => {
-      setAberto(false);
-      cliente.invalidateQueries({ queryKey: ['meal-plan', planId] });
-      // A lista já gerada não muda, mas passa a dizer que ficou para trás.
-      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
-    },
-  });
+  const {
+    aberto,
+    confirmado,
+    sugestao,
+    candidatos,
+    buscando,
+    buscaFalhou,
+    confirmando,
+    confirmacaoFalhou,
+    alternarAberto,
+    confirmar,
+  } = usePlanItemViewModel(planId, item);
 
   return (
     <Card>
@@ -342,32 +232,27 @@ function ItemDoPlano({
           {sugestao !== null && !aberto ? (
             <Button
               label="Confirmar"
-              onPress={() =>
-                confirmacao.mutate({
-                  productId: sugestao.product.id,
-                  score: sugestao.score,
-                })
-              }
-              loading={confirmacao.isPending}
+              onPress={() => confirmar(sugestao)}
+              loading={confirmando}
             />
           ) : null}
           <Button
             label={aberto ? 'Fechar opções' : 'Ver outras opções'}
             variant="ghost"
-            onPress={() => setAberto((estava) => !estava)}
+            onPress={alternarAberto}
           />
         </View>
       ) : null}
 
-      {!confirmado && candidatos.isPending ? (
+      {!confirmado && buscando ? (
         <Body muted>Procurando o produto no catálogo…</Body>
       ) : null}
 
-      {!confirmado && !candidatos.isPending && sugestao === null && !aberto ? (
+      {!confirmado && !buscando && sugestao === null && !aberto ? (
         <Body muted>Nenhum produto do catálogo se parece com este item.</Body>
       ) : null}
 
-      {!confirmado && (confirmacao.isError || falhouNoLote) && !aberto ? (
+      {!confirmado && (confirmacaoFalhou || falhouNoLote) && !aberto ? (
         <ErrorNotice message="não foi possível confirmar este produto" />
       ) : null}
 
@@ -375,32 +260,27 @@ function ItemDoPlano({
         <Button
           label={aberto ? 'Cancelar edição' : 'Editar'}
           variant="ghost"
-          onPress={() => setAberto((estava) => !estava)}
+          onPress={alternarAberto}
         />
       ) : null}
 
       {aberto ? (
         <View style={styles.candidatos}>
-          {candidatos.isPending ? <Body muted>Buscando no catálogo…</Body> : null}
+          {buscando ? <Body muted>Buscando no catálogo…</Body> : null}
 
-          {candidatos.isError ? (
+          {buscaFalhou ? (
             <ErrorNotice message="não foi possível buscar os candidatos" />
           ) : null}
 
-          {candidatos.data?.length === 0 ? (
+          {candidatos?.length === 0 ? (
             <Body muted>Nenhum produto do catálogo se parece com este item.</Body>
           ) : null}
 
-          {candidatos.data?.map((candidato) => (
+          {candidatos?.map((candidato) => (
             <Pressable
               key={candidato.product.id}
               accessibilityRole="button"
-              onPress={() =>
-                confirmacao.mutate({
-                  productId: candidato.product.id,
-                  score: candidato.score,
-                })
-              }
+              onPress={() => confirmar(candidato)}
               style={styles.candidato}
             >
               <View style={styles.candidatoTexto}>
@@ -417,7 +297,7 @@ function ItemDoPlano({
             </Pressable>
           ))}
 
-          {confirmacao.isError ? (
+          {confirmacaoFalhou ? (
             <ErrorNotice message="não foi possível confirmar este produto" />
           ) : null}
         </View>
