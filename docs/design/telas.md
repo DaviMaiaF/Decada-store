@@ -326,6 +326,12 @@ casa com "Uva itália" (0,625) e "picanha" com "Castanha-do-pará" (0,667). Como
 confirma cada item, nada errado entra sozinho, mas a proposta aparece como
 identificada. O motor é o mesmo do plano alimentar e não foi alterado.
 
+**Duas correções só para a foto** (`rank_for_photo`), sem mexer no motor: a busca é feita
+com o singular e o plural da primeira palavra — a foto diz "ovo" e o catálogo vende "Ovos
+de galinha" —, e entre os produtos que passam do corte vem antes o que **começa** pelo
+alimento: "tomate" propõe "Tomate italiano" antes de "Molho de tomate". Os dois casos
+acima, de nome sem parente no catálogo, continuam como estão.
+
 **Isto não é a decisão 7.** O que está fora do MVP lá é OCR do *plano alimentar* — ler a
 prescrição de uma foto, onde errar significa comida sumindo da dieta de alguém. Aqui o
 erro custa um item a mais ou a menos numa lista que a pessoa está olhando na hora.

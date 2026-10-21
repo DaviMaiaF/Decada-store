@@ -23,6 +23,7 @@ from app.services.pantry_photo import (
     RecognitionUnavailableError,
     build_recognizer,
     clean_names,
+    name_variants,
     prepare_image,
     propose_items,
     recognize_photo,
@@ -141,6 +142,68 @@ def test_varios_alimentos_na_ordem_em_que_vieram(catalogo):
     assert [p.name for p in propostas] == ["ovos", "arroz integral"]
     assert propostas[0].candidates[0].product.name == "Ovos de galinha"
     assert propostas[1].candidates[0].product.name == "Arroz integral"
+
+
+@pytest.mark.parametrize(
+    ("nome", "esperadas"),
+    [
+        ("ovo", ["ovo", "ovos"]),
+        ("Ovos", ["ovos", "ovo"]),
+        ("pão", ["pao", "paes", "poes"]),
+        ("pães", ["paes", "pao"]),
+        ("limões", ["limoes", "limao"]),
+        ("noz", ["noz", "nozes"]),
+        ("colheres", ["colheres", "colher"]),
+        ("feijão preto", ["feijao preto", "feijoes preto", "feijaes preto"]),
+    ],
+)
+def test_variantes_de_singular_e_plural_da_primeira_palavra(nome, esperadas):
+    assert sorted(name_variants(nome)) == sorted(esperadas)
+
+
+def test_nome_vazio_nao_tem_variante():
+    assert name_variants("  ") == []
+
+
+def test_singular_encontra_o_produto_vendido_no_plural(catalogo):
+    [ovo] = propose_items(["ovo"], catalogo)
+
+    assert ovo.identified is True
+    assert ovo.candidates[0].product.name == "Ovos de galinha"
+
+
+def test_plural_encontra_o_produto_vendido_no_singular(catalogo):
+    [bananas] = propose_items(["bananas"], catalogo)
+
+    assert bananas.candidates[0].product.name.startswith("Banana")
+
+
+def test_o_alimento_vem_antes_do_produto_feito_dele(catalogo):
+    # O motor dá nota maior a "Molho de tomate"; quem fotografou tomates quer o tomate.
+    [tomate] = propose_items(["tomate"], catalogo)
+
+    assert tomate.candidates[0].product.name == "Tomate italiano"
+    assert {c.product.name for c in tomate.candidates} >= {"Molho de tomate", "Tomate italiano"}
+
+
+def test_o_produto_feito_do_alimento_continua_vencendo_quando_e_ele_na_foto(catalogo):
+    [molho] = propose_items(["molho de tomate"], catalogo)
+
+    assert molho.candidates[0].product.name == "Molho de tomate"
+
+
+def test_a_nota_mostrada_e_a_da_melhor_forma_do_nome(catalogo):
+    [ovo] = propose_items(["ovo"], catalogo)
+    [ovos] = propose_items(["ovos"], catalogo)
+
+    assert ovo.candidates[0].score == ovos.candidates[0].score
+
+
+def test_cada_produto_aparece_uma_vez_so(catalogo):
+    [ovo] = propose_items(["ovo"], catalogo)
+
+    nomes = [c.product.name for c in ovo.candidates]
+    assert len(nomes) == len(set(nomes))
 
 
 def test_alimento_fora_do_catalogo_fica_nao_identificado(catalogo):
