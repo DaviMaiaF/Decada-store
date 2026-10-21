@@ -1032,6 +1032,18 @@ def test_a_busca_respeita_o_limite(client, marina):
     assert len(corpo) == 3
 
 
+def test_busca_acha_no_plural_o_que_foi_digitado_no_singular(client, marina):
+    corpo = client.get("/products/search?q=ovo", headers=_headers(marina)).json()
+
+    assert corpo[0]["product"]["name"] == "Ovos de galinha"
+
+
+def test_busca_traz_o_alimento_antes_do_produto_feito_dele(client, marina):
+    corpo = client.get("/products/search?q=tomate", headers=_headers(marina)).json()
+
+    assert corpo[0]["product"]["name"] == "Tomate italiano"
+
+
 def test_busca_curta_demais_e_recusada(client, marina):
     # Uma letra devolveria o catálogo inteiro ordenado por ruído.
     assert client.get("/products/search?q=a", headers=_headers(marina)).status_code == 422

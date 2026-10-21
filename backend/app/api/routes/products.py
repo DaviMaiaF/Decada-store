@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.models import Product
 from app.schemas.pantry import ProductSuggestionOut
-from app.services.matching import rank_products
+from app.services.pantry import rank_by_food_name
 
 router = APIRouter(prefix="/products", tags=["catálogo"])
 
@@ -25,6 +25,8 @@ def search_products(
     conta para as receitas.
 
     Só ordena por semelhança de nome — quem escolhe continua sendo o usuário.
+    "ovo" acha "Ovos de galinha", e "tomate" traz o tomate antes do molho
+    (`rank_by_food_name`).
     """
     catalog = session.scalars(select(Product)).all()
-    return rank_products(q, catalog, limit)
+    return rank_by_food_name(q, catalog, limit)

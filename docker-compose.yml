@@ -39,6 +39,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-decada}
       POSTGRES_DB: ${POSTGRES_DB:-decada}
       SECRET_KEY: ${SECRET_KEY:-chave-de-desenvolvimento-nao-use-em-producao}
+      # O .env da raiz não entra no container: a chave da foto vem por aqui.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VISION_MODEL: ${VISION_MODEL:-claude-haiku-5-5}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:

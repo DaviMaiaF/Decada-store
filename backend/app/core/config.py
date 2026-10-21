@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     secret_key: str = "chave-de-desenvolvimento-nao-use-em-producao"
     access_token_expire_minutes: int = 60 * 24 * 7
 
+    # Reconhecimento de alimentos na foto da despensa. Sem chave, a rota da foto
+    # responde 503 e o resto do app continua funcionando. O Haiku é o modelo mais
+    # barato com visão, e listar o que está numa prateleira não pede mais que isso.
+    anthropic_api_key: str | None = None
+    vision_model: str = "claude-haiku-5-5"
+
     postgres_user: str = "decada"
     postgres_password: str = "decada"
     postgres_db: str = "decada"

@@ -28,6 +28,11 @@ dado do paciente *no aplicativo* quando ele aceita, com consentimento — antes 
 altura, condição clínica, restrição alimentar em campo próprio. Nada disso é
 necessário para traduzir uma prescrição em lista de compras.
 
+**A foto da despensa também não.** Foto do interior da casa de alguém é dado pessoal,
+e o app só precisa dos nomes dos alimentos que ela mostra. Não há coluna, arquivo nem
+log com a imagem: ela é lida em memória, reduzida, enviada ao reconhecimento e
+descartada na mesma requisição.
+
 ## Consentimento
 
 `meal_plans.consent_at` e `meal_plans.consent_version` são `NOT NULL`, e
@@ -47,11 +52,19 @@ O plano enviado pela nutricionista segue a mesma regra. Aceitar exige o mesmo ac
 PDF, carimbado no servidor; sem ele a resposta é 422 e nada é gravado. Recusar não grava
 nada na conta do paciente.
 
+A foto da despensa tem aceite próprio, porque **sai do servidor para um terceiro**: o
+reconhecimento é feito pela API do Claude, da Anthropic. Sem `consent_accepted`, a rota
+responde 422 antes de ler o arquivo, e a foto não vai a lugar nenhum. A tela diz para
+quem a foto vai e que ela não é guardada, e os botões de câmera e galeria só funcionam
+depois do aceite. Este aceite não é gravado — não há nada gravado a que ele se refira.
+
 > Testes: `test_import_plan.py::test_grava_consentimento_com_data_e_versao`,
 > `::test_nao_da_para_importar_sem_informar_o_consentimento`,
 > `test_api.py::test_sem_aceite_do_termo_nao_grava_plano`,
 > `test_prescription_delivery.py::test_sem_consentimento_nada_e_gravado`,
-> `::test_recusar_nao_grava_nada`.
+> `::test_recusar_nao_grava_nada`,
+> `test_pantry_photo.py::test_sem_consentimento_a_foto_nem_e_enviada`;
+> no app, `DespensaPorFoto.test.tsx` › "não deixa enviar a foto sem o aceite".
 
 ## Minimização
 
@@ -63,6 +76,17 @@ O aplicativo **não prescreve dieta** — ele operacionaliza uma prescrição qu
 existe. Substituição de alimento só aparece se veio da nutricionista. No plano montado
 no app, quem prescreve é a nutricionista, com nome e CRN; o app só leva as substituições
 dela até o paciente, para ler, e não as põe na compra.
+
+**Da foto da despensa, o terceiro recebe o mínimo.** O servidor reduz a imagem a 1280 px
+no lado maior e a regrava do zero antes do envio. Regravar descarta o EXIF, e com ele a
+localização que o celular costuma gravar na foto, o modelo do aparelho e a hora. Vai a
+imagem, sem nome, e-mail ou identificador da conta. O que volta são nomes de alimentos,
+e nem eles são gravados até a pessoa confirmar item a item (decisão 11).
+
+> Testes: `test_pantry_photo.py::test_descarta_a_localizacao_da_foto`,
+> `::test_rota_nao_grava_nada_na_despensa`,
+> `::test_fluxo_completo_com_reconhecedor_falso` (o reconhecedor recebe a foto
+> preparada, nunca o arquivo original).
 
 O paciente vê do plano recebido só o nome e o CRN de quem o assinou — nunca o e-mail
 da nutricionista. A nutricionista vê do paciente só o que ela mesma digitou e se ele
@@ -139,6 +163,10 @@ Este é um projeto acadêmico e o MVP não cobre:
 - registro de operações de tratamento e prazo de retenção definido;
 - revogação de token antes de expirar, que exigiria sessões no banco;
 - consentimento granular por finalidade — hoje é um aceite único;
+- contrato com o operador da foto da despensa: a Anthropic recebe a imagem como
+  operadora, e em produção isso pede acordo de tratamento de dados e a conferência da
+  política de retenção da API — o app descarta a foto, mas não controla o que o
+  operador faz com ela;
 - verificação do CRN junto ao conselho — hoje ele é só declarado;
 - prazo de retenção do plano que a nutricionista guarda depois de o paciente excluir a
   conta: hoje o documento dela, com nome e e-mail do paciente, fica até ela o apagar.

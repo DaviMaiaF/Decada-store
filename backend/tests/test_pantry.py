@@ -297,6 +297,13 @@ def test_sugere_produtos_do_catalogo_para_o_texto_digitado(db_session, usuario_c
 
 
 @pytest.mark.db
+def test_sugestao_do_item_salvo_casa_singular_com_plural(db_session, usuario_com_despensa):
+    item = PantryItem(user_id=usuario_com_despensa.id, raw_description="ovo")
+
+    assert suggest_products(db_session, item)[0].product.name == "Ovos de galinha"
+
+
+@pytest.mark.db
 def test_cobertura_usando_a_despensa_gravada(db_session, usuario_com_despensa):
     aveia = db_session.scalars(select(Product).where(Product.name == "Aveia em flocos")).one()
     despensa = user_pantry(db_session, usuario_com_despensa.id)

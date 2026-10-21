@@ -64,3 +64,22 @@ class PantryItemOut(ApiModel):
     product: ProductOut | None = None
     quantity: Decimal | None = None
     unit: MeasurementUnit | None = None
+
+
+class PhotoProposalOut(ApiModel):
+    """Um alimento que a foto mostrou, com os produtos que podem ser ele.
+
+    É proposta, não item: só vira despensa quando a pessoa confirma pelo
+    `POST /pantry`. `identified` falso é o que a tela mostra à parte, como não
+    identificado — os candidatos vêm mesmo assim, para a pessoa poder escolher.
+    """
+
+    name: str
+    identified: bool
+    candidates: list[ProductSuggestionOut]
+
+
+class PhotoRecognitionOut(BaseModel):
+    """O que a foto mostrou. Lista vazia é foto sem alimento, não erro."""
+
+    items: list[PhotoProposalOut]

@@ -45,6 +45,7 @@ Legenda:
 | `GET /meal-plans` · `GET /meal-plans/{id}/shopping-lists` | o que o usuário já tem, sem os itens: é como o app reabre onde parou |
 | `services/prescriptions.py` | plano da nutricionista: edição, envio, aceite com cópia para o paciente, texto do documento |
 | `services/pdf_writer.py` | PDF com texto, de várias páginas, no formato que o import lê |
+| `services/pantry_photo.py` · `POST /pantry/photo` | foto do que se tem em casa → alimentos reconhecidos, cada um com os produtos do catálogo que podem ser ele. Só propõe, não grava |
 
 ---
 
@@ -227,7 +228,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
-| Encher a despensa por foto | 🔨 | Não estava no protótipo. Fotografar o que se tem em casa, o app dizer o que viu e a pessoa confirmar o que vira item |
+| Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | ✅ | Um botão por ingrediente que falta, na quantidade que a receita pede |
@@ -275,7 +276,7 @@ Ingrediente opcional não entra na conta. Item da despensa sem quantidade conta 
 disponível — regra oposta à da lista de compras, onde item sem quantidade não abate
 nada, porque aqui o custo do erro é uma sugestão imprecisa, não uma compra a menos.
 
-**Encher a despensa por foto — a próxima funcionalidade.** A pessoa fotografa o que tem
+**Encher a despensa por foto.** A pessoa fotografa o que tem
 em casa (a prateleira, a geladeira, as compras em cima da mesa) e **o app diz o que viu**.
 O que ela confirmar vira item da despensa. Nasceu de um problema de uso, não do protótipo:
 cadastrar item por item é trabalhoso o bastante para a pessoa não fazer — e despensa vazia
@@ -296,8 +297,49 @@ pessoa disser quanto tem.
 
 **A imagem não é guardada.** Foto do interior da casa de alguém é dado pessoal, e a
 decisão 5 pede minimização: o app extrai os itens e descarta o arquivo — não há coluna
-para imagem, nem nada a apagar depois. Se o reconhecimento for feito por serviço de
-terceiros, isso entra no termo de consentimento antes de a primeira foto sair do aparelho.
+para imagem, nem nada a apagar depois. O reconhecimento é feito por serviço de terceiros
+(a API do Claude), então o aceite vem antes de a primeira foto sair do aparelho.
+
+**Como ficou.** O botão "Encher por foto" fica no cartão da despensa, logo abaixo do
+campo de digitar. Ele abre um painel com o aceite e dois botões, **Tirar foto** e
+**Escolher da galeria**, desativados até a pessoa aceitar. A foto vai para
+`POST /pantry/photo`, que responde com uma lista de propostas — `name`, `identified` e
+até cinco `candidates` — e **não grava nada**.
+
+A revisão mostra cada alimento com o produto mais parecido já escolhido. A pessoa
+**confirma**, **troca o produto** entre os candidatos ou **descarta**. O que não chega
+ao corte do casamento (`MINIMUM_SCORE`, o mesmo do plano alimentar) aparece em
+"Não identificados", sem produto escolhido: dá para escolher um dos candidatos,
+guardar só como texto ou descartar. Confirmar é o `POST /pantry` de sempre, com
+`product_id` e sem quantidade. "Concluir" fecha o painel, e o que ninguém confirmou
+simplesmente não entra.
+
+**O reconhecimento erra, e o nome se corrige ali mesmo.** Cada alimento da revisão tem
+**Editar**: um campo já preenchido com o que a foto mostrou, e **Buscar** procura o nome
+corrigido no catálogo pelo mesmo `GET /products/search` do cadastro manual. A proposta
+inteira é trocada — nome, candidatos e produto escolhido —, e um nome sem produto parecido
+vai para os não identificados, pelo mesmo corte do servidor. Corrigir não grava nada:
+continua sendo proposta até a pessoa confirmar.
+
+O servidor reduz a foto a 1280 px no lado maior e a regrava em JPEG antes de enviá-la,
+o que também descarta o EXIF — e, com ele, a localização que o celular costuma gravar.
+O modelo é o Claude Haiku 5.5 (`VISION_MODEL`), o mais barato com visão: listar o que
+está numa prateleira não pede mais que isso, e cada foto custa uma fração de centavo.
+Sem `ANTHROPIC_API_KEY` a rota responde 503 e o resto do app continua igual.
+
+**Limite conhecido do casamento.** Com nomes curtos de uma palavra, o motor de
+`matching.py` às vezes passa do corte com um produto que não tem nada a ver: "pitaia"
+casa com "Uva itália" (0,625) e "picanha" com "Castanha-do-pará" (0,667). Como a pessoa
+confirma cada item, nada errado entra sozinho, mas a proposta aparece como
+identificada. O motor é o mesmo do plano alimentar e não foi alterado.
+
+**Duas correções na busca da despensa** (`pantry.rank_by_food_name`), sem mexer no motor
+do plano alimentar. Valem para a foto, para o campo de digitar e para os candidatos de um
+item salvo: a busca é feita
+com o singular e o plural da primeira palavra — a foto diz "ovo" e o catálogo vende "Ovos
+de galinha" —, e entre os produtos que passam do corte vem antes o que **começa** pelo
+alimento: "tomate" propõe "Tomate italiano" antes de "Molho de tomate". Os dois casos
+acima, de nome sem parente no catálogo, continuam como estão.
 
 **Isto não é a decisão 7.** O que está fora do MVP lá é OCR do *plano alimentar* — ler a
 prescrição de uma foto, onde errar significa comida sumindo da dieta de alguém. Aqui o

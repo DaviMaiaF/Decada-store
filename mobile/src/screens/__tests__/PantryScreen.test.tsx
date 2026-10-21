@@ -8,7 +8,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import PantryScreen from '../PantryScreen';
+import PantryScreen, { ESPERA_DAS_RECEITAS } from '../PantryScreen';
 import * as api from '../../services/api';
 import type { PantryItem, Product, Recipe, RecipeAvailability } from '../../types/api';
 
@@ -23,6 +23,32 @@ jest.mock('../../services/api', () => ({
   addExtraItem: jest.fn(),
   readShoppingList: jest.fn(),
 }));
+
+// A revisão da foto tem os próprios testes; aqui importa só o que a tela faz
+// com o item que ela entrega.
+jest.mock('../../components/DespensaPorFoto', () => {
+  const { Pressable, Text } = jest.requireActual('react-native');
+  let contador = 0;
+  return {
+    DespensaPorFoto: ({ onAdicionado }: { onAdicionado: (item: unknown) => void }) => (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          contador += 1;
+          onAdicionado({
+            id: `foto-${contador}`,
+            raw_description: `alimento da foto ${contador}`,
+            product: null,
+            quantity: null,
+            unit: null,
+          });
+        }}
+      >
+        <Text>confirmar item da foto</Text>
+      </Pressable>
+    ),
+  };
+});
 
 const lerDespensa = api.readPantry as jest.Mock;
 const adicionar = api.addPantryItem as jest.Mock;
@@ -698,5 +724,39 @@ describe('quantidade do item da despensa', () => {
         '1 item está ligado a um produto mas não tem quantidade, então também não desconta da sua lista de compras.',
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('itens confirmados pela foto', () => {
+  it('entram na despensa sem buscar a despensa de novo', async () => {
+    await montar();
+    await screen.findByText(/Sua despensa está vazia/);
+    const leiturasAntes = lerDespensa.mock.calls.length;
+
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+
+    expect(await screen.findByText(/alimento da foto/)).toBeTruthy();
+    expect(screen.getByText('1 item')).toBeTruthy();
+    expect(lerDespensa.mock.calls.length).toBe(leiturasAntes);
+  });
+
+  it('recalculam as receitas uma vez só, quando os toques param', async () => {
+    await montar();
+    await screen.findByText(/Sua despensa está vazia/);
+    const leiturasAntes = lerReceitas.mock.calls.length;
+
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+
+    // Logo depois dos toques, nada foi recarregado ainda.
+    expect(lerReceitas.mock.calls.length).toBe(leiturasAntes);
+    await waitFor(() => expect(lerReceitas.mock.calls.length).toBe(leiturasAntes + 1), {
+      timeout: ESPERA_DAS_RECEITAS + 2000,
+    });
+    // E não vem uma segunda recarga atrasada.
+    await new Promise((resolve) => setTimeout(resolve, ESPERA_DAS_RECEITAS + 200));
+    expect(lerReceitas.mock.calls.length).toBe(leiturasAntes + 1);
+    expect(screen.getByText('3 itens')).toBeTruthy();
   });
 });

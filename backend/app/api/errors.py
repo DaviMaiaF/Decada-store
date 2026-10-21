@@ -12,6 +12,11 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
+from app.services.pantry_photo import (
+    ImageTooLargeError,
+    InvalidImageError,
+    RecognitionUnavailableError,
+)
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
 from app.services.prescriptions import PrescriptionLockedError
 from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
@@ -23,6 +28,12 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (PdfWithoutTextError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # O arquivo não é um PDF: erro de quem enviou.
     (InvalidPdfError, status.HTTP_400_BAD_REQUEST),
+    # A foto da despensa: arquivo que não é imagem é erro de quem enviou; grande
+    # demais tem código próprio; e o reconhecimento fora do ar não é culpa de
+    # ninguém do lado do app — 503 diz à tela que vale tentar de novo.
+    (InvalidImageError, status.HTTP_400_BAD_REQUEST),
+    (ImageTooLargeError, status.HTTP_413_CONTENT_TOO_LARGE),
+    (RecognitionUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE),
     # Unidade de outra grandeza: o pedido não faz sentido no domínio.
     (IncompatibleUnitError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # Produto repetido na lista: conflito com o que já está lá, não erro de

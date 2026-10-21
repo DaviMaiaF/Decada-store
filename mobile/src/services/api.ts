@@ -17,6 +17,7 @@ import type {
   MealPlanSummary,
   MeasurementUnit,
   PantryItem,
+  PhotoRecognition,
   PlanItem,
   Prescription,
   PrescriptionInput,
@@ -224,6 +225,38 @@ export const updatePantryItem = (
 
 export const removePantryItem = (itemId: string) =>
   request<void>(`/pantry/${itemId}`, { method: 'DELETE' });
+
+/**
+ * Envia a foto do que se tem em casa e recebe o que o reconhecimento viu.
+ *
+ * Não grava nada: devolve propostas, e cada uma só entra na despensa quando a
+ * pessoa confirma. Vai como multipart, igual ao PDF do plano.
+ */
+export async function recognizePantryPhoto(
+  photo: { uri: string; mimeType?: string | null },
+  consentAccepted: boolean,
+): Promise<PhotoRecognition> {
+  const form = new FormData();
+  const tipo = photo.mimeType ?? 'image/jpeg';
+
+  if (Platform.OS === 'web') {
+    // Mesmo motivo do PDF: no navegador o arquivo precisa ir como Blob.
+    const conteudo = await fetch(photo.uri).then((resposta) => resposta.blob());
+    form.append('file', conteudo, 'despensa.jpg');
+  } else {
+    form.append('file', { uri: photo.uri, name: 'despensa.jpg', type: tipo } as unknown as Blob);
+  }
+  form.append('consent_accepted', String(consentAccepted));
+
+  const resposta = await http.post<PhotoRecognition>('/pantry/photo', form, {
+    networkMessage: 'não foi possível enviar a foto',
+    fallbackMessage: 'não foi possível reconhecer a foto',
+    // Subir a foto e esperar o reconhecimento leva mais que uma chamada comum.
+    timeout: 90_000,
+  });
+
+  return resposta.data;
+}
 
 /**
  * Produtos do catálogo parecidos com um texto digitado.
