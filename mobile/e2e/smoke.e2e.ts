@@ -31,6 +31,11 @@ jest.mock('axios', () => {
 // descritor de arquivo do RN não existe aqui.
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
 
+// O `config.ts` pergunta ao Expo o IP da máquina, e o módulo de verdade precisa do
+// React Native inteiro, que o mock acima não tem. Sem Expo aqui, o endereço cai em
+// `EXPO_PUBLIC_API_URL` ou em `localhost:8000`.
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: null } }));
+
 // Cofre do token em memória, no lugar do SecureStore.
 jest.mock('../src/services/session', () => {
   let guardado: string | null = null;
