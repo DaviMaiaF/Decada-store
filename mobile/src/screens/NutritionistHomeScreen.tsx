@@ -6,14 +6,12 @@
  * cartões e a tipografia do sistema de design.
  */
 
-import { useQuery } from '@tanstack/react-query';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, ErrorNotice, SectionTitle } from '../components';
-import { readAccount, readPrescriptions } from '../services/api';
-import { useAuth } from '../services/auth';
 import { colors, radius, spacing, typography } from '../theme/tokens';
-import type { PrescriptionStatus, PrescriptionSummary } from '../types/api';
+import type { PrescriptionStatus } from '../types/api';
+import { useNutritionistHomeViewModel } from '../viewmodels/useNutritionistHomeViewModel';
 
 const SITUACAO: Record<
   PrescriptionStatus,
@@ -32,29 +30,22 @@ export default function NutritionistHomeScreen({
   onNew: () => void;
   onOpen: (prescriptionId: string) => void;
 }) {
-  const { signOut } = useAuth();
-  const conta = useQuery({ queryKey: ['account'], queryFn: readAccount });
-  const planos = useQuery({ queryKey: ['prescriptions'], queryFn: readPrescriptions });
+  const { assinatura, carregando, falhou, planos, sair } = useNutritionistHomeViewModel();
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <View style={styles.cabecalho}>
         <Text style={styles.marca}>DÉCADA · NUTRICIONISTA</Text>
         <Text style={styles.titulo}>Planos alimentares</Text>
-        {conta.data ? (
-          <Body muted>
-            {conta.data.full_name}
-            {conta.data.crn ? ` · ${conta.data.crn}` : ''}
-          </Body>
-        ) : null}
+        {assinatura ? <Body muted>{assinatura}</Body> : null}
       </View>
 
       <Button label="Novo plano" onPress={onNew} />
 
-      {planos.isPending ? <Body muted>Carregando…</Body> : null}
-      {planos.isError ? <ErrorNotice message="não foi possível carregar seus planos" /> : null}
+      {carregando ? <Body muted>Carregando…</Body> : null}
+      {falhou ? <ErrorNotice message="não foi possível carregar seus planos" /> : null}
 
-      {planos.data?.length === 0 ? (
+      {planos?.length === 0 ? (
         <Card style={styles.vazio}>
           <Body>Você ainda não montou nenhum plano.</Body>
           <Body muted>
@@ -65,24 +56,16 @@ export default function NutritionistHomeScreen({
         </Card>
       ) : null}
 
-      {planos.data?.map((plano) => (
+      {planos?.map((plano) => (
         <Pressable
           key={plano.id}
           accessibilityRole="button"
-          accessibilityLabel={`Abrir ${titulo(plano)}`}
+          accessibilityLabel={`Abrir ${plano.titulo}`}
           onPress={() => onOpen(plano.id)}
         >
           <Card style={styles.plano}>
-            <Text style={styles.planoTitulo}>{titulo(plano)}</Text>
-            <Text style={styles.planoDetalhe}>
-              {[
-                plano.patient_name,
-                plano.patient_email,
-                `${plano.meal_count} ${plano.meal_count === 1 ? 'refeição' : 'refeições'}`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
+            <Text style={styles.planoTitulo}>{plano.titulo}</Text>
+            <Text style={styles.planoDetalhe}>{plano.detalhe}</Text>
             <Chip label={SITUACAO[plano.status].rotulo} tone={SITUACAO[plano.status].tom} />
           </Card>
         </Pressable>
@@ -90,14 +73,10 @@ export default function NutritionistHomeScreen({
 
       <View style={styles.conta}>
         <SectionTitle>Conta</SectionTitle>
-        <Button label="Sair da conta" variant="ghost" onPress={signOut} />
+        <Button label="Sair da conta" variant="ghost" onPress={sair} />
       </View>
     </ScrollView>
   );
-}
-
-function titulo(plano: PrescriptionSummary): string {
-  return plano.title ?? (plano.patient_name ? `Plano de ${plano.patient_name}` : 'Plano sem título');
 }
 
 const styles = StyleSheet.create({
