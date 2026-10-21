@@ -5,9 +5,9 @@
  * navegar, e sim a porta de entrada: diz em que ponto da jornada a pessoa está
  * e leva direto para a aba que resolve a próxima etapa.
  *
- * A próxima etapa vem da mesma trilha que fica no topo, para as duas nunca
- * discordarem sobre onde a pessoa parou. Abaixo dela, um card por aba para quem
- * quer ir direto a outro lugar sem seguir a ordem.
+ * Qual é a próxima etapa é decisão do `useHomeViewModel`; a tela só a desenha.
+ * Abaixo dela, um card por aba para quem quer ir direto a outro lugar sem
+ * seguir a ordem.
  */
 
 import type { ComponentType } from 'react';
@@ -15,52 +15,17 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, SectionTitle } from '../components';
 import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
-import { type EtapaDaTrilha, etapasUltrapassadas } from '../components/Trilha';
+import type { EtapaDaTrilha } from '../components/Trilha';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
+import { type AbaDeDestino, useHomeViewModel } from '../viewmodels/useHomeViewModel';
 
-export type AbaDeDestino = 'Dieta' | 'Mercado' | 'Despensa' | 'Economia';
-
-type ProximoPasso = { titulo: string; texto: string; botao: string; aba: AbaDeDestino };
+// A navegação e os testes da tela importam daqui; a regra mora no ViewModel.
+export { type AbaDeDestino, proximoPasso } from '../viewmodels/useHomeViewModel';
 
 /**
- * O que fazer em cada etapa da trilha, na mesma ordem dela:
- * Enviar → Confirmar → Região → Comprar.
+ * Os atalhos, na ordem da barra de abas. Os ícones são os mesmos dela. São fixos
+ * e só de apresentação, por isso ficam na View e não no ViewModel.
  */
-const PASSOS: ProximoPasso[] = [
-  {
-    titulo: 'Envie o plano da sua nutricionista',
-    texto: 'Comece importando o PDF da prescrição na aba Dieta.',
-    botao: 'Enviar o plano',
-    aba: 'Dieta',
-  },
-  {
-    titulo: 'Confirme os produtos',
-    texto: 'Diga qual produto do mercado corresponde a cada item do plano.',
-    botao: 'Confirmar produtos',
-    aba: 'Dieta',
-  },
-  {
-    titulo: 'Escolha a região e gere a lista',
-    texto: 'O preço estimado é sempre o da sua cidade.',
-    botao: 'Gerar a lista',
-    aba: 'Mercado',
-  },
-  {
-    titulo: 'Faça a sua compra',
-    texto: 'Marque o que já pegou ou finalize a compra com o que escolheu.',
-    botao: 'Ir ao mercado',
-    aba: 'Mercado',
-  },
-];
-
-const CONCLUIDO: ProximoPasso = {
-  titulo: 'Compra concluída',
-  texto: 'Tudo o que o plano pedia está na sacola. Veja quanto a sua despensa poupou.',
-  botao: 'Ver a economia',
-  aba: 'Economia',
-};
-
-/** Os atalhos, na ordem da barra de abas. Os ícones são os mesmos dela. */
 const ATALHOS: {
   aba: AbaDeDestino;
   texto: string;
@@ -72,12 +37,6 @@ const ATALHOS: {
   { aba: 'Economia', texto: 'Custo e economia', Icone: IconeEconomia },
 ];
 
-export function proximoPasso(etapas: EtapaDaTrilha[]): ProximoPasso & { detalhe?: string } {
-  const atual = etapasUltrapassadas(etapas).findIndex((ultrapassada) => !ultrapassada);
-  if (atual === -1) return CONCLUIDO;
-  return { ...PASSOS[atual], detalhe: etapas[atual].detalhe };
-}
-
 export default function HomeScreen({
   etapas,
   onIr,
@@ -86,7 +45,7 @@ export default function HomeScreen({
   /** Sai do início para a aba escolhida. */
   onIr: (aba: AbaDeDestino) => void;
 }) {
-  const passo = proximoPasso(etapas);
+  const { passo, jornadaConcluida } = useHomeViewModel(etapas);
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
@@ -95,7 +54,7 @@ export default function HomeScreen({
 
       <Card style={styles.passo}>
         <Text style={styles.rotulo}>
-          {passo === CONCLUIDO ? 'JORNADA CONCLUÍDA' : 'PRÓXIMA ETAPA'}
+          {jornadaConcluida ? 'JORNADA CONCLUÍDA' : 'PRÓXIMA ETAPA'}
         </Text>
         <SectionTitle>{passo.titulo}</SectionTitle>
         <Body muted>{passo.texto}</Body>

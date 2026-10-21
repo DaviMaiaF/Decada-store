@@ -65,6 +65,7 @@ Dieta, Mercado, Despensa e Economia — e uma tela de início.
 | [`docs/modelo-dados.md`](docs/modelo-dados.md) | Diagrama ER e a razão de cada regra de exclusão |
 | [`docs/lgpd.md`](docs/lgpd.md) | Consentimento, minimização e exclusão, cada um com o teste que o sustenta |
 | [`docs/integracao-api.md`](docs/integracao-api.md) | Como o app consome a API |
+| [`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md) | Arquitetura do app em MVVM: o que cabe em cada camada e o teste que guarda a regra |
 | [`docs/design/telas.md`](docs/design/telas.md) | Contrato tela a tela: o que existe, o que falta |
 | [`docs/demo/roteiro.md`](docs/demo/roteiro.md) | Roteiro de demonstração de cinco minutos |
 | [`docs/estado-do-projeto.md`](docs/estado-do-projeto.md) | Levantamento do estado das branches |
@@ -399,15 +400,17 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   └── pyproject.toml
 ├── mobile/
 │   ├── src/
-│   │   ├── components/    # cartão, botão, chip, campo, despensa por foto
+│   │   ├── components/    # View: cartão, botão, chip, campo, despensa por foto
 │   │   ├── navigation/    # abas Dieta, Mercado, Despensa, Economia
-│   │   ├── screens/       # início, login, dieta, mercado, despensa, economia, nutricionista
-│   │   ├── services/      # cliente HTTP, sessão, formatação
+│   │   ├── screens/       # View: início, login, dieta, mercado, despensa, economia, nutricionista
+│   │   ├── services/      # Model: cliente HTTP, sessão, formatação, regras puras
 │   │   ├── theme/         # tokens do sistema de design
-│   │   └── types/         # contrato da API
+│   │   ├── types/         # Model: contrato da API
+│   │   └── viewmodels/    # ViewModel: um hook por tela, com estado, queries e ações
 │   └── App.tsx
 ├── docs/
 │   ├── design/        # protótipos, sistema de design, contrato das telas
+│   ├── arquitetura-mvvm.md # camadas do app e a convenção entre elas
 │   ├── lgpd.md        # consentimento, minimização e exclusão
 │   └── modelo-dados.md # diagrama ER e regras de exclusão
 ├── .github/workflows/     # CI: pytest + ruff, tsc + jest

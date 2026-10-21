@@ -6,7 +6,6 @@
  * na porta do papel dela — e responde igual a senha errada quando não aceita.
  */
 
-import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,12 +17,9 @@ import {
 } from 'react-native';
 
 import { Body, Button, ErrorNotice, Field } from '../components';
-import { ApiError } from '../services/api';
-import { useAuth } from '../services/auth';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { UserRole } from '../types/api';
-
-const SENHA_MINIMA = 8;
+import { SENHA_MINIMA, useLoginViewModel } from '../viewmodels/useLoginViewModel';
 
 const PAPEIS: { valor: UserRole; rotulo: string }[] = [
   { valor: 'paciente', rotulo: 'Sou paciente' },
@@ -31,53 +27,8 @@ const PAPEIS: { valor: UserRole; rotulo: string }[] = [
 ];
 
 export default function LoginScreen() {
-  const { signIn, signUp, signUpNutritionist, notice } = useAuth();
-  const [papel, setPapel] = useState<UserRole>('paciente');
-  const [cadastrando, setCadastrando] = useState(false);
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [nome, setNome] = useState('');
-  const [crn, setCrn] = useState('');
-  const [erro, setErro] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  const nutricionista = papel === 'nutricionista';
-  const senhaCurta = cadastrando && senha.length > 0 && senha.length < SENHA_MINIMA;
-
-  async function enviar() {
-    setErro(null);
-
-    if (!email.trim() || !senha) {
-      setErro('preencha e-mail e senha');
-      return;
-    }
-    if (cadastrando && senha.length < SENHA_MINIMA) {
-      setErro(`a senha precisa de pelo menos ${SENHA_MINIMA} caracteres`);
-      return;
-    }
-    // Nome e CRN assinam a receita que o paciente vai ler.
-    if (cadastrando && nutricionista && (!nome.trim() || !crn.trim())) {
-      setErro('preencha nome e CRN');
-      return;
-    }
-
-    setEnviando(true);
-    try {
-      if (!cadastrando) {
-        await signIn(email.trim(), senha, papel);
-      } else if (nutricionista) {
-        await signUpNutritionist(email.trim(), senha, nome.trim(), crn.trim());
-      } else {
-        await signUp(email.trim(), senha);
-      }
-    } catch (problema) {
-      setErro(
-        problema instanceof ApiError ? problema.message : 'não foi possível entrar agora',
-      );
-    } finally {
-      setEnviando(false);
-    }
-  }
+  const vm = useLoginViewModel();
+  const { cadastrando, nutricionista } = vm;
 
   return (
     <KeyboardAvoidingView
@@ -101,16 +52,13 @@ export default function LoginScreen() {
 
         <View style={styles.papeis} accessibilityRole="radiogroup">
           {PAPEIS.map(({ valor, rotulo }) => {
-            const ativo = valor === papel;
+            const ativo = valor === vm.papel;
             return (
               <Pressable
                 key={valor}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: ativo }}
-                onPress={() => {
-                  setPapel(valor);
-                  setErro(null);
-                }}
+                onPress={() => vm.escolherPapel(valor)}
                 style={[styles.papel, ativo && styles.papelAtivo]}
               >
                 <Text style={[styles.papelTexto, ativo && styles.papelTextoAtivo]}>
@@ -126,15 +74,15 @@ export default function LoginScreen() {
             <>
               <Field
                 label="Nome completo"
-                value={nome}
-                onChangeText={setNome}
+                value={vm.nome}
+                onChangeText={vm.setNome}
                 autoComplete="name"
                 placeholder="como aparece nas receitas"
               />
               <Field
                 label="CRN"
-                value={crn}
-                onChangeText={setCrn}
+                value={vm.crn}
+                onChangeText={vm.setCrn}
                 autoCapitalize="characters"
                 placeholder="CRN-3 12345"
               />
@@ -142,8 +90,8 @@ export default function LoginScreen() {
           ) : null}
           <Field
             label="E-mail"
-            value={email}
-            onChangeText={setEmail}
+            value={vm.email}
+            onChangeText={vm.setEmail}
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
@@ -151,28 +99,25 @@ export default function LoginScreen() {
           />
           <Field
             label="Senha"
-            value={senha}
-            onChangeText={setSenha}
+            value={vm.senha}
+            onChangeText={vm.setSenha}
             secureTextEntry
             autoCapitalize="none"
             placeholder={cadastrando ? `pelo menos ${SENHA_MINIMA} caracteres` : ''}
-            error={senhaCurta ? `pelo menos ${SENHA_MINIMA} caracteres` : null}
+            error={vm.senhaCurta ? `pelo menos ${SENHA_MINIMA} caracteres` : null}
           />
 
-          {erro || notice ? <ErrorNotice message={erro ?? notice ?? ''} /> : null}
+          {vm.mensagem ? <ErrorNotice message={vm.mensagem} /> : null}
 
           <Button
             label={cadastrando ? 'Criar conta' : 'Entrar'}
-            onPress={enviar}
-            loading={enviando}
+            onPress={vm.enviar}
+            loading={vm.enviando}
           />
           <Button
             label={cadastrando ? 'Já tenho conta' : 'Criar uma conta'}
             variant="ghost"
-            onPress={() => {
-              setCadastrando((estava) => !estava);
-              setErro(null);
-            }}
+            onPress={vm.alternarCadastro}
           />
         </View>
 

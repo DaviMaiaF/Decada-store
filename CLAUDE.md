@@ -54,10 +54,11 @@ decada/
 │   └── pyproject.toml
 ├── mobile/
 │   ├── src/
-│   │   ├── screens/
-│   │   ├── components/
-│   │   ├── services/      # cliente HTTP
-│   │   └── types/
+│   │   ├── screens/       # View
+│   │   ├── components/    # View
+│   │   ├── viewmodels/    # ViewModel: um hook por tela
+│   │   ├── services/      # Model: cliente HTTP e regras puras
+│   │   └── types/         # Model: contrato da API
 │   └── app.json
 ├── docs/
 │   └── design/        # protótipos, sistema de design, contrato das telas
@@ -131,6 +132,12 @@ backend estão em [`docs/design/`](docs/design/). Antes de implementar qualquer 
 ou endpoint que a alimente, leia [`docs/design/telas.md`](docs/design/telas.md): ele
 diz o que já existe, o que falta e o que ficou fora do MVP.
 
+O app segue **MVVM** ([`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md)): a tela
+(`screens/`, `components/`) só desenha e repassa toques; estado, queries, mutations e
+ações ficam num hook em `src/viewmodels/`, que tem teste próprio com `renderHook`. A
+View não importa `services/api`, `@tanstack/react-query` nem `services/auth` — o teste
+`viewmodels/__tests__/arquitetura.test.ts` quebra se importar.
+
 A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**, e uma tela de
 início fora delas, onde o app abre e para onde a compra concluída leva. O app vive em
 `mobile/`; os tokens do sistema de design estão em `mobile/src/theme/tokens.ts` e
@@ -144,6 +151,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
   com o teste que o sustenta.
 - [`docs/integracao-api.md`](docs/integracao-api.md) — como o app consome a API:
   a instância do axios, os interceptors, as rotas e o que cada status faz na tela.
+- [`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md) — as camadas do app (Model,
+  View, ViewModel), a convenção entre elas e o que fica de fora.
 
 ## Como rodar
 

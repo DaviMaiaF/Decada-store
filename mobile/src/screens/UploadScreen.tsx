@@ -6,68 +6,20 @@
  * inclusive as linhas que ele não entendeu.
  */
 
-import { useState } from 'react';
-import * as DocumentPicker from 'expo-document-picker';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, Field, SectionTitle } from '../components';
 import { PlanosRecebidos } from '../components/PlanosRecebidos';
-import { ApiError, importMealPlan } from '../services/api';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ImportResult } from '../types/api';
-
-type Arquivo = { uri: string; name: string; mimeType?: string };
+import { useUploadViewModel } from '../viewmodels/useUploadViewModel';
 
 export default function UploadScreen({
   onImported,
 }: {
   onImported: (resultado: ImportResult) => void;
 }) {
-  const [arquivo, setArquivo] = useState<Arquivo | null>(null);
-  const [nutricionista, setNutricionista] = useState('');
-  const [crn, setCrn] = useState('');
-  const [aceitou, setAceitou] = useState(false);
-  const [resultado, setResultado] = useState<ImportResult | null>(null);
-
-  const envio = useMutation({
-    mutationFn: () =>
-      importMealPlan(arquivo!, aceitou, {
-        nutritionistName: nutricionista.trim() || undefined,
-        nutritionistCrn: crn.trim() || undefined,
-      }),
-    onSuccess: (dados) => setResultado(dados),
-  });
-
-  async function escolher() {
-    const escolha = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      copyToCacheDirectory: true,
-    });
-    if (escolha.canceled) return;
-
-    const selecionado = escolha.assets[0];
-    setArquivo({
-      uri: selecionado.uri,
-      name: selecionado.name,
-      mimeType: selecionado.mimeType,
-    });
-    setResultado(null);
-    envio.reset();
-  }
-
-  const erro = envio.error;
-
-  // Botão inerte sem explicação faz a pessoa tocar de novo achando que falhou.
-  // Duas condições, e a frase diz qual das duas está faltando.
-  const faltando =
-    !arquivo && !aceitou
-      ? 'Escolha o PDF e marque o aceite para enviar.'
-      : !arquivo
-        ? 'Escolha o PDF para enviar.'
-        : !aceitou
-          ? 'Marque o aceite para enviar.'
-          : null;
+  const vm = useUploadViewModel();
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
@@ -99,12 +51,12 @@ export default function UploadScreen({
           ainda não faz parte desta versão.
         </Body>
 
-        <Button label={arquivo ? 'Trocar arquivo' : 'Escolher PDF'} onPress={escolher} />
+        <Button label={vm.nomeDoArquivo ? 'Trocar arquivo' : 'Escolher PDF'} onPress={vm.escolher} />
 
-        {arquivo ? (
+        {vm.nomeDoArquivo ? (
           <View style={styles.arquivo}>
             <Text style={styles.arquivoNome} numberOfLines={1}>
-              {arquivo.name}
+              {vm.nomeDoArquivo}
             </Text>
           </View>
         ) : null}
@@ -120,15 +72,15 @@ export default function UploadScreen({
         <Field
           label="Nutricionista"
           placeholder="Dra. Camila Fernandes"
-          value={nutricionista}
-          onChangeText={setNutricionista}
+          value={vm.nutricionista}
+          onChangeText={vm.setNutricionista}
           autoCapitalize="words"
         />
         <Field
           label="CRN"
           placeholder="CRN-3 48291"
-          value={crn}
-          onChangeText={setCrn}
+          value={vm.crn}
+          onChangeText={vm.setCrn}
           autoCapitalize="characters"
           autoCorrect={false}
         />
@@ -136,13 +88,13 @@ export default function UploadScreen({
 
       <Pressable
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: aceitou }}
+        accessibilityState={{ checked: vm.aceitou }}
         accessibilityLabel="Aceito o tratamento do meu plano alimentar"
-        onPress={() => setAceitou((estava) => !estava)}
+        onPress={vm.alternarAceite}
         style={styles.consentimento}
       >
-        <View style={[styles.caixa, aceitou && styles.caixaMarcada]}>
-          {aceitou ? <Text style={styles.caixaMarca}>✓</Text> : null}
+        <View style={[styles.caixa, vm.aceitou && styles.caixaMarcada]}>
+          {vm.aceitou ? <Text style={styles.caixaMarca}>✓</Text> : null}
         </View>
         <Text style={styles.consentimentoTexto}>
           Autorizo a DÉCADA a tratar meu plano alimentar, que é dado sensível de saúde,
@@ -150,22 +102,18 @@ export default function UploadScreen({
         </Text>
       </Pressable>
 
-      {erro ? (
-        <ErrorNotice
-          message={erro instanceof ApiError ? erro.message : 'não foi possível enviar o PDF'}
-        />
-      ) : null}
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
 
       <Button
         label="Enviar prescrição"
-        onPress={() => envio.mutate()}
-        disabled={!arquivo || !aceitou}
-        loading={envio.isPending}
+        onPress={vm.enviar}
+        disabled={!vm.podeEnviar}
+        loading={vm.enviando}
       />
 
-      {faltando ? <Body muted>{faltando}</Body> : null}
+      {vm.faltando ? <Body muted>{vm.faltando}</Body> : null}
 
-      {resultado ? <Resumo resultado={resultado} onContinuar={onImported} /> : null}
+      {vm.resultado ? <Resumo resultado={vm.resultado} onContinuar={onImported} /> : null}
     </ScrollView>
   );
 }

@@ -17,7 +17,6 @@
  * mesmo par produto + quantidade, e é por ali que o item solto passa a abater.
  */
 
-import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -27,254 +26,27 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { DespensaPorFoto } from '../components/DespensaPorFoto';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
-import {
-  ApiError,
-  addExtraItem,
-  addPantryItem,
-  readPantry,
-  readRecipeSuggestions,
-  readShoppingList,
-  removePantryItem,
-  searchProducts,
-  updatePantryItem,
-} from '../services/api';
 import { formatQuantity } from '../services/format';
-import { amountToField, parseDecimal, suggestedAmount, unitOptions } from '../services/units';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import type {
-  MeasurementUnit,
-  PantryItem,
-  Product,
-  ProductSuggestion,
-  RecipeAvailability,
-  RecipeIngredient,
-} from '../types/api';
+import type { PantryItem, ProductSuggestion, RecipeAvailability } from '../types/api';
+import { usePantryViewModel, useRecipeCardViewModel } from '../viewmodels/usePantryViewModel';
 
-// Quanto esperar o último item confirmado pela foto antes de recalcular as receitas.
-export const ESPERA_DAS_RECEITAS = 1000;
+// O teste da tela espera a recarga das receitas por este tempo.
+export { ESPERA_DAS_RECEITAS } from '../viewmodels/usePantryViewModel';
 
 export default function PantryScreen({ listId }: { listId: string | null }) {
-  const cliente = useQueryClient();
-  const [texto, setTexto] = useState('');
-  // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
-  const [escolhendo, setEscolhendo] = useState<string | null>(null);
-  // Produto já escolhido, aguardando a quantidade. Segundo e último passo.
-  const [medindo, setMedindo] = useState<{ descricao: string; produto: Product } | null>(
-    null,
-  );
-  const [quantidade, setQuantidade] = useState('');
-  const [unidade, setUnidade] = useState<MeasurementUnit>('unidade');
-  // Item já salvo em edição, com estado próprio: os dois painéis nunca estão
-  // abertos ao mesmo tempo, mas compartilhar os campos deixaria um sujar o outro.
-  const [editando, setEditando] = useState<PantryItem | null>(null);
-  const [buscaEdicao, setBuscaEdicao] = useState('');
-  const [produtoEdicao, setProdutoEdicao] = useState<Product | null>(null);
-  const [quantidadeEdicao, setQuantidadeEdicao] = useState('');
-  const [unidadeEdicao, setUnidadeEdicao] = useState<MeasurementUnit>('unidade');
-
-  const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
-
-  // A disponibilidade soma duas fontes: a despensa e a lista de compras
-  // corrente. Sem o id da lista ela contava só o que está em casa, e uma
-  // receita cujo ingrediente já estava no carrinho aparecia como incompleta.
-  const receitas = useQuery({
-    queryKey: ['recipe-suggestions', listId],
-    queryFn: () => readRecipeSuggestions(listId ?? undefined),
-  });
-
-  // Mesma chave que o Mercado usa: o React Query serve as duas telas do mesmo
-  // cache, e saber o que já está na lista não custa requisição nova.
-  const lista = useQuery({
-    queryKey: ['shopping-list', listId],
-    queryFn: () => readShoppingList(listId!),
-    enabled: listId !== null,
-  });
-
-  // Produto que já está na lista não entra de novo — o servidor recusa com 409.
-  // Sem isto o botão convidava para uma recusa: o ingrediente falta porque a
-  // receita pede mais do que a lista traz, e não porque ele não foi comprado.
-  const naLista = new Set((lista.data?.items ?? []).map((item) => item.product.id));
-
-  /** Depois de mexer na despensa, as receitas mudam junto. */
-  function recarregar() {
-    cliente.invalidateQueries({ queryKey: ['pantry'] });
-    cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
-  }
-
-  const recargaDasReceitas = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (recargaDasReceitas.current) clearTimeout(recargaDasReceitas.current);
-    },
-    [],
-  );
-
-  /**
-   * Item confirmado na revisão da foto. A pessoa confirma vários em sequência,
-   * e recarregar a despensa e as receitas a cada um redesenhava a tela inteira
-   * entre um toque e outro. O item que o servidor devolveu entra direto no
-   * cache — a lista vem do mais recente ao mais antigo, então vai no começo —,
-   * e as receitas são recarregadas uma vez só, quando os toques param.
-   */
-  function guardadoPelaFoto(item: PantryItem) {
-    cliente.setQueryData<PantryItem[]>(['pantry'], (atual) => [item, ...(atual ?? [])]);
-    if (recargaDasReceitas.current) clearTimeout(recargaDasReceitas.current);
-    recargaDasReceitas.current = setTimeout(() => {
-      recargaDasReceitas.current = null;
-      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
-    }, ESPERA_DAS_RECEITAS);
-  }
-
-  const candidatos = useQuery({
-    queryKey: ['product-search', escolhendo],
-    queryFn: () => searchProducts(escolhendo!),
-    enabled: escolhendo !== null,
-  });
-
-  const candidatosEdicao = useQuery({
-    queryKey: ['product-search', buscaEdicao],
-    queryFn: () => searchProducts(buscaEdicao),
-    enabled: buscaEdicao.trim().length >= 2,
-  });
-
-  const adicionar = useMutation({
-    mutationFn: ({
-      descricao,
-      produtoId,
-      medida,
-    }: {
-      descricao: string;
-      produtoId: string | null;
-      medida?: { quantidade: string; unidade: MeasurementUnit } | null;
-    }) =>
-      addPantryItem({
-        raw_description: descricao,
-        product_id: produtoId,
-        // O backend recusa o par pela metade, então ou vão os dois ou nenhum.
-        ...(medida ? { quantity: medida.quantidade, unit: medida.unidade } : {}),
-      }),
-    onSuccess: () => {
-      setTexto('');
-      setEscolhendo(null);
-      setMedindo(null);
-      recarregar();
-    },
-  });
-
-  function comecarEscolha() {
-    const descricao = texto.trim();
-    if (descricao.length < 2) return;
-    setEscolhendo(descricao);
-  }
-
-  /** Produto escolhido: falta dizer quanto se tem dele. */
-  function comecarMedida(descricao: string, produto: Product) {
-    const sugestao = suggestedAmount(produto);
-    setQuantidade(sugestao.quantity);
-    setUnidade(sugestao.unit);
-    setMedindo({ descricao, produto });
-    setEscolhendo(null);
-  }
-
-  function salvarMedido(comQuantidade: boolean) {
-    if (medindo === null) return;
-    const numero = comQuantidade ? parseDecimal(quantidade) : null;
-    adicionar.mutate({
-      descricao: medindo.descricao,
-      produtoId: medindo.produto.id,
-      medida: numero === null ? null : { quantidade: numero, unidade },
-    });
-  }
-
-  const atualizar = useMutation({
-    mutationFn: ({
-      itemId,
-      produtoId,
-      medida,
-    }: {
-      itemId: string;
-      produtoId: string | null;
-      medida: { quantidade: string; unidade: MeasurementUnit } | null;
-    }) =>
-      updatePantryItem(itemId, {
-        product_id: produtoId,
-        // Aqui os dois campos vão sempre, inclusive nulos: nulo nos dois é como
-        // se diz "não sei mais a quantidade" e apaga a medição que havia.
-        quantity: medida === null ? null : medida.quantidade,
-        unit: medida === null ? null : medida.unidade,
-      }),
-    onSuccess: () => {
-      setEditando(null);
-      recarregar();
-    },
-  });
-
-  /** Tocar no item abre o mesmo par produto + quantidade, já preenchido. */
-  function abrirEdicao(item: PantryItem) {
-    setEditando(item);
-    setProdutoEdicao(item.product);
-    setBuscaEdicao('');
-    setEscolhendo(null);
-    setMedindo(null);
-
-    if (item.product !== null && item.quantity !== null && item.unit !== null) {
-      setQuantidadeEdicao(amountToField(item.quantity));
-      setUnidadeEdicao(item.unit);
-      return;
-    }
-    const sugestao =
-      item.product === null
-        ? { quantity: '', unit: 'unidade' as MeasurementUnit }
-        : suggestedAmount(item.product);
-    setQuantidadeEdicao(sugestao.quantity);
-    setUnidadeEdicao(sugestao.unit);
-  }
-
-  /** Produto escolhido na edição: a unidade passa a ser a da grandeza dele. */
-  function escolherProdutoEdicao(produto: Product) {
-    const sugestao = suggestedAmount(produto);
-    setProdutoEdicao(produto);
-    setQuantidadeEdicao(sugestao.quantity);
-    setUnidadeEdicao(sugestao.unit);
-  }
-
-  function salvarEdicao() {
-    if (editando === null) return;
-    // Campo vazio é "não sei a quantidade", e apaga a medição. Texto que não é
-    // número não chega aqui: o botão fica inativo antes disso.
-    const numero = quantidadeEdicao.trim() === '' ? null : parseDecimal(quantidadeEdicao);
-    atualizar.mutate({
-      itemId: editando.id,
-      produtoId: produtoEdicao === null ? null : produtoEdicao.id,
-      medida: numero === null ? null : { quantidade: numero, unidade: unidadeEdicao },
-    });
-  }
-
-  const remover = useMutation({
-    mutationFn: (itemId: string) => removePantryItem(itemId),
-    onSuccess: recarregar,
-  });
-
-  const itens = despensa.data ?? [];
-  const semVinculo = itens.filter((item) => item.product === null).length;
-  // Item vinculado mas sem quantidade conta para as receitas e não abate nada
-  // da compra. Sem este aviso a pessoa acha que o vínculo bastava.
-  const semQuantidade = itens.filter(
-    (item) => item.product !== null && (item.quantity === null || item.unit === null),
-  ).length;
-  // Campo vazio é intenção ("não sei"); texto que não é número é erro de digitação,
-  // e gravar nulo por causa dele apagaria a medição sem a pessoa pedir.
-  const medidaEdicaoInvalida =
-    quantidadeEdicao.trim() !== '' && parseDecimal(quantidadeEdicao) === null;
+  const vm = usePantryViewModel(listId);
+  const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
+  const { escolhendo, medindo } = adicao;
+  const { editando } = edicao;
 
   return (
     <FlatList
-      data={receitas.data ?? []}
+      data={vm.receitas}
       keyExtractor={(item) => item.recipe.id}
       contentContainerStyle={styles.conteudo}
       ListHeaderComponent={
@@ -300,23 +72,23 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                 placeholder="Ex: ovos, aveia, tomate…"
                 placeholderTextColor={colors.outline}
                 style={styles.campo}
-                value={texto}
-                onChangeText={setTexto}
-                onSubmitEditing={comecarEscolha}
+                value={adicao.texto}
+                onChangeText={adicao.setTexto}
+                onSubmitEditing={adicao.comecarEscolha}
                 returnKeyType="done"
               />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Adicionar à despensa"
-                disabled={texto.trim().length < 2 || adicionar.isPending}
-                onPress={comecarEscolha}
+                disabled={!adicao.podeComecar}
+                onPress={adicao.comecarEscolha}
                 style={({ pressed }) => [
                   styles.botaoAdicionar,
-                  (texto.trim().length < 2 || adicionar.isPending) && styles.botaoInativo,
+                  !adicao.podeComecar && styles.botaoInativo,
                   pressed && styles.botaoPressionado,
                 ]}
               >
-                {adicionar.isPending ? (
+                {adicao.salvando ? (
                   <ActivityIndicator color={colors.onPrimary} />
                 ) : (
                   <Text style={styles.botaoAdicionarTexto}>+</Text>
@@ -324,7 +96,7 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
               </Pressable>
             </View>
 
-            <DespensaPorFoto onAdicionado={guardadoPelaFoto} />
+            <DespensaPorFoto onAdicionado={vm.guardadoPelaFoto} />
 
             {escolhendo !== null ? (
               <View style={styles.escolha}>
@@ -334,18 +106,18 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                   compras e contar nas receitas.
                 </Body>
 
-                {candidatos.isPending ? <Body muted>Buscando no catálogo…</Body> : null}
-                {candidatos.isError ? (
+                {adicao.buscando ? <Body muted>Buscando no catálogo…</Body> : null}
+                {adicao.buscaFalhou ? (
                   <ErrorNotice message="não foi possível buscar no catálogo" />
                 ) : null}
 
-                {candidatos.data?.map((sugestao: ProductSuggestion) => (
+                {adicao.candidatos?.map((sugestao: ProductSuggestion) => (
                   <Pressable
                     key={sugestao.product.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Usar ${sugestao.product.name}`}
-                    disabled={adicionar.isPending}
-                    onPress={() => comecarMedida(escolhendo, sugestao.product)}
+                    disabled={adicao.salvando}
+                    onPress={() => adicao.escolherProduto(sugestao.product)}
                     style={styles.candidato}
                   >
                     <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
@@ -355,23 +127,21 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                   </Pressable>
                 ))}
 
-                {candidatos.data?.length === 0 ? (
+                {adicao.candidatos?.length === 0 ? (
                   <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
                 ) : null}
 
                 <View style={styles.escolhaAcoes}>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() =>
-                      adicionar.mutate({ descricao: escolhendo, produtoId: null })
-                    }
+                    onPress={adicao.guardarSoTexto}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Guardar só como texto</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setEscolhendo(null)}
+                    onPress={adicao.cancelarEscolha}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
@@ -396,15 +166,15 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                     placeholder="0"
                     placeholderTextColor={colors.outline}
                     style={[styles.campo, styles.campoQuantidade]}
-                    value={quantidade}
-                    onChangeText={setQuantidade}
+                    value={adicao.quantidade}
+                    onChangeText={adicao.setQuantidade}
                     keyboardType="decimal-pad"
                     returnKeyType="done"
                   />
                   <SeletorDeUnidade
                     produto={medindo.produto}
-                    escolhida={unidade}
-                    onEscolher={setUnidade}
+                    escolhida={adicao.unidade}
+                    onEscolher={adicao.setUnidade}
                   />
                 </View>
 
@@ -412,26 +182,23 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Salvar na despensa"
-                    disabled={parseDecimal(quantidade) === null || adicionar.isPending}
-                    onPress={() => salvarMedido(true)}
-                    style={[
-                      styles.acaoSecundaria,
-                      parseDecimal(quantidade) === null && styles.botaoInativo,
-                    ]}
+                    disabled={!adicao.quantidadeValida || adicao.salvando}
+                    onPress={adicao.salvarComQuantidade}
+                    style={[styles.acaoSecundaria, !adicao.quantidadeValida && styles.botaoInativo]}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Salvar</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    disabled={adicionar.isPending}
-                    onPress={() => salvarMedido(false)}
+                    disabled={adicao.salvando}
+                    onPress={adicao.salvarSemQuantidade}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Não sei a quantidade</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setMedindo(null)}
+                    onPress={adicao.cancelarMedida}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
@@ -446,7 +213,7 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                   Medir ou vincular: "{editando.raw_description}"
                 </Text>
 
-                {produtoEdicao === null ? (
+                {edicao.produto === null ? (
                   <>
                     <Body muted>
                       Primeiro diga qual produto é este item. A quantidade só desconta
@@ -457,15 +224,15 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                       placeholder="Buscar produto no catálogo…"
                       placeholderTextColor={colors.outline}
                       style={styles.campo}
-                      value={buscaEdicao}
-                      onChangeText={setBuscaEdicao}
+                      value={edicao.busca}
+                      onChangeText={edicao.setBusca}
                     />
-                    {candidatosEdicao.data?.map((sugestao: ProductSuggestion) => (
+                    {edicao.candidatos?.map((sugestao: ProductSuggestion) => (
                       <Pressable
                         key={sugestao.product.id}
                         accessibilityRole="button"
                         accessibilityLabel={`Usar ${sugestao.product.name}`}
-                        onPress={() => escolherProdutoEdicao(sugestao.product)}
+                        onPress={() => edicao.escolherProduto(sugestao.product)}
                         style={styles.candidato}
                       >
                         <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
@@ -474,14 +241,14 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                         </Text>
                       </Pressable>
                     ))}
-                    {candidatosEdicao.data?.length === 0 ? (
+                    {edicao.candidatos?.length === 0 ? (
                       <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
                     ) : null}
                   </>
                 ) : (
                   <>
                     <Body muted>
-                      {produtoEdicao.name} · deixe a quantidade em branco se não souber
+                      {edicao.produto.name} · deixe a quantidade em branco se não souber
                       quanto tem.
                     </Body>
                     <View style={styles.medidaLinha}>
@@ -490,15 +257,15 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                         placeholder="Quantidade"
                         placeholderTextColor={colors.outline}
                         style={[styles.campo, styles.campoQuantidade]}
-                        value={quantidadeEdicao}
-                        onChangeText={setQuantidadeEdicao}
+                        value={edicao.quantidade}
+                        onChangeText={edicao.setQuantidade}
                         keyboardType="decimal-pad"
                         returnKeyType="done"
                       />
                       <SeletorDeUnidade
-                        produto={produtoEdicao}
-                        escolhida={unidadeEdicao}
-                        onEscolher={setUnidadeEdicao}
+                        produto={edicao.produto}
+                        escolhida={edicao.unidade}
+                        onEscolher={edicao.setUnidade}
                       />
                     </View>
                   </>
@@ -508,15 +275,15 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Salvar medição"
-                    disabled={medidaEdicaoInvalida || atualizar.isPending}
-                    onPress={salvarEdicao}
-                    style={[styles.acaoSecundaria, medidaEdicaoInvalida && styles.botaoInativo]}
+                    disabled={edicao.medidaInvalida || edicao.salvando}
+                    onPress={edicao.salvar}
+                    style={[styles.acaoSecundaria, edicao.medidaInvalida && styles.botaoInativo]}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Salvar medição</Text>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setEditando(null)}
+                    onPress={edicao.cancelar}
                     style={styles.acaoSecundaria}
                   >
                     <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
@@ -525,30 +292,13 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
               </View>
             ) : null}
 
-            {atualizar.isError ? (
-              <ErrorNotice
-                message={
-                  atualizar.error instanceof ApiError
-                    ? atualizar.error.message
-                    : 'não foi possível salvar a medição'
-                }
-              />
-            ) : null}
+            {edicao.erro ? <ErrorNotice message={edicao.erro} /> : null}
+            {adicao.erro ? <ErrorNotice message={adicao.erro} /> : null}
 
-            {adicionar.isError ? (
-              <ErrorNotice
-                message={
-                  adicionar.error instanceof ApiError
-                    ? adicionar.error.message
-                    : 'não foi possível adicionar'
-                }
-              />
-            ) : null}
+            {vm.carregando ? <Body muted>Carregando sua despensa…</Body> : null}
+            {vm.falhou ? <ErrorNotice message="não foi possível ler a despensa" /> : null}
 
-            {despensa.isPending ? <Body muted>Carregando sua despensa…</Body> : null}
-            {despensa.isError ? <ErrorNotice message="não foi possível ler a despensa" /> : null}
-
-            {!despensa.isPending && itens.length === 0 ? (
+            {!vm.carregando && itens.length === 0 ? (
               <Body muted>
                 Sua despensa está vazia. Adicione o que já tem em casa para descontar da
                 compra e ver o que dá para cozinhar.
@@ -564,8 +314,8 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
                 <ChipDaDespensa
                   key={item.id}
                   item={item}
-                  onPress={() => abrirEdicao(item)}
-                  onRemove={() => remover.mutate(item.id)}
+                  onPress={() => edicao.abrir(item)}
+                  onRemove={() => vm.remover(item.id)}
                 />
               ))}
             </View>
@@ -591,12 +341,12 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
             <SectionTitle>Sugestões de receita</SectionTitle>
           </View>
 
-          {receitas.isPending ? <Body muted>Procurando receitas…</Body> : null}
-          {receitas.isError ? <ErrorNotice message="não foi possível buscar receitas" /> : null}
+          {vm.buscandoReceitas ? <Body muted>Procurando receitas…</Body> : null}
+          {vm.receitasFalharam ? <ErrorNotice message="não foi possível buscar receitas" /> : null}
         </View>
       }
       renderItem={({ item }) => (
-        <CartaoDeReceita disponibilidade={item} listId={listId} naLista={naLista} />
+        <CartaoDeReceita disponibilidade={item} listId={listId} naLista={vm.naLista} />
       )}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
     />
@@ -652,12 +402,6 @@ function ChipDaDespensa({
   );
 }
 
-/** "arroz", "arroz e feijão", "arroz, feijão e farofa". */
-function enumerar(nomes: string[]): string {
-  if (nomes.length <= 1) return nomes.join('');
-  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
-}
-
 function CartaoDeReceita({
   disponibilidade,
   listId,
@@ -669,29 +413,8 @@ function CartaoDeReceita({
   /** Ids dos produtos que a lista de compras já tem. */
   naLista: Set<string>;
 }) {
-  const cliente = useQueryClient();
-  const [aberto, setAberto] = useState(false);
+  const vm = useRecipeCardViewModel(disponibilidade, listId, naLista);
   const { recipe, percentage, complete, missing } = disponibilidade;
-
-  const jaComprados = missing.filter((ingrediente) => naLista.has(ingrediente.product.id));
-
-  /**
-   * O ingrediente que falta vai para a lista de compras, na quantidade que a
-   * receita pede. Não passa pelo plano alimentar: o que muda é a compra.
-   */
-  const acrescentar = useMutation({
-    mutationFn: (ingrediente: RecipeIngredient) =>
-      addExtraItem(listId!, {
-        product_id: ingrediente.product.id,
-        quantity: ingrediente.quantity,
-        unit: ingrediente.unit,
-      }),
-    onSuccess: () => {
-      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
-      // A receita acabou de ficar mais disponível: o que está na lista conta.
-      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
-    },
-  });
 
   return (
     <Card style={styles.receita}>
@@ -716,25 +439,23 @@ function CartaoDeReceita({
             Falta: {missing.map((item) => item.product.name).join(', ')}
           </Text>
 
-          {listId === null ? (
+          {!vm.temLista ? (
             <Body muted>
               Gere sua lista de compras na aba Mercado para acrescentar o que falta.
             </Body>
           ) : (
             <>
               <View style={styles.faltantes}>
-                {missing
-                  .filter((ingrediente) => !naLista.has(ingrediente.product.id))
-                  .map((ingrediente) => (
+                {vm.acrescentaveis.map((ingrediente) => (
                     <Pressable
                       key={ingrediente.product.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Acrescentar ${ingrediente.product.name} à lista de compras`}
-                      disabled={acrescentar.isPending}
-                      onPress={() => acrescentar.mutate(ingrediente)}
+                      disabled={vm.acrescentando}
+                      onPress={() => vm.acrescentar(ingrediente)}
                       style={({ pressed }) => [
                         styles.botaoFaltante,
-                        acrescentar.isPending && styles.botaoInativo,
+                        vm.acrescentando && styles.botaoInativo,
                         pressed && styles.botaoPressionado,
                       ]}
                     >
@@ -746,25 +467,16 @@ function CartaoDeReceita({
               {/* O que já está na lista falta por quantidade, não por ausência:
                   acrescentar de novo seria recusado, e sem esta linha o botão
                   sumiria sem explicar por quê. */}
-              {jaComprados.length > 0 ? (
+              {vm.quantosJaNaLista > 0 ? (
                 <Body muted>
-                  {enumerar(jaComprados.map((ingrediente) => ingrediente.product.name))}{' '}
-                  {jaComprados.length === 1 ? 'já está' : 'já estão'} na sua lista, em
+                  {vm.jaNaLista} {vm.quantosJaNaLista === 1 ? 'já está' : 'já estão'} na sua lista, em
                   quantidade menor do que esta receita pede.
                 </Body>
               ) : null}
             </>
           )}
 
-          {acrescentar.isError ? (
-            <ErrorNotice
-              message={
-                acrescentar.error instanceof ApiError
-                  ? acrescentar.error.message
-                  : 'não foi possível acrescentar à lista'
-              }
-            />
-          ) : null}
+          {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
         </>
       ) : (
         <Text style={styles.completa}>Dá para fazer com o que você já tem.</Text>
@@ -774,14 +486,14 @@ function CartaoDeReceita({
         <>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setAberto((estava) => !estava)}
+            onPress={vm.alternarPreparo}
             style={styles.verPreparo}
           >
             <Text style={styles.verPreparoTexto}>
-              {aberto ? 'Ocultar preparo' : 'Ver modo de preparo'}
+              {vm.aberto ? 'Ocultar preparo' : 'Ver modo de preparo'}
             </Text>
           </Pressable>
-          {aberto ? <Text style={styles.preparo}>{recipe.instructions}</Text> : null}
+          {vm.aberto ? <Text style={styles.preparo}>{recipe.instructions}</Text> : null}
         </>
       ) : null}
 

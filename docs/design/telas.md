@@ -21,6 +21,10 @@ Legenda:
 > lista de compras e despensa — esta com as receitas ordenadas por
 > disponibilidade dentro dela, e Economia. As quatro abas têm tela.
 >
+> Cada tela tem um ViewModel em `mobile/src/viewmodels/` com o estado e as chamadas à
+> API; a tela só desenha (ver [`arquitetura-mvvm.md`](../arquitetura-mvvm.md)). Implementar
+> uma tela nova é escrever os dois, e o teste do ViewModel junto.
+>
 > Há também a **área da nutricionista** (seção 6), que nenhum protótipo previu: o
 > login escolhe o papel, e a conta de nutricionista monta planos alimentares no
 > formato do Dietbox e os entrega ao paciente.

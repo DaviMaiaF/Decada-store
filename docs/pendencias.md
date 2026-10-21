@@ -1,0 +1,21 @@
+# Pendências — retorno do professor
+
+> Levantamento a partir das anotações da aula. O cronograma é responsabilidade de outra
+> integrante do grupo e não entra aqui.
+
+## O que já está atendido
+
+- App consome a API com **axios** (`mobile/src/services/http.ts`)
+- **Docker Compose** mantido (banco, API e app)
+- Dependências do backend só no `pyproject.toml`, sem `requirements.txt`
+- Chaves primárias **UUID** mantidas
+- Primeira versão do front (React Native + TypeScript) e do back (FastAPI) com a stack definida
+- **Código do app em MVVM** (model, view, viewModel): ViewModels em `mobile/src/viewmodels/`,
+  convenção e mapa em [`arquitetura-mvvm.md`](arquitetura-mvvm.md)
+
+## O que falta
+
+| # | Pendência | Observação |
+|---|---|---|
+| 1 | **API publicada** (Railway, Render ou Vercel) | Não há deploy. O Dockerfile atual é de desenvolvimento (`--reload`); precisa de Postgres gerenciado e `SECRET_KEY` próprio |
+| 2 | **Conceito e justificativa do `test:smoke`** | `docs/integracao-api.md` mostra como rodar, mas não explica por que existe nem o que ele cobre que o `npm test` não cobre |
