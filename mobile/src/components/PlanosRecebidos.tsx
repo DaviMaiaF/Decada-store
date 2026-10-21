@@ -7,32 +7,26 @@
  * antes de decidir.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Checkbox, Chip, ErrorNotice, SectionTitle } from '.';
 import { PlanoPrescrito } from './PlanoPrescrito';
-import {
-  ApiError,
-  acceptPrescription,
-  declinePrescription,
-  readReceivedPrescriptions,
-} from '../services/api';
 import { colors, spacing, typography } from '../theme/tokens';
 import type { ImportResult, ReceivedPrescription } from '../types/api';
-
-export const RECEIVED_KEY = ['received-prescriptions'];
+import {
+  useReceivedPrescriptionViewModel,
+  useReceivedPrescriptionsViewModel,
+} from '../viewmodels/useReceivedPrescriptionsViewModel';
 
 export function PlanosRecebidos({ onAccepted }: { onAccepted: (r: ImportResult) => void }) {
-  const recebidos = useQuery({ queryKey: RECEIVED_KEY, queryFn: readReceivedPrescriptions });
+  const { planos } = useReceivedPrescriptionsViewModel();
 
   // Sem plano recebido, nada aparece: a tela do PDF segue como sempre foi.
-  if (!recebidos.data?.length) return null;
+  if (!planos.length) return null;
 
   return (
     <View style={styles.lista}>
-      {recebidos.data.map((plano) => (
+      {planos.map((plano) => (
         <PlanoRecebido key={plano.id} plano={plano} onAccepted={onAccepted} />
       ))}
     </View>
@@ -46,48 +40,29 @@ function PlanoRecebido({
   plano: ReceivedPrescription;
   onAccepted: (r: ImportResult) => void;
 }) {
-  const cliente = useQueryClient();
-  const [aberto, setAberto] = useState(false);
-  const [aceitou, setAceitou] = useState(false);
-
-  const depois = () => {
-    cliente.invalidateQueries({ queryKey: RECEIVED_KEY });
-    cliente.invalidateQueries({ queryKey: ['meal-plans'] });
-  };
-
-  const aceitar = useMutation({
-    mutationFn: () => acceptPrescription(plano.id, aceitou),
-    onSuccess: (resultado) => {
-      depois();
-      onAccepted(resultado);
-    },
-  });
-  const recusar = useMutation({ mutationFn: () => declinePrescription(plano.id), onSuccess: depois });
-
-  const erro = aceitar.error ?? recusar.error;
-  const autora = [plano.author.full_name, plano.author.crn].filter(Boolean).join(' · ');
+  const vm = useReceivedPrescriptionViewModel(plano, onAccepted);
 
   return (
     <Card style={styles.cartao}>
       <Chip label="ENVIADO PELA SUA NUTRICIONISTA" tone="success" />
       <SectionTitle>{plano.title ?? 'Plano alimentar'}</SectionTitle>
-      {autora ? <Body muted>{autora}</Body> : null}
+      {vm.autora ? <Body muted>{vm.autora}</Body> : null}
       <Body muted>
         {plano.meals.length} {plano.meals.length === 1 ? 'refeição' : 'refeições'}. Os
         alimentos principais vão para a sua lista de compras; as substituições ficam
         no plano para você consultar.
       </Body>
 
-      <Pressable accessibilityRole="button" onPress={() => setAberto((a) => !a)}>
-        <Text style={styles.verPlano}>{aberto ? 'Ocultar o plano' : 'Ler o plano completo'}</Text>
+      <Pressable accessibilityRole="button" onPress={vm.alternarLeitura}>
+        <Text style={styles.verPlano}>{vm.aberto ? 'Ocultar o plano' : 'Ler o plano completo'}</Text>
       </Pressable>
-      {aberto ? <PlanoPrescrito meals={plano.meals} notes={plano.notes} /> : null}
+      {vm.aberto ? <PlanoPrescrito meals={plano.meals} notes={plano.notes} /> : null}
 
       <View style={styles.consentimento}>
         <Checkbox
           label={`Aceito o tratamento do plano ${plano.title ?? 'alimentar'}`}
-          checked={aceitou}
-          onPress={() => setAceitou((a) => !a)}
+          checked={vm.aceitou}
+          onPress={vm.alternarAceite}
         />
         <Text style={styles.consentimentoTexto}>
           Autorizo a DÉCADA a tratar meu plano alimentar, que é dado sensível de saúde,
@@ -95,24 +70,20 @@ function PlanoRecebido({
         </Text>
       </View>
 
-      {erro ? (
-        <ErrorNotice
-          message={erro instanceof ApiError ? erro.message : 'não foi possível responder agora'}
-        />
-      ) : null}
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
 
       <Button
         label="Aceitar plano"
-        onPress={() => aceitar.mutate()}
-        disabled={!aceitou}
-        loading={aceitar.isPending}
+        onPress={vm.aceitar}
+        disabled={!vm.aceitou}
+        loading={vm.aceitando}
       />
-      {!aceitou ? <Body muted>Marque o aceite para usar este plano.</Body> : null}
+      {!vm.aceitou ? <Body muted>Marque o aceite para usar este plano.</Body> : null}
       <Button
         label="Recusar"
         variant="ghost"
-        onPress={() => recusar.mutate()}
-        loading={recusar.isPending}
+        onPress={vm.recusar}
+        loading={vm.recusando}
       />
     </Card>
   );

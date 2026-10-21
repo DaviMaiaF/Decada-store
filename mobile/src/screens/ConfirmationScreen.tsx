@@ -12,7 +12,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 
 import { Body, Button, Card, Checkbox, Chip, ErrorNotice } from '../components';
 import { PlanoPrescrito } from '../components/PlanoPrescrito';
-import { RECEIVED_KEY } from '../components/PlanosRecebidos';
+import { RECEIVED_KEY } from '../viewmodels/useReceivedPrescriptionsViewModel';
 import {
   ApiError,
   confirmItem,
