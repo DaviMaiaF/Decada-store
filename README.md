@@ -1,33 +1,84 @@
+<p align="center">
+  <img src="docs/design/marca/logo-decada.svg" alt="DÉCADA" width="120">
+</p>
+
 # DÉCADA
 
-Aplicativo mobile que recebe o plano alimentar de uma nutricionista, traduz os itens
-prescritos em produtos reais de supermercado, calcula o custo estimado da compra
-(preço médio por região, com data e origem do dado) e sugere receitas usando apenas
-os ingredientes da lista.
+**Do plano alimentar à lista de compras — com o custo estimado antes de sair de casa.**
 
-Projeto acadêmico — Engenharia de Software, UCB.
+DÉCADA é um aplicativo mobile que pega o plano alimentar prescrito por uma
+nutricionista, traduz cada alimento em produtos reais de supermercado, estima o custo
+da compra (preço médio por região, sempre com data e origem do dado) e sugere receitas
+usando só o que está na lista ou na despensa.
 
-> **Status:** beta. Backend completo e app mobile com login, envio da prescrição em
-> PDF, confirmação dos produtos, lista de compras — com item avulso para o que a
-> receita pede e o que acabou em casa —, despensa com quantidade, sugestão de
-> receitas e a aba Economia. NFC-e continua fora do MVP.
+O app **não prescreve dieta**: ele operacionaliza uma prescrição que já existe.
+
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-Expo_57-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+
+Projeto acadêmico — Engenharia de Software, UCB. Prioridade: MVP funcional e bem
+documentado.
+
+> **Status:** beta. Backend e app mobile funcionando de ponta a ponta com dados de
+> preço **fictícios** (seed de desenvolvimento). A leitura de NFC-e, fonte real de
+> preço, está fora do MVP.
+
+## Funcionalidades
+
+- **Dois papéis de conta** — paciente e nutricionista, cada um com sua porta de login.
+- **Nutricionista monta o plano no app** (refeições, horários, medidas caseiras,
+  substituições, orientação) e entrega por **e-mail do paciente** ou **PDF**.
+- **Paciente aceita com consentimento** (LGPD) e fica com uma cópia do plano; também
+  pode importar um **PDF com texto** por conta própria.
+- **Casamento item–produto**: cada item prescrito recebe produtos candidatos com score
+  de confiança; quem confirma é sempre a pessoa.
+- **Lista de compras** por região, com preço médio, data e origem de cada item, item
+  avulso, marcação de comprado e **simulação** de outras quantidades.
+- **Despensa** com quantidade, que abate da lista de compras — preenchida à mão ou
+  **por foto** do que se tem em casa (o app propõe, a pessoa confirma, a imagem é
+  descartada).
+- **Receitas** ordenadas pelo que já se tem disponível.
+- **Aba Economia** e fluxo de compra concluída.
+- **Privacidade by design**: consentimento explícito, minimização e exclusão de conta
+  que apaga de verdade — ver [`docs/lgpd.md`](docs/lgpd.md).
+
+## Princípios
+
+1. Preço nunca é um valor único: média, mediana e desvio, com data e origem.
+2. Média sempre **por região**, nunca nacional.
+3. Nunca se inventa preço em produção; dado fictício existe só no seed de dev e é marcado.
+4. Substituição de alimento só existe se veio da nutricionista.
 
 ## Design
 
 Os protótipos das telas, o sistema de design e o contrato que cada tela exige do
 backend estão em [`docs/design/`](docs/design/). O aplicativo tem quatro abas —
-Dieta, Mercado, Despensa e Economia.
+Dieta, Mercado, Despensa e Economia — e uma tela de início.
+
+## Documentação
+
+| Documento | Conteúdo |
+|---|---|
+| [`docs/modelo-dados.md`](docs/modelo-dados.md) | Diagrama ER e a razão de cada regra de exclusão |
+| [`docs/lgpd.md`](docs/lgpd.md) | Consentimento, minimização e exclusão, cada um com o teste que o sustenta |
+| [`docs/integracao-api.md`](docs/integracao-api.md) | Como o app consome a API |
+| [`docs/design/telas.md`](docs/design/telas.md) | Contrato tela a tela: o que existe, o que falta |
+| [`docs/demo/roteiro.md`](docs/demo/roteiro.md) | Roteiro de demonstração de cinco minutos |
+| [`docs/estado-do-projeto.md`](docs/estado-do-projeto.md) | Levantamento do estado das branches |
 
 ## O que falta
 
 | O que | Situação |
 |---|---|
-| Encher a despensa por foto | **Próxima funcionalidade.** Fotografar o que se tem em casa, o app reconhecer os alimentos e a pessoa confirmar o que vira item da despensa. A imagem não é guardada |
 | Leitura de NFC-e por QR Code | Fora do MVP — hoje todo preço do catálogo vem do seed fictício |
 | Refeições com horário e status | Depende de um modelo `Meal`, fora do MVP. Ver [`docs/design/telas.md`](docs/design/telas.md) |
+| OCR da prescrição por foto | Fora do MVP por decisão: errar ali faz comida sumir da dieta de alguém |
 
-A foto enche a despensa; **não forma preço**. Ela não substitui a NFC-e, que continua
-sendo a fonte principal de preço do projeto — e continua fora do MVP.
+A foto da despensa enche a despensa; **não forma preço**. A fonte principal de preço
+continua sendo a NFC-e.
 
 ## Stack
 
@@ -38,13 +89,15 @@ sendo a fonte principal de preço do projeto — e continua fora do MVP.
 | ORM / migrações | SQLAlchemy 2.x + Alembic |
 | Banco | PostgreSQL 16 |
 | Testes | pytest (backend), Jest + React Native Testing Library (mobile) |
-| Ambiente | Docker Compose para o banco |
+| Reconhecimento de foto | API do Claude (opcional) |
+| Ambiente | Docker Compose para banco, API e app |
 
 ## Pré-requisitos
 
-- Python 3.10 ou superior
-- Docker e Docker Compose
-- Node.js 20+ (apenas a partir da etapa do app mobile)
+- Docker e Docker Compose (caminho mais simples — dispensa o resto)
+- Para rodar fora do Docker: Python 3.10+ e Node.js 20+
+- Um celular com o app **Expo Go** na mesma rede Wi-Fi do computador (ou um emulador)
+- Opcional: chave da API do Claude (`ANTHROPIC_API_KEY`) para a despensa por foto
 
 ## Subir tudo com um comando
 
@@ -55,9 +108,23 @@ cp .env.example .env          # defina HOST_IP com o IP da sua máquina na rede 
 docker compose up --build     # db + api (migrações automáticas) + mobile
 ```
 
+Em outro terminal, carregue o catálogo fictício e a conta de desenvolvimento (o
+Compose aplica as migrações, mas **não** roda o seed; sem ele não há produtos nem
+preços):
+
+```bash
+docker compose exec api python -m app.seeds
+```
+
+Depois é só abrir o app no celular pelo QR code e entrar com a
+[conta de desenvolvimento](#conta-de-desenvolvimento).
+
 - A API fica em `http://localhost:8000` e o QR code do Expo aparece nos logs do `mobile`.
 - `HOST_IP` (ex.: `hostname -I | awk '{print $1}'` no Linux) é o endereço que o celular usa
   para alcançar o Metro e a API; sem ele, vale `localhost`, que só serve no emulador.
+  O `.env.example` traz um `HOST_IP` de exemplo (`192.168.0.10`): **troque pelo seu**.
+- A despensa por foto precisa de `ANTHROPIC_API_KEY` no `.env`; sem ela, só a foto
+  responde 503 e o resto do app funciona normalmente.
 - O código de `backend/` e `mobile/` é montado por volume: editar recarrega sozinho.
   Se mudar o `package.json`, rode `docker compose down -v` e suba de novo para refazer o `node_modules`.
 - Para o app abrir na tela de login, sem tocar no banco (só limpa o token do aparelho, e só em desenvolvimento):
@@ -108,15 +175,14 @@ cd backend
 .venv/bin/python -m app.seeds
 ```
 
-Carrega 3 mercados no DF, 120 produtos, 1.080 registros de preço e 10 receitas.
-É idempotente:
-rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
+Carrega 3 mercados no DF, 120 produtos, 1.080 registros de preço, 10 receitas e a
+conta de desenvolvimento. É idempotente: rodar de novo atualiza as mesmas linhas em vez de duplicá-las.
 
 **Todos esses dados são fictícios.** Mercados, produtos e receitas ficam com
 `is_fictitious = true`, os preços têm origem `seed` e as marcas são inventadas.
 O script se recusa a rodar se `APP_ENV` não for `dev`.
 
-As onze tabelas do domínio estão documentadas em
+As tabelas do domínio estão documentadas em
 [`docs/modelo-dados.md`](docs/modelo-dados.md), com diagrama ER e a razão de cada
 regra de exclusão.
 
@@ -268,6 +334,7 @@ Verificação:
 cd mobile
 npm test          # Jest + React Native Testing Library
 npm run typecheck # tsc --noEmit
+npm run test:smoke # ponta a ponta: exige a API de pé; cria e apaga a própria conta
 ```
 
 ## Testes
@@ -332,9 +399,9 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   └── pyproject.toml
 ├── mobile/
 │   ├── src/
-│   │   ├── components/    # cartão, botão, chip, campo
+│   │   ├── components/    # cartão, botão, chip, campo, despensa por foto
 │   │   ├── navigation/    # abas Dieta, Mercado, Despensa, Economia
-│   │   ├── screens/       # login, upload, confirmação, mercado
+│   │   ├── screens/       # início, login, dieta, mercado, despensa, economia, nutricionista
 │   │   ├── services/      # cliente HTTP, sessão, formatação
 │   │   ├── theme/         # tokens do sistema de design
 │   │   └── types/         # contrato da API
@@ -343,6 +410,7 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   ├── design/        # protótipos, sistema de design, contrato das telas
 │   ├── lgpd.md        # consentimento, minimização e exclusão
 │   └── modelo-dados.md # diagrama ER e regras de exclusão
+├── .github/workflows/     # CI: pytest + ruff, tsc + jest
 ├── docker-compose.yml
 └── CLAUDE.md              # contexto do projeto para o Claude Code
 ```
@@ -360,3 +428,8 @@ consentimento explícito, minimização de dados e exclusão sob demanda — cad
 dessas exigências virou código, e [`docs/lgpd.md`](docs/lgpd.md) aponta o teste que
 sustenta cada uma. `DELETE /auth/me` apaga tudo e devolve o comprovante do que foi
 removido.
+
+## CI
+
+O GitHub Actions roda a cada push na `main` e em todo pull request: `ruff` e `pytest`
+(contra um Postgres 16 de verdade) no backend, e `tsc` e `jest` no app.
