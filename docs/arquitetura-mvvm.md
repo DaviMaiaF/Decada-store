@@ -28,7 +28,9 @@ flowchart LR
    inglês segue a regra do projeto; o comentário, em português.
 3. **O ViewModel não devolve JSX nem estilo.** Ele devolve dado pronto para exibir
    (números já somados, listas já filtradas) e funções com nome de ação
-   (`confirmar`, `sair`). Texto de interface — rótulo, título, aviso — fica na View.
+   (`confirmar`, `sair`). Texto fixo de interface — rótulo, título, aviso — fica na
+   View; texto que é resultado de uma decisão (qual próximo passo mostrar) pode vir
+   do ViewModel, junto com a decisão.
 4. **Regra pura continua no Model.** Se uma conta não depende de estado nem de
    query, ela vai para `services/` e o ViewModel só a chama. O ViewModel é a cola
    entre a tela e o Model, não um segundo lugar para regra de domínio.

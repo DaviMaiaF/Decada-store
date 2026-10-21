@@ -9,7 +9,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const MIGRADAS: string[] = [];
+const MIGRADAS: string[] = ['screens/HomeScreen.tsx'];
 
 const PROIBIDOS = [/from '[./]*services\/api'/, /from '@tanstack\/react-query'/, /from '[./]*services\/auth'/];
 
