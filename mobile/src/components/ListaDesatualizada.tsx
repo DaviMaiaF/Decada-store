@@ -8,23 +8,12 @@
  * que divergiu e oferece gerar de novo, na mesma região.
  */
 
-import { useMutation } from '@tanstack/react-query';
 import { StyleSheet } from 'react-native';
 
 import { Body, Button, Card, ErrorNotice, SectionTitle } from '.';
-import { ApiError, generateShoppingList } from '../services/api';
 import { colors, spacing } from '../theme/tokens';
-import type { OutdatedItem, PlanChange, ShoppingList } from '../types/api';
-
-const MOTIVO: Record<PlanChange, string> = {
-  produto_trocado: 'produto trocado',
-  nao_confirmado: 'não está mais confirmado',
-  novo_confirmado: 'confirmado depois da lista',
-};
-
-export function descreverDivergencia(item: OutdatedItem): string {
-  return `${item.description} — ${MOTIVO[item.change]}`;
-}
+import type { ShoppingList } from '../types/api';
+import { useOutdatedListViewModel } from '../viewmodels/useOutdatedListViewModel';
 
 export function ListaDesatualizada({
   lista,
@@ -33,12 +22,9 @@ export function ListaDesatualizada({
   lista: ShoppingList;
   onGenerated: (listId: string) => void;
 }) {
-  const geracao = useMutation({
-    mutationFn: () => generateShoppingList(lista.meal_plan_id, lista.state_code, lista.city),
-    onSuccess: (resultado) => onGenerated(resultado.shopping_list.id),
-  });
+  const vm = useOutdatedListViewModel(lista, onGenerated);
 
-  if (lista.outdated_items.length === 0) return null;
+  if (!vm.desatualizada) return null;
 
   return (
     <Card style={styles.aviso}>
@@ -47,23 +33,15 @@ export function ListaDesatualizada({
         A lista mostra o que estava confirmado quando foi gerada. Gere de novo para
         trazer o que você mudou na aba Dieta.
       </Body>
-      {lista.outdated_items.map((item) => (
-        <Body key={item.plan_item_id}>• {descreverDivergencia(item)}</Body>
+      {vm.divergencias.map(({ id, texto }) => (
+        <Body key={id}>• {texto}</Body>
       ))}
-      {geracao.isError ? (
-        <ErrorNotice
-          message={
-            geracao.error instanceof ApiError
-              ? geracao.error.message
-              : 'não foi possível gerar a lista'
-          }
-        />
-      ) : null}
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
       <Button
         label="Gerar lista atualizada"
         variant="secondary"
-        onPress={() => geracao.mutate()}
-        loading={geracao.isPending}
+        onPress={vm.gerar}
+        loading={vm.gerando}
       />
     </Card>
   );
