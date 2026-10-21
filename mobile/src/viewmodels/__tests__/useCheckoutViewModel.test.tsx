@@ -74,7 +74,10 @@ function Provedor({ children }: { children: ReactNode }) {
 beforeEach(() => {
   jest.clearAllMocks();
   cliente = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
+    },
   });
 });
 
