@@ -17,7 +17,7 @@
  * mesmo par produto + quantidade, e é por ali que o item solto passa a abater.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -54,6 +54,9 @@ import type {
   RecipeAvailability,
   RecipeIngredient,
 } from '../types/api';
+
+// Quanto esperar o último item confirmado pela foto antes de recalcular as receitas.
+export const ESPERA_DAS_RECEITAS = 1000;
 
 export default function PantryScreen({ listId }: { listId: string | null }) {
   const cliente = useQueryClient();
@@ -101,6 +104,30 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
   function recarregar() {
     cliente.invalidateQueries({ queryKey: ['pantry'] });
     cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+  }
+
+  const recargaDasReceitas = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (recargaDasReceitas.current) clearTimeout(recargaDasReceitas.current);
+    },
+    [],
+  );
+
+  /**
+   * Item confirmado na revisão da foto. A pessoa confirma vários em sequência,
+   * e recarregar a despensa e as receitas a cada um redesenhava a tela inteira
+   * entre um toque e outro. O item que o servidor devolveu entra direto no
+   * cache — a lista vem do mais recente ao mais antigo, então vai no começo —,
+   * e as receitas são recarregadas uma vez só, quando os toques param.
+   */
+  function guardadoPelaFoto(item: PantryItem) {
+    cliente.setQueryData<PantryItem[]>(['pantry'], (atual) => [item, ...(atual ?? [])]);
+    if (recargaDasReceitas.current) clearTimeout(recargaDasReceitas.current);
+    recargaDasReceitas.current = setTimeout(() => {
+      recargaDasReceitas.current = null;
+      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+    }, ESPERA_DAS_RECEITAS);
   }
 
   const candidatos = useQuery({
@@ -297,7 +324,7 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
               </Pressable>
             </View>
 
-            <DespensaPorFoto onAdicionado={recarregar} />
+            <DespensaPorFoto onAdicionado={guardadoPelaFoto} />
 
             {escolhendo !== null ? (
               <View style={styles.escolha}>

@@ -162,6 +162,58 @@ describe('despensa por foto', () => {
     expect(aoAdicionar).toHaveBeenCalled();
   });
 
+  it('o ✓ aparece no toque, sem esperar o servidor', async () => {
+    // Uma gravação que ainda não respondeu.
+    adicionar.mockReturnValue(new Promise(() => {}));
+    await montar();
+    await enviarFoto();
+
+    await fireEvent.press(await screen.findByLabelText('Confirmar banana'));
+
+    expect(screen.getByText('✓ banana')).toBeTruthy();
+    expect(aoAdicionar).not.toHaveBeenCalled();
+  });
+
+  it('entrega à tela o item que o servidor gravou', async () => {
+    const gravado = { id: 'item-9', raw_description: 'banana', product: null, quantity: null, unit: null };
+    adicionar.mockResolvedValue(gravado);
+    await montar();
+    await enviarFoto();
+
+    await fireEvent.press(await screen.findByLabelText('Confirmar banana'));
+
+    await waitFor(() => expect(aoAdicionar).toHaveBeenCalledWith(gravado));
+  });
+
+  it('se a gravação falhar, a linha volta a ficar pendente com o motivo', async () => {
+    adicionar.mockRejectedValue(new api.ApiError(422, 'produto não encontrado'));
+    await montar();
+    await enviarFoto();
+
+    await fireEvent.press(await screen.findByLabelText('Confirmar banana'));
+
+    expect(await screen.findByText('produto não encontrado')).toBeTruthy();
+    expect(screen.getByLabelText('Confirmar banana')).toBeTruthy();
+    expect(screen.queryByText('✓ banana')).toBeNull();
+    expect(aoAdicionar).not.toHaveBeenCalled();
+  });
+
+  it('a falha de um item não apaga o ✓ do outro', async () => {
+    adicionar.mockImplementation(({ raw_description }: { raw_description: string }) =>
+      raw_description === 'kiwi'
+        ? Promise.reject(new api.ApiError(0, 'sem rede'))
+        : Promise.resolve({ id: 'item-1' }),
+    );
+    await montar();
+    await enviarFoto();
+
+    await fireEvent.press(await screen.findByLabelText('Confirmar banana'));
+    await fireEvent.press(screen.getByLabelText('Confirmar kiwi'));
+
+    expect(await screen.findByText('sem rede')).toBeTruthy();
+    expect(screen.getByText('✓ banana')).toBeTruthy();
+  });
+
   it('trocar o produto muda o que vai junto ao confirmar', async () => {
     await montar();
     await enviarFoto();

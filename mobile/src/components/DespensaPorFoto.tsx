@@ -29,7 +29,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Body, Button, Checkbox, ErrorNotice } from './index';
 import { ApiError, addPantryItem, recognizePantryPhoto, searchProducts } from '../services/api';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import type { PhotoProposal, Product } from '../types/api';
+import type { PantryItem, PhotoProposal, Product } from '../types/api';
 
 type Situacao = 'pendente' | 'adicionado' | 'descartado';
 
@@ -40,10 +40,10 @@ interface Revisao {
   /** Produto que vai junto ao confirmar. Nulo guarda só como texto. */
   escolhido: Product | null;
   situacao: Situacao;
+  /** Por que a gravação falhou. Cada linha guarda o seu: confirmações correm juntas. */
+  erro?: string | null;
 }
 
-// Qualidade 0,7 deixa a foto de celular bem menor sem perder o rótulo da
-// embalagem; o servidor ainda reduz de novo antes de enviar ao reconhecimento.
 // O mesmo corte do servidor (`MINIMUM_SCORE`): abaixo disto o nome corrigido não
 // tem produto parecido e vai para os não identificados, como viria da foto.
 const SEMELHANCA_MINIMA = 0.6;
@@ -51,6 +51,8 @@ const SEMELHANCA_MINIMA = 0.6;
 // Uma letra devolveria o catálogo inteiro; o servidor recusa com 422.
 const NOME_MINIMO = 2;
 
+// Qualidade 0,7 deixa a foto de celular bem menor sem perder o rótulo da
+// embalagem; o servidor ainda reduz de novo antes de enviar ao reconhecimento.
 const OPCOES_DA_FOTO: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
   quality: 0.7,
@@ -68,7 +70,12 @@ function revisoesDe(propostas: PhotoProposal[]): Revisao[] {
   }));
 }
 
-export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) {
+export function DespensaPorFoto({
+  onAdicionado,
+}: {
+  /** Recebe o item que o servidor gravou, para a tela pôr na despensa sem recarregar. */
+  onAdicionado: (item: PantryItem) => void;
+}) {
   const [aberto, setAberto] = useState(false);
   const [aceitou, setAceitou] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -80,16 +87,25 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
     onSuccess: (resultado) => setRevisoes(revisoesDe(resultado.items)),
   });
 
+  /**
+   * O ✓ aparece no toque, sem esperar o servidor: pela rede do celular a
+   * resposta podia levar mais de meio segundo, e a pessoa confirmando vários
+   * itens seguidos sentia cada um. Se a gravação falhar, a linha volta a ficar
+   * pendente com o motivo — nada some em silêncio.
+   */
   const confirmar = useMutation({
     mutationFn: (revisao: Revisao) =>
       addPantryItem({
         raw_description: revisao.proposta.name,
         product_id: revisao.escolhido?.id ?? null,
       }),
-    onSuccess: (_, revisao) => {
-      mudar(revisao.id, { situacao: 'adicionado' });
-      onAdicionado();
-    },
+    onMutate: (revisao) => mudar(revisao.id, { situacao: 'adicionado', erro: null }),
+    onSuccess: (item) => onAdicionado(item),
+    onError: (erro, revisao) =>
+      mudar(revisao.id, {
+        situacao: 'pendente',
+        erro: erro instanceof ApiError ? erro.message : 'não foi possível guardar o item',
+      }),
   });
 
   /** Nome corrigido: busca no catálogo de novo e troca a proposta inteira. */
@@ -117,7 +133,6 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
       <LinhaDaFoto
         key={revisao.id}
         revisao={revisao}
-        salvando={confirmar.isPending && confirmar.variables?.id === revisao.id}
         buscando={renomear.isPending && renomear.variables?.id === revisao.id}
         onConfirmar={() => confirmar.mutate(revisao)}
         onEscolher={(produto) => mudar(revisao.id, { escolhido: produto })}
@@ -246,15 +261,6 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
             />
           ) : null}
 
-          {confirmar.isError ? (
-            <ErrorNotice
-              message={
-                confirmar.error instanceof ApiError
-                  ? confirmar.error.message
-                  : 'não foi possível guardar o item'
-              }
-            />
-          ) : null}
         </>
       )}
 
@@ -293,7 +299,6 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
 /** Um alimento da foto: o produto proposto e o que a pessoa decide fazer. */
 function LinhaDaFoto({
   revisao,
-  salvando,
   buscando,
   onConfirmar,
   onEscolher,
@@ -301,7 +306,6 @@ function LinhaDaFoto({
   onRenomear,
 }: {
   revisao: Revisao;
-  salvando: boolean;
   buscando: boolean;
   onConfirmar: () => void;
   onEscolher: (produto: Product | null) => void;
@@ -384,6 +388,7 @@ function LinhaDaFoto({
       <Text style={styles.detalhe}>
         {escolhido ? `Produto: ${escolhido.name}` : 'Sem produto do catálogo'}
       </Text>
+      {revisao.erro ? <ErrorNotice message={revisao.erro} /> : null}
 
       {trocando ? (
         <>
@@ -422,9 +427,8 @@ function LinhaDaFoto({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Confirmar ${proposta.name}`}
-          disabled={salvando}
           onPress={onConfirmar}
-          style={[styles.acaoSecundaria, salvando && styles.inativo]}
+          style={styles.acaoSecundaria}
         >
           <Text style={styles.acaoPrincipalTexto}>
             {escolhido ? 'Confirmar' : 'Guardar só como texto'}
