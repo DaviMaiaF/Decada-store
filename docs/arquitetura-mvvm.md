@@ -35,7 +35,13 @@ flowchart LR
    query, ela vai para `services/` e o ViewModel só a chama. O ViewModel é a cola
    entre a tela e o Model, não um segundo lugar para regra de domínio.
 5. **Navegação continua na View.** Callbacks como `onVoltar` e `onIr` chegam pela
-   prop da tela e são chamados por ela; o ViewModel não conhece o navegador.
+   prop da tela e são chamados por ela; o ViewModel não conhece o navegador. A
+   exceção é o callback que só pode disparar depois de uma resposta da API (por
+   exemplo, `onExcluido` no editor do plano): ele entra como parâmetro do hook.
+
+**Fora da convenção, de propósito:** `src/navigation/`. Os navegadores consultam
+a API para montar a trilha e decidir a tela inicial; são o esqueleto do app, não
+uma tela, e ficam como estão.
 
 ## Exemplo
 
