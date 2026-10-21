@@ -223,13 +223,18 @@ cd mobile && npm test
 ```
 
 **Ponta a ponta** — [`mobile/e2e/smoke.e2e.ts`](../mobile/e2e/smoke.e2e.ts),
-o cliente real contra o backend real. Precisa do Postgres e do uvicorn de pé:
+o cliente real contra o backend real. Precisa do Postgres e da API de pé, com o
+catálogo de desenvolvimento carregado:
 
 ```bash
-docker compose up -d
-cd backend && .venv/bin/python -m app.seeds && .venv/bin/uvicorn app.main:app &
-cd ../mobile && npm run test:smoke
+docker compose up -d db api                        # banco + API em localhost:8000
+docker compose exec api python -m app.seeds        # só na primeira vez: catálogo fictício
+cd mobile && npm run test:smoke
 ```
+
+Sem Docker para a API, suba só o banco (`docker compose up -d db`) e rode o seed e
+o uvicorn à mão, como no README. Para apontar para outro servidor, defina
+`EXPO_PUBLIC_API_URL` antes do comando.
 
 Ele percorre o caminho inteiro e cria uma conta própria, que apaga no último
 passo: cadastro → `/auth/me` → PDF do plano por multipart → confirmação item a
@@ -238,3 +243,59 @@ o `204` do DELETE → o `401` da senha errada → exclusão da conta.
 
 Fica fora da suíte comum de propósito: sem servidor de pé ele falharia, e
 `npm test` tem de poder rodar sozinho.
+
+### O que é um smoke test, e por que este projeto tem um
+
+O nome vem da eletrônica: liga-se a placa nova e olha-se se sai fumaça. Em
+software, *smoke test* é um teste **largo e raso**: em vez de examinar uma regra a
+fundo, ele passa uma vez pelo caminho principal do sistema montado de verdade e
+responde a uma pergunta só — *as peças ligadas funcionam juntas?* Se ele falha, não
+adianta testar mais nada; se passa, o resto dos testes tem um sistema em que
+confiar.
+
+A DÉCADA são dois sistemas que só se falam por HTTP (ver o início deste
+documento), e cada um tem a sua suíte:
+
+| Suíte | Roda contra | Prova | Não alcança |
+|---|---|---|---|
+| `pytest` (backend) | FastAPI + Postgres de teste | regras de negócio, rotas, LGPD | se o app sabe chamar as rotas |
+| `npm test` (app) | adaptador falso do axios, API simulada | telas, ViewModels, o contrato **como o app o imagina** | se o servidor responde daquele jeito |
+| `npm run test:smoke` | o `api.ts` real contra a API real | que os dois lados concordam | detalhes de cada regra |
+
+O buraco entre as duas primeiras linhas é exatamente onde mora o tipo de erro que
+mais aparece num app dividido em cliente e servidor: cada lado passa nos seus
+testes e, juntos, não funcionam. Alguns que o smoke pega e as outras suítes não:
+
+- **Contrato divergente.** `types/api.ts` diz um nome de campo e o Pydantic devolve
+  outro. O teste do app usa o tipo que ele mesmo declarou e passa; o do backend usa
+  o schema dele e passa.
+- **Multipart.** O PDF sobe como `multipart/form-data`, e o formato do arquivo difere
+  entre web e nativo (seção acima). Só um servidor de verdade diz se recebeu o
+  arquivo ou a string `"[object Object]"`.
+- **Os status sem corpo e os de erro.** O `204` do `DELETE` precisa ser aceito sem
+  tentar ler JSON; o `401` da senha errada precisa chegar ao app como `ApiError`,
+  marcado como não autorizado e com a mensagem que o servidor escreveu.
+- **Token de verdade.** O JWT assinado pelo backend volta no interceptor e abre as
+  rotas protegidas; depois da exclusão da conta, o mesmo token deixa de valer
+  (decisão 9). Nenhum mock assina token.
+- **Banco, migração e seed.** Se uma migração não rodou ou o catálogo não foi
+  carregado, o casamento não acha produto e a lista sai sem preço — o smoke confere
+  que o PDF de exemplo vira 15 itens com candidato e uma lista com total.
+
+Ele cria uma conta própria e a apaga no último passo: o teste não deixa dado de
+saúde para trás (decisão 5) e pode rodar em qualquer banco de desenvolvimento.
+
+**Quando rodar:** antes de juntar uma branch que mexa em `api.ts`, `http.ts`,
+`types/api.ts` ou nas rotas do backend, antes de uma demonstração e depois de
+publicar a API.
+
+**O que ele não cobre:** a interface (quem desenha é o `npm test`), o adaptador de
+rede do celular (aqui o axios usa o de Node, ver o comentário no arquivo), a despensa
+por foto (precisa da chave da Anthropic e custa uma chamada paga) e a área da
+nutricionista.
+
+**Por que não está no CI:** o CI já sobe um Postgres para o `pytest`, mas não sobe a
+API nem roda o seed para o app. Enquanto isso não existir, o smoke depende de alguém
+rodá-lo — e isso tem custo: em 21/10/2026 ele estava quebrado sem ninguém ter
+notado. O `config.ts` passou a usar o `expo-constants` em 13/10, e o mock do smoke
+não acompanhou (corrigido em `f702c53`). Colocá-lo no CI é o próximo passo natural.
