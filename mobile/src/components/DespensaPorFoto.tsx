@@ -11,24 +11,31 @@
  * do primeiro envio. Ela não é guardada em lugar nenhum: nem aqui, nem no
  * servidor.
  *
+ * O reconhecimento erra: vê pêssego onde há manga. Cada alimento pode ter o
+ * nome corrigido, e a correção busca de novo no catálogo, pela mesma busca do
+ * cadastro manual. Corrigir continua sendo proposta — só o toque em confirmar
+ * põe o item na despensa.
+ *
  * O item entra sem quantidade, como no cadastro manual sem medida — foto não
  * pesa arroz. Conta para as receitas na hora; para descontar da compra, a
  * pessoa toca no item depois e diz quanto tem.
  */
 
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMutation } from '@tanstack/react-query';
 
 import { Body, Button, Checkbox, ErrorNotice } from './index';
-import { ApiError, addPantryItem, recognizePantryPhoto } from '../services/api';
+import { ApiError, addPantryItem, recognizePantryPhoto, searchProducts } from '../services/api';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { PhotoProposal, Product } from '../types/api';
 
 type Situacao = 'pendente' | 'adicionado' | 'descartado';
 
 interface Revisao {
+  /** Fixo durante a revisão: o nome muda quando a pessoa corrige. */
+  id: number;
   proposta: PhotoProposal;
   /** Produto que vai junto ao confirmar. Nulo guarda só como texto. */
   escolhido: Product | null;
@@ -37,6 +44,13 @@ interface Revisao {
 
 // Qualidade 0,7 deixa a foto de celular bem menor sem perder o rótulo da
 // embalagem; o servidor ainda reduz de novo antes de enviar ao reconhecimento.
+// O mesmo corte do servidor (`MINIMUM_SCORE`): abaixo disto o nome corrigido não
+// tem produto parecido e vai para os não identificados, como viria da foto.
+const SEMELHANCA_MINIMA = 0.6;
+
+// Uma letra devolveria o catálogo inteiro; o servidor recusa com 422.
+const NOME_MINIMO = 2;
+
 const OPCOES_DA_FOTO: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
   quality: 0.7,
@@ -44,7 +58,8 @@ const OPCOES_DA_FOTO: ImagePicker.ImagePickerOptions = {
 };
 
 function revisoesDe(propostas: PhotoProposal[]): Revisao[] {
-  return propostas.map((proposta) => ({
+  return propostas.map((proposta, id) => ({
+    id,
     proposta,
     // Identificado já vem com o produto mais parecido escolhido; o não
     // identificado espera a pessoa dizer qual é.
@@ -72,16 +87,43 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
         product_id: revisao.escolhido?.id ?? null,
       }),
     onSuccess: (_, revisao) => {
-      mudar(revisao.proposta, { situacao: 'adicionado' });
+      mudar(revisao.id, { situacao: 'adicionado' });
       onAdicionado();
     },
   });
 
-  function mudar(proposta: PhotoProposal, mudanca: Partial<Revisao>) {
+  /** Nome corrigido: busca no catálogo de novo e troca a proposta inteira. */
+  const renomear = useMutation({
+    mutationFn: ({ nome }: { id: number; nome: string }) => searchProducts(nome),
+    onSuccess: (candidatos, { id, nome }) => {
+      const identified =
+        candidatos.length > 0 && Number(candidatos[0].score) >= SEMELHANCA_MINIMA;
+      mudar(id, {
+        proposta: { name: nome, identified, candidates: candidatos },
+        escolhido: identified ? candidatos[0].product : null,
+      });
+    },
+  });
+
+  function mudar(id: number, mudanca: Partial<Revisao>) {
     setRevisoes((atuais) =>
-      (atuais ?? []).map((revisao) =>
-        revisao.proposta === proposta ? { ...revisao, ...mudanca } : revisao,
-      ),
+      (atuais ?? []).map((revisao) => (revisao.id === id ? { ...revisao, ...mudanca } : revisao)),
+    );
+  }
+
+  /** As linhas dos dois grupos recebem as mesmas ações. */
+  function linha(revisao: Revisao) {
+    return (
+      <LinhaDaFoto
+        key={revisao.id}
+        revisao={revisao}
+        salvando={confirmar.isPending && confirmar.variables?.id === revisao.id}
+        buscando={renomear.isPending && renomear.variables?.id === revisao.id}
+        onConfirmar={() => confirmar.mutate(revisao)}
+        onEscolher={(produto) => mudar(revisao.id, { escolhido: produto })}
+        onDescartar={() => mudar(revisao.id, { situacao: 'descartado' })}
+        onRenomear={(nome) => renomear.mutateAsync({ id: revisao.id, nome })}
+      />
     );
   }
 
@@ -181,37 +223,27 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
             </Body>
           )}
 
-          {identificados.map((revisao) => (
-            <LinhaDaFoto
-              key={revisao.proposta.name}
-              revisao={revisao}
-              salvando={confirmar.isPending && confirmar.variables?.proposta === revisao.proposta}
-              onConfirmar={() => confirmar.mutate(revisao)}
-              onEscolher={(produto) => mudar(revisao.proposta, { escolhido: produto })}
-              onDescartar={() => mudar(revisao.proposta, { situacao: 'descartado' })}
-            />
-          ))}
+          {identificados.map(linha)}
 
           {naoIdentificados.length > 0 ? (
             <>
               <Text style={styles.subtitulo}>Não identificados</Text>
               <Body muted>
-                Estes não batem com nenhum produto do catálogo. Escolha qual é, guarde só como
-                texto ou descarte.
+                Estes não batem com nenhum produto do catálogo. Corrija o nome, escolha qual é,
+                guarde só como texto ou descarte.
               </Body>
-              {naoIdentificados.map((revisao) => (
-                <LinhaDaFoto
-                  key={revisao.proposta.name}
-                  revisao={revisao}
-                  salvando={
-                    confirmar.isPending && confirmar.variables?.proposta === revisao.proposta
-                  }
-                  onConfirmar={() => confirmar.mutate(revisao)}
-                  onEscolher={(produto) => mudar(revisao.proposta, { escolhido: produto })}
-                  onDescartar={() => mudar(revisao.proposta, { situacao: 'descartado' })}
-                />
-              ))}
+              {naoIdentificados.map(linha)}
             </>
+          ) : null}
+
+          {renomear.isError ? (
+            <ErrorNotice
+              message={
+                renomear.error instanceof ApiError
+                  ? renomear.error.message
+                  : 'não foi possível buscar o nome corrigido'
+              }
+            />
           ) : null}
 
           {confirmar.isError ? (
@@ -262,18 +294,38 @@ export function DespensaPorFoto({ onAdicionado }: { onAdicionado: () => void }) 
 function LinhaDaFoto({
   revisao,
   salvando,
+  buscando,
   onConfirmar,
   onEscolher,
   onDescartar,
+  onRenomear,
 }: {
   revisao: Revisao;
   salvando: boolean;
+  buscando: boolean;
   onConfirmar: () => void;
   onEscolher: (produto: Product | null) => void;
   onDescartar: () => void;
+  /** Busca o nome corrigido no catálogo; falha deixa o campo aberto. */
+  onRenomear: (nome: string) => Promise<unknown>;
 }) {
   const [trocando, setTrocando] = useState(false);
+  // Texto do campo de correção. Nulo quando o campo está fechado.
+  const [editando, setEditando] = useState<string | null>(null);
   const { proposta, escolhido, situacao } = revisao;
+
+  const nomeNovo = editando?.trim() ?? '';
+
+  async function buscarNomeNovo() {
+    if (nomeNovo.length < NOME_MINIMO) return;
+    try {
+      await onRenomear(nomeNovo);
+      setEditando(null);
+      setTrocando(false);
+    } catch {
+      // O erro aparece no painel; o campo fica aberto para tentar de novo.
+    }
+  }
 
   if (situacao === 'adicionado') {
     return (
@@ -282,6 +334,46 @@ function LinhaDaFoto({
         <Text style={styles.detalhe}>
           {escolhido ? `na despensa como ${escolhido.name}` : 'na despensa, só como texto'}
         </Text>
+      </View>
+    );
+  }
+
+  if (editando !== null) {
+    return (
+      <View style={styles.linha}>
+        <Text style={styles.detalhe}>A foto mostrou "{proposta.name}". O que é na verdade?</Text>
+        <TextInput
+          accessibilityLabel={`Corrigir o nome de ${proposta.name}`}
+          placeholder="Ex: manga, leite integral…"
+          placeholderTextColor={colors.outline}
+          style={styles.campo}
+          value={editando}
+          onChangeText={setEditando}
+          onSubmitEditing={buscarNomeNovo}
+          returnKeyType="search"
+          autoFocus
+        />
+        <View style={styles.acoes}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Buscar o nome corrigido de ${proposta.name}`}
+            disabled={nomeNovo.length < NOME_MINIMO || buscando}
+            onPress={buscarNomeNovo}
+            style={[
+              styles.acaoSecundaria,
+              (nomeNovo.length < NOME_MINIMO || buscando) && styles.inativo,
+            ]}
+          >
+            <Text style={styles.acaoPrincipalTexto}>{buscando ? 'Buscando…' : 'Buscar'}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setEditando(null)}
+            style={styles.acaoSecundaria}
+          >
+            <Text style={styles.acaoSecundariaTexto}>Cancelar</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -352,6 +444,14 @@ function LinhaDaFoto({
         ) : null}
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={`Editar ${proposta.name}`}
+          onPress={() => setEditando(proposta.name)}
+          style={styles.acaoSecundaria}
+        >
+          <Text style={styles.acaoSecundariaTexto}>Editar</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={`Descartar ${proposta.name}`}
           onPress={onDescartar}
           style={styles.acaoSecundaria}
@@ -383,6 +483,14 @@ const styles = StyleSheet.create({
   },
   nome: { ...typography.labelLg, color: colors.onSurface },
   detalhe: { ...typography.labelSm, color: colors.onSurfaceVariant },
+  campo: {
+    minHeight: MIN_TOUCH_HEIGHT,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    ...typography.bodyMd,
+    color: colors.onSurface,
+  },
   candidato: {
     minHeight: MIN_TOUCH_HEIGHT,
     justifyContent: 'center',

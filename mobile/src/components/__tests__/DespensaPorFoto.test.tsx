@@ -23,6 +23,7 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   recognizePantryPhoto: jest.fn(),
   addPantryItem: jest.fn(),
+  searchProducts: jest.fn(),
 }));
 
 const permissaoDaCamera = ImagePicker.requestCameraPermissionsAsync as jest.Mock;
@@ -30,6 +31,7 @@ const abrirCamera = ImagePicker.launchCameraAsync as jest.Mock;
 const abrirGaleria = ImagePicker.launchImageLibraryAsync as jest.Mock;
 const reconhecer = api.recognizePantryPhoto as jest.Mock;
 const adicionar = api.addPantryItem as jest.Mock;
+const buscarProdutos = api.searchProducts as jest.Mock;
 
 function produto(nome: string): Product {
   return {
@@ -90,7 +92,17 @@ beforeEach(() => {
   abrirGaleria.mockResolvedValue(FOTO);
   reconhecer.mockResolvedValue({ items: [BANANA, KIWI] });
   adicionar.mockResolvedValue({ id: 'item-1' });
+  buscarProdutos.mockResolvedValue([
+    { product: produto('Manga palmer'), score: '0.850' },
+    { product: produto('Manga tommy'), score: '0.840' },
+  ]);
 });
+
+/** Abre o campo de correção de um alimento e digita o nome certo. */
+async function corrigir(de: string, para: string) {
+  await fireEvent.press(await screen.findByLabelText(`Editar ${de}`));
+  await fireEvent.changeText(screen.getByLabelText(`Corrigir o nome de ${de}`), para);
+}
 
 afterEach(() => {
   cliente.clear();
@@ -229,5 +241,105 @@ describe('despensa por foto', () => {
 
     await waitFor(() => expect(abrirCamera).toHaveBeenCalled());
     expect(reconhecer).not.toHaveBeenCalled();
+  });
+
+  describe('corrigir o nome', () => {
+    it('busca o nome corrigido e troca o produto proposto', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'manga');
+
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+
+      expect(buscarProdutos).toHaveBeenCalledWith('manga');
+      expect(await screen.findByText('manga')).toBeTruthy();
+      expect(screen.getByText('Produto: Manga palmer')).toBeTruthy();
+      expect(screen.queryByText('banana')).toBeNull();
+    });
+
+    it('confirmar depois de corrigir guarda o nome e o produto novos', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'manga');
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+
+      await fireEvent.press(await screen.findByLabelText('Confirmar manga'));
+
+      await waitFor(() =>
+        expect(adicionar).toHaveBeenCalledWith({
+          raw_description: 'manga',
+          product_id: 'produto-Manga palmer',
+        }),
+      );
+    });
+
+    it('corrigir não grava nada sozinho', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'manga');
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+      await screen.findByText('manga');
+
+      expect(adicionar).not.toHaveBeenCalled();
+    });
+
+    it('nome sem produto parecido vai para os não identificados', async () => {
+      buscarProdutos.mockResolvedValue([{ product: produto('Uva itália'), score: '0.300' }]);
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'pitomba');
+
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+
+      expect(await screen.findByText('pitomba')).toBeTruthy();
+      // Dois sem produto: o kiwi que já veio assim e a pitomba corrigida.
+      expect(screen.getAllByText('Sem produto do catálogo')).toHaveLength(2);
+      expect(screen.getByLabelText('Confirmar pitomba')).toBeTruthy();
+    });
+
+    it('não identificado pode ser corrigido e passar a ter produto', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('kiwi', 'manga');
+
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de kiwi'));
+
+      expect(await screen.findByText('Produto: Manga palmer')).toBeTruthy();
+      expect(screen.queryByText('Não identificados')).toBeNull();
+    });
+
+    it('cancelar mantém a proposta original', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'manga');
+
+      await fireEvent.press(screen.getByText('Cancelar'));
+
+      expect(screen.getByText('banana')).toBeTruthy();
+      expect(screen.getByText('Produto: Banana prata')).toBeTruthy();
+      expect(buscarProdutos).not.toHaveBeenCalled();
+    });
+
+    it('nome curto demais não busca', async () => {
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'm');
+
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+
+      expect(buscarProdutos).not.toHaveBeenCalled();
+    });
+
+    it('falha na busca mostra o erro e deixa o campo aberto', async () => {
+      buscarProdutos.mockRejectedValue(new api.ApiError(0, 'não foi possível falar com o servidor'));
+      await montar();
+      await enviarFoto();
+      await corrigir('banana', 'manga');
+
+      await fireEvent.press(screen.getByLabelText('Buscar o nome corrigido de banana'));
+
+      expect(await screen.findByText('não foi possível falar com o servidor')).toBeTruthy();
+      expect(screen.getByLabelText('Corrigir o nome de banana')).toBeTruthy();
+    });
   });
 });

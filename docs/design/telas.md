@@ -314,6 +314,13 @@ guardar só como texto ou descartar. Confirmar é o `POST /pantry` de sempre, co
 `product_id` e sem quantidade. "Concluir" fecha o painel, e o que ninguém confirmou
 simplesmente não entra.
 
+**O reconhecimento erra, e o nome se corrige ali mesmo.** Cada alimento da revisão tem
+**Editar**: um campo já preenchido com o que a foto mostrou, e **Buscar** procura o nome
+corrigido no catálogo pelo mesmo `GET /products/search` do cadastro manual. A proposta
+inteira é trocada — nome, candidatos e produto escolhido —, e um nome sem produto parecido
+vai para os não identificados, pelo mesmo corte do servidor. Corrigir não grava nada:
+continua sendo proposta até a pessoa confirmar.
+
 O servidor reduz a foto a 1280 px no lado maior e a regrava em JPEG antes de enviá-la,
 o que também descarta o EXIF — e, com ele, a localização que o celular costuma gravar.
 O modelo é o Claude Haiku 5.5 (`VISION_MODEL`), o mais barato com visão: listar o que
@@ -326,7 +333,9 @@ casa com "Uva itália" (0,625) e "picanha" com "Castanha-do-pará" (0,667). Como
 confirma cada item, nada errado entra sozinho, mas a proposta aparece como
 identificada. O motor é o mesmo do plano alimentar e não foi alterado.
 
-**Duas correções só para a foto** (`rank_for_photo`), sem mexer no motor: a busca é feita
+**Duas correções na busca da despensa** (`pantry.rank_by_food_name`), sem mexer no motor
+do plano alimentar. Valem para a foto, para o campo de digitar e para os candidatos de um
+item salvo: a busca é feita
 com o singular e o plural da primeira palavra — a foto diz "ovo" e o catálogo vende "Ovos
 de galinha" —, e entre os produtos que passam do corte vem antes o que **começa** pelo
 alimento: "tomate" propõe "Tomate italiano" antes de "Molho de tomate". Os dois casos
