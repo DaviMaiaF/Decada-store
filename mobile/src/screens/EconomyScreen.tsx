@@ -13,74 +13,42 @@
  */
 
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
-import { readShoppingList } from '../services/api';
-import { useAuth } from '../services/auth';
 import { describeConfidence, formatMoney } from '../services/format';
 import { colors, radius, spacing, typography } from '../theme/tokens';
-import type { ShoppingList, ShoppingListItem } from '../types/api';
+import { type ResumoDaEconomia, useEconomyViewModel } from '../viewmodels/useEconomyViewModel';
 
 export default function EconomyScreen({ listId }: { listId: string | null }) {
-  const lista = useQuery({
-    queryKey: ['shopping-list', listId],
-    queryFn: () => readShoppingList(listId!),
-    enabled: listId !== null,
-  });
+  const { conteudo, sair } = useEconomyViewModel(listId);
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <Text style={styles.titulo}>Economia</Text>
 
-      {listId === null ? (
+      {conteudo.estado === 'sem-lista' ? (
         <Body muted>
           Gere sua lista na aba Mercado para ver quanto ela custa e quanto a sua
           despensa já poupou.
         </Body>
-      ) : lista.isPending ? (
+      ) : conteudo.estado === 'carregando' ? (
         <Body muted>Carregando…</Body>
-      ) : lista.isError ? (
+      ) : conteudo.estado === 'erro' ? (
         <ErrorNotice message="não foi possível carregar a lista" />
       ) : (
-        <Resumo lista={lista.data} />
+        <Resumo resumo={conteudo.resumo} />
       )}
 
       <View style={styles.conta}>
         <SectionTitle>Conta</SectionTitle>
-        <Sair />
+        <Button label="Sair da conta" variant="ghost" onPress={sair} />
       </View>
     </ScrollView>
   );
 }
 
-function Sair() {
-  const { signOut } = useAuth();
-  return <Button label="Sair da conta" variant="ghost" onPress={signOut} />;
-}
-
-/** Soma os valores de uma coluna de dinheiro, ignorando o que não tem preço. */
-function somar(itens: ShoppingListItem[], campo: 'estimated_cost' | 'pantry_savings'): number {
-  return itens.reduce((total, item) => total + Number(item[campo] ?? 0), 0);
-}
-
-function Resumo({ lista }: { lista: ShoppingList }) {
-  const aComprar = lista.items.filter((item) => !item.dispensed_by_pantry);
-  const comprados = aComprar.filter((item) => item.purchased);
-
-  const jaNoCarrinho = somar(comprados, 'estimated_cost');
-  const total = Number(lista.estimated_total ?? 0);
-  const falta = Math.max(total - jaNoCarrinho, 0);
-  const percentual = total === 0 ? 0 : (jaNoCarrinho / total) * 100;
-
-  const economia = somar(lista.items, 'pantry_savings');
-  const comPreco = lista.items.filter((item) => item.estimated_cost !== null);
-  const semPreco = lista.items.length - comPreco.length;
-
-  // O selo mais fraco manda no aviso: dizer "atual" quando um item é estimativa
-  // daria à lista inteira uma confiança que ela não tem.
-  const maisFraco = piorSelo(comPreco);
-  const ficticio = lista.items.some((item) => item.product.is_fictitious);
+function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
+  const { economia, maisFraco, semPreco } = resumo;
 
   return (
     <>
@@ -96,23 +64,23 @@ function Resumo({ lista }: { lista: ShoppingList }) {
 
       <Card>
         <SectionTitle>Esta compra</SectionTitle>
-        <Linha rotulo="Total estimado" valor={formatMoney(lista.estimated_total)} />
-        <Linha rotulo="Já no carrinho" valor={formatMoney(jaNoCarrinho.toFixed(2))} />
-        <Linha rotulo="Ainda falta" valor={formatMoney(falta.toFixed(2))} />
+        <Linha rotulo="Total estimado" valor={formatMoney(resumo.estimatedTotal)} />
+        <Linha rotulo="Já no carrinho" valor={formatMoney(resumo.jaNoCarrinho.toFixed(2))} />
+        <Linha rotulo="Ainda falta" valor={formatMoney(resumo.falta.toFixed(2))} />
         <View style={styles.progresso}>
-          <ProgressBar percent={percentual} />
+          <ProgressBar percent={resumo.percentual} />
           <Text style={styles.progressoTexto}>
-            {comprados.length} de {aComprar.length} itens comprados
+            {resumo.comprados} de {resumo.aComprar} itens comprados
           </Text>
         </View>
         <Text style={styles.regiao}>
-          Preços de {lista.city} · {lista.state_code}
+          Preços de {resumo.city} · {resumo.stateCode}
         </Text>
       </Card>
 
       <Card>
         <SectionTitle>De onde vêm estes números</SectionTitle>
-        <Linha rotulo="Itens com preço" valor={String(comPreco.length)} />
+        <Linha rotulo="Itens com preço" valor={String(resumo.comPreco)} />
         <Linha rotulo="Sem preço na região" valor={String(semPreco)} />
         {maisFraco ? (
           <Text style={styles.procedencia}>
@@ -128,26 +96,10 @@ function Resumo({ lista }: { lista: ShoppingList }) {
             Item sem preço na sua região fica fora do total. Zero seria mentira.
           </Body>
         ) : null}
-        {ficticio ? <Chip label="dado fictício de desenvolvimento" tone="warning" /> : null}
+        {resumo.ficticio ? <Chip label="dado fictício de desenvolvimento" tone="warning" /> : null}
       </Card>
     </>
   );
-}
-
-/** O item de selo mais fraco: estimativa perde de recente, que perde de atual. */
-function piorSelo(itens: ShoppingListItem[]): ShoppingListItem | null {
-  const ordem = ['atual', 'recente', 'estimativa'];
-  let pior: ShoppingListItem | null = null;
-
-  for (const item of itens) {
-    if (item.price_confidence === null) continue;
-    if (pior === null) pior = item;
-    else if (ordem.indexOf(item.price_confidence) > ordem.indexOf(pior.price_confidence!)) {
-      pior = item;
-    }
-  }
-
-  return pior;
 }
 
 function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
