@@ -11,34 +11,14 @@
  * manda por onde quiser e o paciente importa como qualquer plano.
  */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, ErrorNotice, Field, SectionTitle } from '../components';
 import { PlanoPrescrito } from '../components/PlanoPrescrito';
-import {
-  ApiError,
-  createPrescription,
-  deletePrescription,
-  downloadPrescriptionPdf,
-  sendPrescription,
-  updatePrescription,
-} from '../services/api';
-import { savePdf } from '../services/download';
-import {
-  UNITS,
-  buildPrescriptionInput,
-  emptyForm,
-  emptyItem,
-  emptyMeal,
-  formFromPrescription,
-  type ItemRow,
-  type MealForm,
-  type PrescriptionForm,
-} from '../services/prescriptionForm';
+import { UNITS, emptyItem, type ItemRow, type MealForm } from '../services/prescriptionForm';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { MeasurementUnit, Prescription } from '../types/api';
+import { usePrescriptionEditorViewModel } from '../viewmodels/usePrescriptionEditorViewModel';
 
 export default function PrescriptionEditorScreen({
   prescription,
@@ -48,101 +28,8 @@ export default function PrescriptionEditorScreen({
   prescription: Prescription | null;
   onDone: () => void;
 }) {
-  const cliente = useQueryClient();
-  // O plano como está no servidor. Começa nulo no plano novo e passa a existir
-  // no primeiro salvamento, sem fechar o editor: é dali que se envia.
-  const [salvo, setSalvo] = useState<Prescription | null>(prescription);
-  const [form, setForm] = useState<PrescriptionForm>(() =>
-    prescription ? formFromPrescription(prescription) : emptyForm(),
-  );
-  const [email, setEmail] = useState(prescription?.patient_email ?? '');
-  const [erro, setErro] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState<'salvar' | 'enviar' | 'pdf' | null>(null);
-  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
-
-  const aceito = salvo?.status === 'aceita';
-
-  /** A lista e o plano aberto mudam juntos a cada gravação. */
-  const atualizarCache = () => {
-    cliente.invalidateQueries({ queryKey: ['prescriptions'] });
-    cliente.invalidateQueries({ queryKey: ['prescription'] });
-  };
-
-  const excluir = useMutation({
-    mutationFn: () => deletePrescription(salvo!.id),
-    onSuccess: () => {
-      atualizarCache();
-      onDone();
-    },
-    onError: (problema) => setErro(mensagem(problema, 'não foi possível excluir agora')),
-  });
-
-  /** Valida e grava. Devolve o plano salvo, ou nulo se não deu. */
-  async function salvar(): Promise<Prescription | null> {
-    if (aceito) return salvo;
-    const resultado = buildPrescriptionInput(form);
-    if (resultado.error !== null) {
-      setErro(resultado.error);
-      return null;
-    }
-    const gravado = salvo
-      ? await updatePrescription(salvo.id, resultado.input)
-      : await createPrescription(resultado.input);
-    setSalvo(gravado);
-    atualizarCache();
-    return gravado;
-  }
-
-  async function executar(
-    acao: 'salvar' | 'enviar' | 'pdf',
-    passo: (plano: Prescription) => Promise<string | null>,
-  ) {
-    setErro(null);
-    setAviso(null);
-    setOcupado(acao);
-    try {
-      const plano = await salvar();
-      if (plano) setAviso(await passo(plano));
-    } catch (problema) {
-      setErro(mensagem(problema, 'não foi possível concluir agora'));
-    } finally {
-      setOcupado(null);
-    }
-  }
-
-  const aoSalvar = () => executar('salvar', async () => 'Plano salvo.');
-
-  const aoEnviar = () => {
-    if (!email.trim()) {
-      setErro('informe o e-mail do paciente');
-      return;
-    }
-    return executar('enviar', async (plano) => {
-      const enviado = await sendPrescription(plano.id, email.trim());
-      setSalvo(enviado);
-      atualizarCache();
-      // A mesma frase exista ou não conta com o e-mail: o servidor não diz, e a
-      // tela não teria como saber.
-      return (
-        `Enviado para ${enviado.patient_email}. O plano aparece na aba Dieta quando ` +
-        'a pessoa entrar com esse e-mail — agora ou depois de criar a conta.'
-      );
-    });
-  };
-
-  const aoBaixar = () =>
-    executar('pdf', async (plano) => {
-      await savePdf(await downloadPrescriptionPdf(plano.id), 'plano-alimentar.pdf');
-      return 'PDF gerado. O paciente importa esse arquivo na aba Dieta.';
-    });
-
-  function mudarRefeicao(indice: number, mudanca: Partial<MealForm>) {
-    setForm((atual) => ({
-      ...atual,
-      meals: atual.meals.map((meal, i) => (i === indice ? { ...meal, ...mudanca } : meal)),
-    }));
-  }
+  const vm = usePrescriptionEditorViewModel(prescription, onDone);
+  const { salvo, aceito, form, ocupado } = vm;
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
@@ -170,13 +57,13 @@ export default function PrescriptionEditorScreen({
           <Field
             label="Título"
             value={form.title}
-            onChangeText={(valor) => setForm((f) => ({ ...f, title: valor }))}
+            onChangeText={vm.mudarTitulo}
             placeholder="Plano de outubro"
           />
           <Field
             label="Nome do paciente"
             value={form.patientName}
-            onChangeText={(valor) => setForm((f) => ({ ...f, patientName: valor }))}
+            onChangeText={vm.mudarPaciente}
             placeholder="como sai no cabeçalho do PDF"
           />
 
@@ -185,40 +72,35 @@ export default function PrescriptionEditorScreen({
               key={indice}
               indice={indice}
               meal={meal}
-              onChange={(mudanca) => mudarRefeicao(indice, mudanca)}
-              onRemove={
-                form.meals.length > 1
-                  ? () =>
-                      setForm((f) => ({ ...f, meals: f.meals.filter((_, i) => i !== indice) }))
-                  : undefined
-              }
+              onChange={(mudanca) => vm.mudarRefeicao(indice, mudanca)}
+              onRemove={vm.podeRemoverRefeicao ? () => vm.removerRefeicao(indice) : undefined}
             />
           ))}
 
           <Button
             label="Adicionar refeição"
             variant="secondary"
-            onPress={() => setForm((f) => ({ ...f, meals: [...f.meals, emptyMeal()] }))}
+            onPress={vm.adicionarRefeicao}
           />
 
           <Field
             label="Orientações gerais"
             value={form.notes}
-            onChangeText={(valor) => setForm((f) => ({ ...f, notes: valor }))}
+            onChangeText={vm.mudarOrientacoes}
             multiline
             textAlignVertical="top"
             style={styles.textoLongo}
             placeholder="hidratação, horários, o que vale para o dia todo"
           />
 
-          <Button label="Salvar plano" onPress={aoSalvar} loading={ocupado === 'salvar'} />
+          <Button label="Salvar plano" onPress={vm.salvar} loading={ocupado === 'salvar'} />
         </>
       )}
 
-      {erro ? <ErrorNotice message={erro} /> : null}
-      {aviso ? (
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
+      {vm.aviso ? (
         <Card style={styles.bloco}>
-          <Body>{aviso}</Body>
+          <Body>{vm.aviso}</Body>
         </Card>
       ) : null}
 
@@ -233,8 +115,8 @@ export default function PrescriptionEditorScreen({
             </Body>
             <Field
               label="E-mail do paciente"
-              value={email}
-              onChangeText={setEmail}
+              value={vm.email}
+              onChangeText={vm.setEmail}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
@@ -248,7 +130,7 @@ export default function PrescriptionEditorScreen({
             ) : null}
             <Button
               label={salvo?.status === 'enviada' ? 'Reenviar pelo e-mail' : 'Enviar pelo e-mail'}
-              onPress={aoEnviar}
+              onPress={vm.enviar}
               loading={ocupado === 'enviar'}
             />
           </>
@@ -256,13 +138,13 @@ export default function PrescriptionEditorScreen({
         <Button
           label="Baixar PDF"
           variant="secondary"
-          onPress={aoBaixar}
+          onPress={vm.baixarPdf}
           loading={ocupado === 'pdf'}
         />
       </Card>
 
       {salvo ? (
-        confirmandoExclusao ? (
+        vm.confirmandoExclusao ? (
           <View style={styles.bloco}>
             <Body>
               {aceito
@@ -272,29 +154,25 @@ export default function PrescriptionEditorScreen({
             <Button
               label="Confirmar exclusão"
               variant="secondary"
-              onPress={() => excluir.mutate()}
-              loading={excluir.isPending}
+              onPress={vm.excluir}
+              loading={vm.excluindo}
             />
             <Button
               label="Manter plano"
               variant="ghost"
-              onPress={() => setConfirmandoExclusao(false)}
+              onPress={vm.cancelarExclusao}
             />
           </View>
         ) : (
           <Button
             label="Excluir plano"
             variant="ghost"
-            onPress={() => setConfirmandoExclusao(true)}
+            onPress={vm.pedirExclusao}
           />
         )
       ) : null}
     </ScrollView>
   );
-}
-
-function mensagem(problema: unknown, padrao: string): string {
-  return problema instanceof ApiError ? problema.message : padrao;
 }
 
 function EditorDeRefeicao({

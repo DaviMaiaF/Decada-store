@@ -18,6 +18,7 @@ const MIGRADAS: string[] = [
   'screens/UploadScreen.tsx',
   'components/PlanosRecebidos.tsx',
   'screens/ConfirmationScreen.tsx',
+  'screens/PrescriptionEditorScreen.tsx',
 ];
 
 const PROIBIDOS = [/from '[./]*services\/api'/, /from '@tanstack\/react-query'/, /from '[./]*services\/auth'/];
