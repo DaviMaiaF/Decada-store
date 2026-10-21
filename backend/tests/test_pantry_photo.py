@@ -13,6 +13,7 @@ import httpx2
 import pytest
 from PIL import Image
 
+from app.services.pantry import name_variants
 from app.services.pantry_photo import (
     MAX_EDGE,
     MAX_FOODS,
@@ -23,7 +24,6 @@ from app.services.pantry_photo import (
     RecognitionUnavailableError,
     build_recognizer,
     clean_names,
-    name_variants,
     prepare_image,
     propose_items,
     recognize_photo,

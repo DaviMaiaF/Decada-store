@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.models import PantryItem, Product
 from app.models.enums import BaseUnit, MeasurementUnit
-from app.services.matching import ScoredProduct, rank_products
+from app.services.matching import MAX_CANDIDATES, MINIMUM_SCORE, ScoredProduct, rank_products
+from app.services.text import normalize_text
 from app.services.units import IncompatibleUnitError, base_unit_of, to_base_quantity
 
 # Mesma precisão das colunas de quantidade do banco, Numeric(12, 3).
@@ -151,4 +152,87 @@ def suggest_products(session: Session, pantry_item: PantryItem) -> list[ScoredPr
     abate nada da lista.
     """
     catalog = session.scalars(select(Product)).all()
-    return rank_products(pantry_item.raw_description, catalog)
+    return rank_by_food_name(pantry_item.raw_description, catalog)
+
+
+def name_variants(name: str) -> list[str]:
+    """O nome normalizado, no singular e no plural da primeira palavra.
+
+    A pessoa (ou a foto) diz "ovo" e o catálogo vende "Ovos de galinha"; diz
+    "bananas" e o catálogo vende "Banana prata". O motor de casamento compara
+    texto e não sabe que as duas formas são o mesmo alimento, então a busca é
+    feita com as duas. Regras simples do português bastam aqui: a forma que não
+    existir no catálogo não casa com nada e só fica de fora.
+    """
+    normalized = normalize_text(name)
+    if not normalized:
+        return []
+    first, _, rest = normalized.partition(" ")
+    rest = f" {rest}" if rest else ""
+
+    if first.endswith("oes") or first.endswith("aes"):
+        forms = [first[:-3] + "ao"]  # pães → pão
+    elif first.endswith("es") and first[-3:-2] in ("r", "z"):
+        forms = [first[:-2]]  # colheres → colher
+    elif first.endswith("s"):
+        forms = [first[:-1]]  # ovos → ovo
+    elif first.endswith("ao"):
+        forms = [first[:-2] + "oes", first[:-2] + "aes"]  # limão → limões
+    elif first.endswith(("r", "z")):
+        forms = [first + "es"]  # noz → nozes
+    else:
+        forms = [first + "s"]  # ovo → ovos
+
+    return [normalized] + [form + rest for form in forms]
+
+
+def _starts_with(product: Product, variants: Sequence[str]) -> bool:
+    """O nome do produto começa pelo alimento, como palavra inteira.
+
+    "Tomate italiano" começa por "tomate"; "Molho de tomate" não — é outro
+    produto feito de tomate.
+    """
+    return any(
+        product.normalized_name == variant or product.normalized_name.startswith(variant + " ")
+        for variant in variants
+    )
+
+
+def rank_by_food_name(
+    name: str, catalog: Sequence[Product], limit: int = MAX_CANDIDATES
+) -> list[ScoredProduct]:
+    """Os produtos que podem ser um alimento da despensa, do mais provável ao menos.
+
+    Serve à busca do cadastro manual, aos candidatos de um item já salvo e à
+    foto. Duas correções sobre `rank_products` — o casamento do plano alimentar
+    continua como está:
+
+    - busca com o singular e o plural (`name_variants`) e fica com a melhor
+      nota de cada produto;
+    - entre os que passam do corte, o produto cujo nome **começa** pelo
+      alimento vem antes. O motor dá a mesma nota a todo produto que contém a
+      palavra, e sem isso "tomate" propunha "Molho de tomate" antes de
+      "Tomate italiano".
+
+    Um produto que começa pelo alimento como palavra inteira sempre passa do
+    corte (o comparador por palavras dá nota cheia), então a preferência nunca
+    põe um produto fraco na frente de um bom.
+    """
+    variants = name_variants(name)
+    best: dict[int, ScoredProduct] = {}
+    for variant in variants:
+        for scored in rank_products(variant, catalog, len(catalog)):
+            atual = best.get(id(scored.product))
+            if atual is None or scored.score > atual.score:
+                best[id(scored.product)] = scored
+
+    ranked = sorted(
+        best.values(),
+        key=lambda scored: (
+            scored.score < MINIMUM_SCORE,
+            not _starts_with(scored.product, variants),
+            -scored.score,
+            scored.product.name,
+        ),
+    )
+    return ranked[:limit]
