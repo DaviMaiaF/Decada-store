@@ -14,37 +14,22 @@
  * Item que veio do plano fica: para vê-lo fora da conta existe a simulação.
  */
 
-import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import CheckoutScreen from './CheckoutScreen';
-import {
-  ApiError,
-  addExtraItem,
-  generateShoppingList,
-  readShoppingList,
-  removeShoppingListItem,
-  searchProducts,
-  setItemPurchased,
-  simulateShoppingList,
-} from '../services/api';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
-import { simulatedDifference, simulatedTotal } from '../services/simulation';
-import { readRegion, saveRegion } from '../services/session';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
-import { parseDecimal, suggestedAmount } from '../services/units';
-import type {
-  MeasurementUnit,
-  Product,
-  ProductSuggestion,
-  ShoppingList,
-  ShoppingListItem,
-  SimulatedItem,
-} from '../types/api';
+import type { ProductSuggestion, ShoppingList, ShoppingListItem, SimulatedItem } from '../types/api';
+import {
+  useAddExtraItemViewModel,
+  useMarketViewModel,
+  useRegionFormViewModel,
+  useShoppingListViewModel,
+  useSimulatedQuantityField,
+} from '../viewmodels/useMarketViewModel';
 
 /** Rótulo de cada corredor. As chaves são as categorias do catálogo. */
 const CORREDORES: Record<string, string> = {
@@ -66,20 +51,9 @@ export default function MarketScreen({
   /** Depois da compra concluída, leva ao início. */
   onCompraConcluida: () => void;
 }) {
-  // Depois de gerada, a lista tomava a tela para sempre e a região virava
-  // definitiva — inclusive para quem lia o aviso de região sem preço, que manda
-  // justamente gerar em outra cidade. Conselho sem caminho não é conselho.
-  const [trocandoRegiao, setTrocandoRegiao] = useState(false);
-  // Checkout simulado: toma a aba até a pessoa voltar à lista.
-  const [finalizando, setFinalizando] = useState(false);
+  const vm = useMarketViewModel(listId);
 
-  const lista = useQuery({
-    queryKey: ['shopping-list', listId],
-    queryFn: () => readShoppingList(listId!),
-    enabled: listId !== null,
-  });
-
-  if (listId === null || trocandoRegiao) {
+  if (vm.mostrarRegiao) {
     return (
       <ScrollView contentContainerStyle={styles.conteudo}>
         <Text style={styles.titulo}>Lista de Mercado</Text>
@@ -91,19 +65,19 @@ export default function MarketScreen({
           <FormularioRegiaoEGeracao
             planId={planId}
             onGenerated={(novaLista) => {
-              setTrocandoRegiao(false);
+              vm.manterRegiao();
               onGenerated(novaLista);
             }}
-            onCancel={trocandoRegiao ? () => setTrocandoRegiao(false) : undefined}
+            onCancel={vm.trocandoRegiao ? vm.manterRegiao : undefined}
           />
         )}
       </ScrollView>
     );
   }
 
-  if (lista.isPending) return <Body muted>Carregando a lista…</Body>;
+  if (vm.carregando) return <Body muted>Carregando a lista…</Body>;
 
-  if (lista.isError) {
+  if (vm.falhou || vm.lista === null) {
     return (
       <View style={styles.conteudo}>
         <ErrorNotice message="não foi possível carregar a lista" />
@@ -111,11 +85,11 @@ export default function MarketScreen({
     );
   }
 
-  if (finalizando) {
+  if (vm.finalizando) {
     return (
       <CheckoutScreen
-        lista={lista.data}
-        onVoltar={() => setFinalizando(false)}
+        lista={vm.lista}
+        onVoltar={vm.voltarALista}
         onGenerated={onGenerated}
         onIrAoInicio={onCompraConcluida}
       />
@@ -124,9 +98,9 @@ export default function MarketScreen({
 
   return (
     <ListaCarregada
-      lista={lista.data}
-      onTrocarRegiao={() => setTrocandoRegiao(true)}
-      onFinalizar={() => setFinalizando(true)}
+      lista={vm.lista}
+      onTrocarRegiao={vm.trocarRegiao}
+      onFinalizar={vm.finalizar}
       onGenerated={onGenerated}
     />
   );
@@ -142,31 +116,7 @@ function FormularioRegiaoEGeracao({
   /** Só existe quando se está trocando a região de uma lista que já existe. */
   onCancel?: () => void;
 }) {
-  const [stateCode, setStateCode] = useState('DF');
-  const [city, setCity] = useState('Brasília');
-
-  useEffect(() => {
-    let ativo = true;
-    readRegion().then((regiao) => {
-      if (ativo && regiao) {
-        setStateCode(regiao.stateCode);
-        setCity(regiao.city);
-      }
-    });
-    return () => {
-      ativo = false;
-    };
-  }, []);
-
-  const geracao = useMutation({
-    mutationFn: async () => {
-      const ufLimpa = stateCode.trim().toUpperCase() || 'DF';
-      const cidadeLimpa = city.trim() || 'Brasília';
-      await saveRegion({ stateCode: ufLimpa, city: cidadeLimpa });
-      return generateShoppingList(planId, ufLimpa, cidadeLimpa);
-    },
-    onSuccess: (resultado) => onGenerated(resultado.shopping_list.id),
-  });
+  const vm = useRegionFormViewModel(planId, onGenerated);
 
   return (
     <>
@@ -191,8 +141,8 @@ function FormularioRegiaoEGeracao({
               autoCapitalize="characters"
               maxLength={2}
               style={styles.campoTexto}
-              value={stateCode}
-              onChangeText={setStateCode}
+              value={vm.stateCode}
+              onChangeText={vm.setStateCode}
             />
           </View>
 
@@ -203,26 +153,18 @@ function FormularioRegiaoEGeracao({
               placeholder="Cidade"
               placeholderTextColor={colors.outline}
               style={styles.campoTexto}
-              value={city}
-              onChangeText={setCity}
+              value={vm.city}
+              onChangeText={vm.setCity}
             />
           </View>
         </View>
       </Card>
 
-      {geracao.isError ? (
-        <ErrorNotice
-          message={
-            geracao.error instanceof ApiError
-              ? geracao.error.message
-              : 'não foi possível gerar a lista'
-          }
-        />
-      ) : null}
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
       <Button
         label="Gerar lista de compras"
-        onPress={() => geracao.mutate()}
-        loading={geracao.isPending}
+        onPress={vm.gerar}
+        loading={vm.gerando}
       />
       {onCancel ? (
         <Button label="Manter a lista atual" variant="ghost" onPress={onCancel} />
@@ -244,119 +186,7 @@ function ListaCarregada({
   /** Lista nova, gerada pelo aviso de plano alterado. */
   onGenerated: (listId: string) => void;
 }) {
-  const cliente = useQueryClient();
-  const chave = ['shopping-list', lista.id];
-
-  /**
-   * Marcar item é otimista de propósito.
-   *
-   * Quem usa isto está de pé no corredor do mercado, com a rede do celular
-   * oscilando. Esperar a resposta para riscar a linha faria o toque parecer
-   * perdido. Se a chamada falhar, a lista volta ao que era e a mensagem de
-   * erro aparece.
-   */
-  const marcacao = useMutation({
-    mutationFn: ({ itemId, comprado }: { itemId: string; comprado: boolean }) =>
-      setItemPurchased(lista.id, itemId, comprado),
-    onMutate: async ({ itemId, comprado }) => {
-      await cliente.cancelQueries({ queryKey: chave });
-      const anterior = cliente.getQueryData<ShoppingList>(chave);
-
-      cliente.setQueryData<ShoppingList>(chave, (atual) =>
-        atual === undefined
-          ? atual
-          : {
-              ...atual,
-              items: atual.items.map((item) =>
-                item.id === itemId ? { ...item, purchased: comprado } : item,
-              ),
-            },
-      );
-
-      return { anterior };
-    },
-    onError: (_erro, _variaveis, contexto) => {
-      if (contexto?.anterior) cliente.setQueryData(chave, contexto.anterior);
-    },
-    onSettled: () => cliente.invalidateQueries({ queryKey: chave }),
-  });
-
-  /**
-   * Tirar da lista só vale para o item avulso.
-   *
-   * Não é otimista como a marcação: remover é destrutivo, e a linha some da
-   * tela só quando o servidor confirmou que sumiu do banco.
-   */
-  const remocao = useMutation({
-    mutationFn: (itemId: string) => removeShoppingListItem(lista.id, itemId),
-    onSuccess: () => {
-      cliente.invalidateQueries({ queryKey: chave });
-      // Um ingrediente a menos na compra muda a disponibilidade das receitas.
-      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
-    },
-  });
-
-  const porCorredor = useMemo(() => {
-    const grupos = new Map<string, ShoppingListItem[]>();
-    for (const item of lista.items) {
-      const chave = item.product.category ?? 'outros';
-      grupos.set(chave, [...(grupos.get(chave) ?? []), item]);
-    }
-    return [...grupos.entries()];
-  }, [lista.items]);
-
-  const aComprar = lista.items.filter((item) => !item.dispensed_by_pantry);
-  const dispensados = lista.items.filter((item) => item.dispensed_by_pantry);
-  // Só conta entre o que há para comprar: item que a despensa dispensou aceita
-  // marcação no servidor, mas não faz parte do trajeto pelo mercado.
-  const comprados = aComprar.filter((item) => item.purchased).length;
-  const progresso = aComprar.length === 0 ? 0 : (comprados / aComprar.length) * 100;
-  // Nenhum item com preço quase sempre quer dizer região sem coleta — e aí o
-  // total é R$ 0,00 por falta de dado, não por a compra ser de graça. Dizer
-  // "sem preço" item por item não explica isso; a causa é a região.
-  const semPrecoNaRegiao =
-    aComprar.length > 0 && aComprar.every((item) => item.estimated_cost === null);
-
-  // Simulação: "e se eu não levar isto?". Vive só na tela — nada é enviado, a
-  // lista salva não muda e a prescrição menos ainda (decisão 8). Por isso é um
-  // estado local, e não uma mutação.
-  const [foraDaSimulacao, setForaDaSimulacao] = useState<string[]>([]);
-  // Resultado que veio do servidor para cada item cuja quantidade foi mexida.
-  const [porQuantidade, setPorQuantidade] = useState<Record<string, SimulatedItem>>({});
-  const excluidos = new Set(foraDaSimulacao);
-
-  const simulacao = useMutation({
-    mutationFn: ({ itemId, quantidade }: { itemId: string; quantidade: string }) =>
-      simulateShoppingList(lista.id, [{ item_id: itemId, quantity: quantidade }]),
-    onSuccess: (resultado) =>
-      setPorQuantidade((atual) => ({ ...atual, [resultado[0].item_id]: resultado[0] })),
-  });
-
-  // Cada item vale o que a simulação disse, ou o que a lista salva diz. A soma
-  // continua sendo a daqui — o que veio do servidor foi o custo de cada item,
-  // que é onde mora a regra da embalagem fechada.
-  const itensSimulados = aComprar.map((item) => ({
-    id: item.id,
-    estimated_cost: porQuantidade[item.id]?.estimated_cost ?? item.estimated_cost,
-  }));
-
-  const simulando = foraDaSimulacao.length > 0 || Object.keys(porQuantidade).length > 0;
-  const totalSimulado = simulatedTotal(itensSimulados, excluidos);
-  // A comparação é contra a lista como ela está salva, não contra a própria
-  // simulação: simular quantidade maior encarece, e dizer "a menos" seria falso.
-  const totalOriginal = simulatedTotal(aComprar, new Set());
-  const diferenca = simulatedDifference(totalSimulado, totalOriginal);
-
-  function alternarSimulacao(itemId: string) {
-    setForaDaSimulacao((fora) =>
-      fora.includes(itemId) ? fora.filter((id) => id !== itemId) : [...fora, itemId],
-    );
-  }
-
-  function limparSimulacao() {
-    setForaDaSimulacao([]);
-    setPorQuantidade({});
-  }
+  const vm = useShoppingListViewModel(lista);
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
@@ -364,16 +194,16 @@ function ListaCarregada({
 
       <Card style={styles.resumo}>
         <Text style={styles.resumoRotulo}>
-          {simulando ? 'SIMULANDO A COMPRA' : 'ESTIMATIVA DA COMPRA'}
+          {vm.simulando ? 'SIMULANDO A COMPRA' : 'ESTIMATIVA DA COMPRA'}
         </Text>
         {/* Na simulação o card de cima é quem muda: o total simulado ficava em
             outro card, abaixo da dobra, e parecia que nada tinha acontecido. */}
         <Text style={styles.total}>
-          {formatMoney(simulando ? totalSimulado : lista.estimated_total)}
+          {formatMoney(vm.simulando ? vm.totalSimulado : lista.estimated_total)}
         </Text>
-        {simulando ? (
+        {vm.simulando ? (
           <Text style={styles.resumoRegiao}>
-            salva: <Text style={styles.totalSalvo}>{formatMoney(totalOriginal)}</Text>
+            salva: <Text style={styles.totalSalvo}>{formatMoney(vm.totalOriginal)}</Text>
           </Text>
         ) : null}
         <Text style={styles.resumoRegiao}>
@@ -388,9 +218,9 @@ function ListaCarregada({
           <Text style={styles.trocarRegiaoTexto}>Gerar em outra região</Text>
         </Pressable>
         <View style={styles.progresso}>
-          <ProgressBar percent={progresso} />
+          <ProgressBar percent={vm.progresso} />
           <Text style={styles.progressoTexto}>
-            {comprados} de {aComprar.length} itens comprados
+            {vm.comprados} de {vm.aComprar} itens comprados
           </Text>
         </View>
       </Card>
@@ -404,22 +234,22 @@ function ListaCarregada({
       <Button
         label="Finalizar compra (simulada)"
         onPress={onFinalizar}
-        disabled={aComprar.length === 0}
+        disabled={vm.aComprar === 0}
       />
 
-      {simulando ? (
+      {vm.simulando ? (
         <Card style={styles.simulacao}>
           <SectionTitle>Simulando a compra</SectionTitle>
-          <Body muted>{descreverSimulacao(foraDaSimulacao.length, diferenca)}</Body>
+          <Body muted>{vm.resumoDaSimulacao}</Body>
           <Body muted>
             É só uma conta nesta tela. Sua lista continua inteira, e o plano da sua
             nutricionista não muda.
           </Body>
-          <Button label="Limpar simulação" variant="ghost" onPress={limparSimulacao} />
+          <Button label="Limpar simulação" variant="ghost" onPress={vm.limparSimulacao} />
         </Card>
       ) : null}
 
-      {semPrecoNaRegiao ? (
+      {vm.semPrecoNaRegiao ? (
         <Card style={styles.avisoRegiao}>
           <SectionTitle>Ainda não temos preços em {lista.city}</SectionTitle>
           <Body muted>
@@ -431,107 +261,50 @@ function ListaCarregada({
         </Card>
       ) : null}
 
-      {marcacao.isError ? (
+      {vm.marcacaoFalhou ? (
         <ErrorNotice message="não foi possível salvar o item marcado" />
       ) : null}
 
-      {dispensados.length > 0 ? (
+      {vm.dispensados > 0 ? (
         <Card style={styles.sincronizacao}>
           <SectionTitle>Sincronização com a despensa</SectionTitle>
           <Body muted>
-            {dispensados.length} item(ns) saíram da compra porque você já tem em casa.
+            {vm.dispensados} item(ns) saíram da compra porque você já tem em casa.
           </Body>
         </Card>
       ) : null}
 
-      {porCorredor.map(([categoria, itens]) => (
+      {vm.porCorredor.map(([categoria, itens]) => (
         <View key={categoria} style={styles.corredor}>
           <SectionTitle>{CORREDORES[categoria] ?? 'Outros'}</SectionTitle>
           {itens.map((item) => (
             <ItemDaLista
               key={item.id}
               item={item}
-              foraDaSimulacao={excluidos.has(item.id)}
-              removendo={remocao.isPending}
-              onRemover={() => remocao.mutate(item.id)}
-              simulado={porQuantidade[item.id] ?? null}
-              calculando={simulacao.isPending}
-              onSimular={() => alternarSimulacao(item.id)}
-              onSimularQuantidade={(quantidade) =>
-                simulacao.mutate({ itemId: item.id, quantidade })
-              }
-              onToggle={() =>
-                marcacao.mutate({ itemId: item.id, comprado: !item.purchased })
-              }
+              foraDaSimulacao={vm.foraDaSimulacao(item.id)}
+              removendo={vm.removendo}
+              onRemover={() => vm.remover(item.id)}
+              simulado={vm.simulado(item.id)}
+              calculando={vm.calculando}
+              onSimular={() => vm.alternarSimulacao(item.id)}
+              onSimularQuantidade={(quantidade) => vm.simularQuantidade(item.id, quantidade)}
+              onToggle={() => vm.alternarComprado(item)}
             />
           ))}
         </View>
       ))}
 
-      {remocao.isError ? (
-        <ErrorNotice
-          message={
-            remocao.error instanceof ApiError
-              ? remocao.error.message
-              : 'não foi possível tirar o item da lista'
-          }
-        />
-      ) : null}
+      {vm.erroDaRemocao ? <ErrorNotice message={vm.erroDaRemocao} /> : null}
 
       <AcrescentarItem listId={lista.id} />
     </ScrollView>
   );
 }
 
-/**
- * Acrescentar à compra um produto que o plano não pediu.
- *
- * Mesmos dois passos do cadastro da despensa — escolher o produto do catálogo e
- * dizer quanto —, pela mesma razão: item sem produto não tem preço, e
- * quantidade em grandeza que o produto não usa não vira compra nenhuma.
- */
+/** Acrescentar à compra um produto que o plano não pediu. */
 function AcrescentarItem({ listId }: { listId: string }) {
-  const cliente = useQueryClient();
-  const [texto, setTexto] = useState('');
-  // Texto aguardando a escolha do produto. Nulo quando não há nada em curso.
-  const [escolhendo, setEscolhendo] = useState<string | null>(null);
-  const [produto, setProduto] = useState<Product | null>(null);
-  const [quantidade, setQuantidade] = useState('');
-  const [unidade, setUnidade] = useState<MeasurementUnit>('unidade');
-
-  const candidatos = useQuery({
-    queryKey: ['product-search', escolhendo],
-    queryFn: () => searchProducts(escolhendo!),
-    enabled: escolhendo !== null,
-  });
-
-  const acrescentar = useMutation({
-    mutationFn: ({ produtoId, medida }: { produtoId: string; medida: string }) =>
-      addExtraItem(listId, { product_id: produtoId, quantity: medida, unit: unidade }),
-    onSuccess: () => {
-      fechar();
-      cliente.invalidateQueries({ queryKey: ['shopping-list', listId] });
-      // O que entra na compra conta para a disponibilidade das receitas.
-      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
-    },
-  });
-
-  function fechar() {
-    setTexto('');
-    setEscolhendo(null);
-    setProduto(null);
-  }
-
-  /** Produto escolhido: falta dizer quanto levar. A embalagem é o palpite. */
-  function escolherProduto(escolhido: Product) {
-    const sugestao = suggestedAmount(escolhido);
-    setQuantidade(sugestao.quantity);
-    setUnidade(sugestao.unit);
-    setProduto(escolhido);
-    setEscolhendo(null);
-  }
-
-  const numero = parseDecimal(quantidade);
+  const vm = useAddExtraItemViewModel(listId);
+  const { produto } = vm;
 
   return (
     <Card style={styles.acrescentar}>
@@ -549,32 +322,32 @@ function AcrescentarItem({ listId }: { listId: string }) {
               placeholder="Ex: chia, azeite, café…"
               placeholderTextColor={colors.outline}
               style={[styles.campoTexto, styles.acrescentarCampo]}
-              value={texto}
-              onChangeText={setTexto}
-              onSubmitEditing={() => texto.trim().length >= 2 && setEscolhendo(texto.trim())}
+              value={vm.texto}
+              onChangeText={vm.setTexto}
+              onSubmitEditing={vm.buscar}
               returnKeyType="done"
             />
             <Button
               label="Buscar"
               variant="secondary"
-              disabled={texto.trim().length < 2}
-              onPress={() => setEscolhendo(texto.trim())}
+              disabled={!vm.podeBuscar}
+              onPress={vm.buscar}
             />
           </View>
 
-          {candidatos.isPending && escolhendo !== null ? (
+          {vm.buscando ? (
             <Body muted>Buscando no catálogo…</Body>
           ) : null}
-          {candidatos.isError ? (
+          {vm.buscaFalhou ? (
             <ErrorNotice message="não foi possível buscar no catálogo" />
           ) : null}
 
-          {candidatos.data?.map((sugestao: ProductSuggestion) => (
+          {vm.candidatos?.map((sugestao: ProductSuggestion) => (
             <Pressable
               key={sugestao.product.id}
               accessibilityRole="button"
               accessibilityLabel={`Acrescentar ${sugestao.product.name}`}
-              onPress={() => escolherProduto(sugestao.product)}
+              onPress={() => vm.escolherProduto(sugestao.product)}
               style={styles.candidato}
             >
               <Text style={styles.candidatoNome}>{sugestao.product.name}</Text>
@@ -584,7 +357,7 @@ function AcrescentarItem({ listId }: { listId: string }) {
             </Pressable>
           ))}
 
-          {escolhendo !== null && candidatos.data?.length === 0 ? (
+          {vm.escolhendo !== null && vm.candidatos?.length === 0 ? (
             <Body muted>Nenhum produto do catálogo se parece com isso.</Body>
           ) : null}
         </>
@@ -599,47 +372,24 @@ function AcrescentarItem({ listId }: { listId: string }) {
               keyboardType="decimal-pad"
               returnKeyType="done"
               style={[styles.campoTexto, styles.acrescentarCampo]}
-              value={quantidade}
-              onChangeText={setQuantidade}
+              value={vm.quantidade}
+              onChangeText={vm.setQuantidade}
             />
-            <SeletorDeUnidade produto={produto} escolhida={unidade} onEscolher={setUnidade} />
+            <SeletorDeUnidade produto={produto} escolhida={vm.unidade} onEscolher={vm.setUnidade} />
           </View>
           <Button
             label="Acrescentar à lista"
-            disabled={numero === null}
-            loading={acrescentar.isPending}
-            onPress={() =>
-              numero !== null && acrescentar.mutate({ produtoId: produto.id, medida: numero })
-            }
+            disabled={!vm.quantidadeValida}
+            loading={vm.acrescentando}
+            onPress={vm.acrescentar}
           />
-          <Button label="Cancelar" variant="ghost" onPress={fechar} />
+          <Button label="Cancelar" variant="ghost" onPress={vm.cancelar} />
         </>
       )}
 
-      {acrescentar.isError ? (
-        <ErrorNotice
-          message={
-            acrescentar.error instanceof ApiError
-              ? acrescentar.error.message
-              : 'não foi possível acrescentar o item'
-          }
-        />
-      ) : null}
+      {vm.erro ? <ErrorNotice message={vm.erro} /> : null}
     </Card>
   );
-}
-
-/** "2 itens fora da simulação · R$ 17,63 a menos", com o sinal certo. */
-function descreverSimulacao(fora: number, diferenca: string): string {
-  const centavos = Math.round(Number(diferenca) * 100);
-  const valor =
-    centavos === 0
-      ? 'mesmo custo'
-      : `${formatMoney(Math.abs(centavos / 100).toFixed(2))} a ${centavos < 0 ? 'menos' : 'mais'}`;
-
-  if (fora === 0) return `Só mudando quantidades · ${valor}`;
-  if (fora === 1) return `1 item fora da simulação · ${valor}`;
-  return `${fora} itens fora da simulação · ${valor}`;
 }
 
 function ItemDaLista({
@@ -665,9 +415,8 @@ function ItemDaLista({
 }) {
   const dispensado = item.dispensed_by_pantry;
   const comprado = item.purchased;
-  const [campoAberto, setCampoAberto] = useState(false);
-  const [quantidade, setQuantidade] = useState('');
-  const numero = parseDecimal(quantidade);
+  const campo = useSimulatedQuantityField();
+  const { numero } = campo;
 
   return (
     <Card
@@ -749,7 +498,7 @@ function ItemDaLista({
             onPress={onSimular}
           />
 
-          {campoAberto ? (
+          {campo.aberto ? (
             <View style={styles.campoSimulacao}>
               <TextInput
                 accessibilityLabel={`Quantidade simulada de ${item.product.name}`}
@@ -758,8 +507,8 @@ function ItemDaLista({
                 keyboardType="decimal-pad"
                 returnKeyType="done"
                 style={styles.campoTexto}
-                value={quantidade}
-                onChangeText={setQuantidade}
+                value={campo.quantidade}
+                onChangeText={campo.setQuantidade}
                 onSubmitEditing={() => numero !== null && onSimularQuantidade(numero)}
               />
               <Button
@@ -773,7 +522,7 @@ function ItemDaLista({
             <Button
               label="Simular outra quantidade"
               variant="ghost"
-              onPress={() => setCampoAberto(true)}
+              onPress={campo.abrir}
             />
           )}
 
