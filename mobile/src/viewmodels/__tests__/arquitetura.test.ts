@@ -1,35 +1,41 @@
 /**
  * Guarda da convenção MVVM (ver docs/arquitetura-mvvm.md).
  *
- * A View não fala com o backend nem com o React Query: isso é do ViewModel.
- * A lista cresce a cada tela migrada; quando todas estiverem nela, a regra vale
- * para o app inteiro.
+ * A View não fala com o backend, com o React Query nem com a sessão: isso é do
+ * ViewModel. Vale para todo arquivo de `screens/` e `components/` — tela nova
+ * que importar um deles quebra este teste.
  */
 
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
-const MIGRADAS: string[] = [
-  'screens/HomeScreen.tsx',
-  'screens/EconomyScreen.tsx',
-  'screens/CheckoutScreen.tsx',
-  'screens/NutritionistHomeScreen.tsx',
-  'screens/LoginScreen.tsx',
-  'screens/UploadScreen.tsx',
-  'components/PlanosRecebidos.tsx',
-  'screens/ConfirmationScreen.tsx',
-  'screens/PrescriptionEditorScreen.tsx',
-  'components/ListaDesatualizada.tsx',
-  'components/DespensaPorFoto.tsx',
-  'screens/PantryScreen.tsx',
-  'screens/MarketScreen.tsx',
+const RAIZ = join(__dirname, '..', '..');
+const PASTAS_DA_VIEW = ['screens', 'components'];
+
+const PROIBIDOS = [
+  /from '[./]*services\/api'/,
+  /from '@tanstack\/react-query'/,
+  /from '[./]*services\/auth'/,
 ];
 
-const PROIBIDOS = [/from '[./]*services\/api'/, /from '@tanstack\/react-query'/, /from '[./]*services\/auth'/];
+function arquivosDaView(): string[] {
+  return PASTAS_DA_VIEW.flatMap((pasta) =>
+    readdirSync(join(RAIZ, pasta))
+      .filter((nome) => nome.endsWith('.tsx'))
+      .map((nome) => `${pasta}/${nome}`),
+  );
+}
 
-it('as telas migradas não importam api, react-query nem auth', () => {
-  const violacoes = MIGRADAS.flatMap((arquivo) => {
-    const codigo = readFileSync(join(__dirname, '..', '..', arquivo), 'utf8');
+it('encontra as telas e os componentes', () => {
+  // Sem isto, um caminho errado faria o teste abaixo passar sem olhar nada.
+  expect(arquivosDaView()).toEqual(
+    expect.arrayContaining(['screens/MarketScreen.tsx', 'components/DespensaPorFoto.tsx']),
+  );
+});
+
+it('nenhuma tela ou componente importa api, react-query ou auth', () => {
+  const violacoes = arquivosDaView().flatMap((arquivo) => {
+    const codigo = readFileSync(join(RAIZ, arquivo), 'utf8');
     return PROIBIDOS.filter((padrao) => padrao.test(codigo)).map(
       (padrao) => `${arquivo}: ${padrao}`,
     );

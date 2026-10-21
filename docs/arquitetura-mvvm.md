@@ -23,7 +23,7 @@ flowchart LR
 1. **A View não importa `services/api` nem `@tanstack/react-query`.** Também não
    importa `services/auth`: sair da conta é uma ação do ViewModel. O teste
    [`arquitetura.test.ts`](../mobile/src/viewmodels/__tests__/arquitetura.test.ts)
-   verifica isso nas telas já migradas.
+   verifica isso em todo arquivo de `screens/` e `components/`.
 2. **Um ViewModel por tela**, em `src/viewmodels/use<Tela>ViewModel.ts`. O nome em
    inglês segue a regra do projeto; o comentário, em português.
 3. **O ViewModel não devolve JSX nem estilo.** Ele devolve dado pronto para exibir
