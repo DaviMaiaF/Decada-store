@@ -52,3 +52,14 @@ it('o botão leva à aba da próxima etapa', async () => {
 
   expect(onIr).toHaveBeenCalledWith('Mercado');
 });
+
+it('cada card leva à sua aba', async () => {
+  const onIr = jest.fn();
+  await render(<HomeScreen etapas={jornada([false, false, false, false])} onIr={onIr} />);
+
+  for (const aba of ['Dieta', 'Mercado', 'Despensa', 'Economia']) {
+    await fireEvent.press(screen.getByLabelText(`Ir para ${aba}`));
+    expect(onIr).toHaveBeenLastCalledWith(aba);
+  }
+  expect(onIr).toHaveBeenCalledTimes(4);
+});
