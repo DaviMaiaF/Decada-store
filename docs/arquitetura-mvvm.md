@@ -24,8 +24,11 @@ flowchart LR
    importa `services/auth`: sair da conta é uma ação do ViewModel. O teste
    [`arquitetura.test.ts`](../mobile/src/viewmodels/__tests__/arquitetura.test.ts)
    verifica isso em todo arquivo de `screens/` e `components/`.
-2. **Um ViewModel por tela**, em `src/viewmodels/use<Tela>ViewModel.ts`. O nome em
-   inglês segue a regra do projeto; o comentário, em português.
+2. **Um arquivo de ViewModel por tela**, em `src/viewmodels/use<Tela>ViewModel.ts`.
+   Tela com partes de estado independente (a linha de uma lista, um formulário
+   dentro da tela) ganha mais de um hook no mesmo arquivo, como
+   `usePlanItemViewModel` ao lado de `useConfirmationViewModel`. O nome em inglês
+   segue a regra do projeto; o comentário, em português.
 3. **O ViewModel não devolve JSX nem estilo.** Ele devolve dado pronto para exibir
    (números já somados, listas já filtradas) e funções com nome de ação
    (`confirmar`, `sair`). Texto fixo de interface — rótulo, título, aviso — fica na
@@ -49,16 +52,40 @@ uma tela, e ficam como estão.
 // viewmodels/useEconomyViewModel.ts
 export function useEconomyViewModel(listId: string | null) {
   const lista = useQuery({ queryKey: ['shopping-list', listId], ... });
-  return { estado, resumo, sair };
+  ...
+  return { conteudo, sair }; // conteudo: sem-lista | carregando | erro | pronto + resumo
 }
 
 // screens/EconomyScreen.tsx
 export default function EconomyScreen({ listId }: { listId: string | null }) {
-  const vm = useEconomyViewModel(listId);
-  if (vm.estado === 'carregando') return <Body muted>Carregando…</Body>;
+  const { conteudo, sair } = useEconomyViewModel(listId);
   ...
+  {conteudo.estado === 'pronto' ? <Resumo resumo={conteudo.resumo} /> : null}
+  <Button label="Sair da conta" onPress={sair} />
 }
 ```
+
+## Mapa
+
+| View | ViewModel |
+|---|---|
+| `HomeScreen` | `useHomeViewModel` |
+| `LoginScreen` | `useLoginViewModel` |
+| `UploadScreen` | `useUploadViewModel` |
+| `PlanosRecebidos` | `useReceivedPrescriptionsViewModel`, `useReceivedPrescriptionViewModel` |
+| `ConfirmationScreen` | `useConfirmationViewModel`, `usePlanItemViewModel` |
+| `MarketScreen` | `useMarketViewModel`, `useRegionFormViewModel`, `useShoppingListViewModel`, `useSimulatedQuantityField`, `useAddExtraItemViewModel` |
+| `CheckoutScreen` | `useCheckoutViewModel` |
+| `ListaDesatualizada` | `useOutdatedListViewModel` |
+| `PantryScreen` | `usePantryViewModel`, `useRecipeCardViewModel` |
+| `DespensaPorFoto` | `usePantryPhotoViewModel`, `usePhotoRowViewModel` |
+| `EconomyScreen` | `useEconomyViewModel` |
+| `NutritionistHomeScreen` | `useNutritionistHomeViewModel` |
+| `PrescriptionEditorScreen` | `usePrescriptionEditorViewModel` |
+
+Os demais componentes (`Trilha`, `PlanoPrescrito`, `SeletorDeUnidade`, `TabIcons` e
+os de `components/index.tsx`) não precisam de ViewModel: recebem tudo por prop. A
+`AnimacaoDeSucesso` guarda só o estado da própria animação, que é visual e fica na View.
 
 ## Testes
 
@@ -70,7 +97,8 @@ export default function EconomyScreen({ listId }: { listId: string | null }) {
 
 ## Por que MVVM aqui
 
-As telas maiores (`MarketScreen`, `PantryScreen`) passaram de 800 linhas misturando
-layout, chamadas à API e regra de negócio. Separar o ViewModel deixa a tela legível,
+As telas maiores (`MarketScreen`, `PantryScreen`) tinham mais de 850 linhas misturando
+layout, chamadas à API e regra de negócio; depois da separação ficaram com cerca de
+600, quase só JSX e estilo. Separar o ViewModel deixa a tela legível,
 permite testar a regra sem renderizar e mantém a mesma estrutura que o React Query
 já sugere: o hook é o ViewModel natural num app React.
