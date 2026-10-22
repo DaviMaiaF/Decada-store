@@ -73,7 +73,9 @@ Ter um token guardado não prova que a sessão vale: ele pode ter vencido (7 dia
 ter sido assinado com outra `SECRET_KEY` ou ser de uma conta já excluída. Por isso
 o app trata o `401` em dois momentos:
 
-- **Na abertura.** Com token guardado, o `AuthProvider` chama `GET /auth/me` antes
+- **Na abertura.** Sem **Lembrar de mim** marcado no último login não há o que
+  restaurar: o token só existiu em memória (`session.ts`), e a abertura cai no
+  login. Com token guardado, o `AuthProvider` chama `GET /auth/me` antes
   de decidir entre login e app. `401` leva ao login. Qualquer outra falha — rede
   fora, servidor desligado — **mantém** a sessão: deslogar quem só está sem
   internet seria pior do que mostrar um erro de rede.

@@ -128,7 +128,9 @@ Depois é só abrir o app no celular pelo QR code e entrar com a
   responde 503 e o resto do app funciona normalmente.
 - O código de `backend/` e `mobile/` é montado por volume: editar recarrega sozinho.
   Se mudar o `package.json`, rode `docker compose down -v` e suba de novo para refazer o `node_modules`.
-- Para o app abrir na tela de login, sem tocar no banco (só limpa o token do aparelho, e só em desenvolvimento):
+- O app abre na tela de login a cada abertura, a menos que a pessoa marque **Lembrar de mim**
+  ao entrar. Sem a marca, o token fica só em memória e nunca vai para o disco.
+- Para o app abrir na tela de login mesmo com **Lembrar de mim** marcado, sem tocar no banco (só limpa o token do aparelho, e só em desenvolvimento):
   - numa subida só: `RESET_SESSION=1 docker compose up --build`;
   - em toda subida: ponha `RESET_SESSION=1` no `.env` (volte para `0` para desligar).
   Com o app já aberto no celular, recarregue-o (agite o aparelho → Reload) depois de subir.
