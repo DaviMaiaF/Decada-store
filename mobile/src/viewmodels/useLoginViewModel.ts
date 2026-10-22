@@ -21,6 +21,8 @@ export function useLoginViewModel() {
   const [senha, setSenha] = useState('');
   const [nome, setNome] = useState('');
   const [crn, setCrn] = useState('');
+  // Vem desmarcado: por padrão o token não fica no aparelho.
+  const [lembrar, setLembrar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -47,11 +49,11 @@ export function useLoginViewModel() {
     setEnviando(true);
     try {
       if (!cadastrando) {
-        await signIn(email.trim(), senha, papel);
+        await signIn(email.trim(), senha, papel, lembrar);
       } else if (nutricionista) {
-        await signUpNutritionist(email.trim(), senha, nome.trim(), crn.trim());
+        await signUpNutritionist(email.trim(), senha, nome.trim(), crn.trim(), lembrar);
       } else {
-        await signUp(email.trim(), senha);
+        await signUp(email.trim(), senha, undefined, lembrar);
       }
     } catch (problema) {
       setErro(
@@ -71,6 +73,7 @@ export function useLoginViewModel() {
     nome,
     crn,
     senhaCurta,
+    lembrar,
     /** O erro do formulário, ou o aviso da sessão (por exemplo, sessão expirada). */
     mensagem: erro ?? notice ?? null,
     enviando,
@@ -78,6 +81,7 @@ export function useLoginViewModel() {
     setSenha,
     setNome,
     setCrn,
+    alternarLembrar: () => setLembrar((estava) => !estava),
     escolherPapel: (valor: UserRole) => {
       setPapel(valor);
       setErro(null);

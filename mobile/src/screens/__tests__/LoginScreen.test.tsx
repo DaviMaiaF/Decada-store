@@ -12,6 +12,7 @@ jest.mock('../../services/session', () => ({
   clearToken: jest.fn().mockResolvedValue(undefined),
   saveRole: jest.fn().mockResolvedValue(undefined),
   readRole: jest.fn().mockResolvedValue('paciente'),
+  readRememberMe: jest.fn().mockResolvedValue(false),
 }));
 
 jest.mock('../../services/api', () => ({
@@ -22,6 +23,7 @@ jest.mock('../../services/api', () => ({
   registerNutritionist: jest.fn(),
 }));
 
+const { saveToken } = jest.requireMock('../../services/session');
 const loginFalso = api.login as jest.Mock;
 const registerFalso = api.register as jest.Mock;
 const loginNutricionistaFalso = api.loginNutritionist as jest.Mock;
@@ -53,6 +55,34 @@ it('entra com e-mail e senha', async () => {
   await waitFor(() =>
     expect(loginFalso).toHaveBeenCalledWith('marina@example.com', 'senha-bem-boa'),
   );
+});
+
+it('"lembrar de mim" vem desmarcado e, sem marcar, o token não fica no aparelho', async () => {
+  loginFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer', role: 'paciente' });
+  await montar();
+
+  const caixa = screen.getByRole('checkbox', { name: 'Lembrar de mim' });
+  expect(caixa.props.accessibilityState.checked).toBe(false);
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'marina@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.press(screen.getByText('Entrar'));
+
+  await waitFor(() => expect(saveToken).toHaveBeenCalledWith('token', false));
+});
+
+it('marcar "lembrar de mim" pelo texto guarda o token', async () => {
+  loginFalso.mockResolvedValue({ access_token: 'token', token_type: 'bearer', role: 'paciente' });
+  await montar();
+
+  await fireEvent.press(screen.getByText('Lembrar de mim'));
+  expect(
+    screen.getByRole('checkbox', { name: 'Lembrar de mim' }).props.accessibilityState.checked,
+  ).toBe(true);
+  await fireEvent.changeText(screen.getByLabelText('E-mail'), 'marina@example.com');
+  await fireEvent.changeText(screen.getByLabelText('Senha'), 'senha-bem-boa');
+  await fireEvent.press(screen.getByText('Entrar'));
+
+  await waitFor(() => expect(saveToken).toHaveBeenCalledWith('token', true));
 });
 
 it('cobra os dois campos antes de chamar a API', async () => {

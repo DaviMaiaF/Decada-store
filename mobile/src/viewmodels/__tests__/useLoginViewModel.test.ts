@@ -51,7 +51,7 @@ it('entra como paciente por padrão, com o e-mail sem espaços', async () => {
   });
   await act(() => result.current.enviar());
 
-  expect(mockSignIn).toHaveBeenCalledWith('ana@example.com', 'segredo123', 'paciente');
+  expect(mockSignIn).toHaveBeenCalledWith('ana@example.com', 'segredo123', 'paciente', false);
   expect(result.current.enviando).toBe(false);
 });
 
@@ -94,8 +94,23 @@ it('cadastro de nutricionista exige nome e CRN e usa a porta dela', async () => 
     'segredo123',
     'Camila Fernandes',
     'CRN-3 48291',
+    false,
   );
   expect(mockSignUp).not.toHaveBeenCalled();
+});
+
+it('"lembrar de mim" vem desmarcado e segue para o login quando marcado', async () => {
+  const { result } = await montar();
+  expect(result.current.lembrar).toBe(false);
+
+  await act(async () => {
+    result.current.alternarLembrar();
+    result.current.setEmail('ana@example.com');
+    result.current.setSenha('segredo123');
+  });
+  await act(() => result.current.enviar());
+
+  expect(mockSignIn).toHaveBeenCalledWith('ana@example.com', 'segredo123', 'paciente', true);
 });
 
 it('mostra a mensagem da API; erro desconhecido vira texto genérico', async () => {
