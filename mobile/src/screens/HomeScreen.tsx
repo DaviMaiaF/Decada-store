@@ -13,7 +13,7 @@
 import type { ComponentType } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Body, Button, Card, SectionTitle } from '../components';
+import { Body, Button, Card, Chip, SectionTitle } from '../components';
 import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
 import type { EtapaDaTrilha } from '../components/Trilha';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
@@ -45,12 +45,24 @@ export default function HomeScreen({
   /** Sai do início para a aba escolhida. */
   onIr: (aba: AbaDeDestino) => void;
 }) {
-  const { passo, jornadaConcluida } = useHomeViewModel(etapas);
+  const { passo, jornadaConcluida, planoRecebido } = useHomeViewModel(etapas);
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <Text style={styles.titulo}>Olá!</Text>
       <Body muted>A DÉCADA transforma o plano da sua nutricionista em compra de mercado.</Body>
+
+      {/* O plano em si fica na aba Dieta, onde a pessoa lê, aceita ou recusa. */}
+      {planoRecebido ? (
+        <Card style={[styles.passo, styles.recebido]}>
+          <Chip label="ENVIADO PELA SUA NUTRICIONISTA" tone="success" />
+          <SectionTitle>{planoRecebido.titulo}</SectionTitle>
+          <Body muted>{planoRecebido.texto}</Body>
+          <View style={styles.acao}>
+            <Button label="Conferir o plano" onPress={() => onIr('Dieta')} />
+          </View>
+        </Card>
+      ) : null}
 
       <Card style={styles.passo}>
         <Text style={styles.rotulo}>
@@ -90,6 +102,7 @@ const styles = StyleSheet.create({
   conteudo: { padding: spacing.margin, gap: spacing.md, paddingBottom: spacing.xl3 },
   titulo: { ...typography.headlineLg, color: colors.primary },
   passo: { gap: spacing.xs2 },
+  recebido: { borderWidth: 1, borderColor: colors.primary },
   rotulo: { ...typography.labelSm, color: colors.onSurfaceVariant },
   detalhe: { ...typography.labelLg, color: colors.primary },
   acao: { marginTop: spacing.xs },
