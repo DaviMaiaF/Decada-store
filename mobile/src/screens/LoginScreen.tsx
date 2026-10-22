@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 
-import { Body, Button, ErrorNotice, Field } from '../components';
+import { Body, Button, Checkbox, ErrorNotice, Field } from '../components';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { UserRole } from '../types/api';
 import { SENHA_MINIMA, useLoginViewModel } from '../viewmodels/useLoginViewModel';
@@ -107,6 +107,14 @@ export default function LoginScreen() {
             error={vm.senhaCurta ? `pelo menos ${SENHA_MINIMA} caracteres` : null}
           />
 
+          <View style={styles.lembrar}>
+            <Checkbox label="Lembrar de mim" checked={vm.lembrar} onPress={vm.alternarLembrar} />
+            {/* O texto também marca a caixa: o alvo de 20 px sozinho é pequeno. */}
+            <Text style={styles.lembrarTexto} onPress={vm.alternarLembrar}>
+              Lembrar de mim
+            </Text>
+          </View>
+
           {vm.mensagem ? <ErrorNotice message={vm.mensagem} /> : null}
 
           <Button
@@ -162,5 +170,12 @@ const styles = StyleSheet.create({
   papelTexto: { ...typography.labelLg, color: colors.onSurfaceVariant },
   papelTextoAtivo: { color: colors.primary },
   formulario: { gap: spacing.md },
+  lembrar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: MIN_TOUCH_HEIGHT,
+  },
+  lembrarTexto: { ...typography.bodyMd, color: colors.onSurface },
   aviso: { ...typography.bodySm, color: colors.onSurfaceVariant, textAlign: 'center' },
 });

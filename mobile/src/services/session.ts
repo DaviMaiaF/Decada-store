@@ -18,6 +18,7 @@ import type { UserRole } from '../types/api';
 const CHAVE_TOKEN = 'decada.access_token';
 const CHAVE_REGIAO = 'decada.user_region';
 const CHAVE_PAPEL = 'decada.user_role';
+const CHAVE_LEMBRAR = 'decada.remember_me';
 
 export interface UserRegion {
   stateCode: string;
@@ -31,30 +32,68 @@ export const REGIAO_PADRAO: UserRegion = {
 
 // --- token de autenticação ---
 
-export async function saveToken(token: string): Promise<void> {
+/**
+ * O token da sessão em curso. Sem "lembrar de mim" ele mora só aqui e nunca
+ * chega ao disco (decisão 5, minimização): fechar o app encerra a sessão.
+ */
+let tokenEmMemoria: string | null = null;
+
+async function gravar(chave: string, valor: string): Promise<void> {
   if (Platform.OS === 'web') {
-    localStorage.setItem(CHAVE_TOKEN, token);
+    localStorage.setItem(chave, valor);
     return;
   }
-  await SecureStore.setItemAsync(CHAVE_TOKEN, token);
+  await SecureStore.setItemAsync(chave, valor);
+}
+
+async function apagar(chave: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(chave);
+    return;
+  }
+  await SecureStore.deleteItemAsync(chave);
+}
+
+/**
+ * Guarda o token. Com `lembrar`, ele vai para o armazenamento seguro junto com
+ * a preferência, e a próxima abertura restaura a sessão. Sem, fica só em
+ * memória — e o que um login antigo tiver deixado no disco é apagado.
+ */
+export async function saveToken(token: string, lembrar: boolean): Promise<void> {
+  tokenEmMemoria = token;
+  if (lembrar) {
+    await gravar(CHAVE_TOKEN, token);
+    await gravar(CHAVE_LEMBRAR, '1');
+    return;
+  }
+  await apagar(CHAVE_TOKEN);
+  await apagar(CHAVE_PAPEL);
+  await apagar(CHAVE_LEMBRAR);
 }
 
 export async function readToken(): Promise<string | null> {
+  if (tokenEmMemoria !== null) return tokenEmMemoria;
   if (Platform.OS === 'web') {
     return localStorage.getItem(CHAVE_TOKEN);
   }
   return SecureStore.getItemAsync(CHAVE_TOKEN);
 }
 
-/** Sai da sessão: o papel guardado vai junto, porque só vale com o token. */
+/** Se a pessoa marcou "lembrar de mim" no último login. Sem marca, não lembra. */
+export async function readRememberMe(): Promise<boolean> {
+  const valor =
+    Platform.OS === 'web'
+      ? localStorage.getItem(CHAVE_LEMBRAR)
+      : await SecureStore.getItemAsync(CHAVE_LEMBRAR);
+  return valor === '1';
+}
+
+/** Sai da sessão: o papel e a preferência vão juntos, porque só valem com o token. */
 export async function clearToken(): Promise<void> {
-  if (Platform.OS === 'web') {
-    localStorage.removeItem(CHAVE_TOKEN);
-    localStorage.removeItem(CHAVE_PAPEL);
-    return;
-  }
-  await SecureStore.deleteItemAsync(CHAVE_TOKEN);
-  await SecureStore.deleteItemAsync(CHAVE_PAPEL);
+  tokenEmMemoria = null;
+  await apagar(CHAVE_TOKEN);
+  await apagar(CHAVE_PAPEL);
+  await apagar(CHAVE_LEMBRAR);
 }
 
 // --- papel da conta ---
