@@ -14,6 +14,7 @@ jest.mock('../session', () => ({
   clearToken: jest.fn().mockResolvedValue(undefined),
   saveRole: jest.fn().mockResolvedValue(undefined),
   readRole: jest.fn().mockResolvedValue('paciente'),
+  readRememberMe: jest.fn().mockResolvedValue(true),
 }));
 
 jest.mock('../api', () => ({
@@ -29,7 +30,8 @@ jest.mock('../config', () => ({
   resetSessionAtivo: () => mockConfig.reset,
 }));
 
-const { readToken, clearToken, readRole, saveRole } = jest.requireMock('../session');
+const { readToken, saveToken, clearToken, readRole, saveRole, readRememberMe } =
+  jest.requireMock('../session');
 const readAccountFalso = api.readAccount as jest.Mock;
 
 function Estado() {
@@ -41,9 +43,10 @@ function Estado() {
         {notice ? ` | ${notice}` : ''}
       </Text>
       <Text>papel: {role ?? 'nenhum'}</Text>
-      <Text onPress={() => signIn('camila@example.com', 'senha-boa', 'nutricionista')}>
+      <Text onPress={() => signIn('camila@example.com', 'senha-boa', 'nutricionista', true)}>
         entrar como nutricionista
       </Text>
+      <Text onPress={() => signIn('ana@example.com', 'senha-boa')}>entrar sem lembrar</Text>
     </>
   );
 }
@@ -59,6 +62,7 @@ async function montar() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockConfig.reset = false;
+  readRememberMe.mockResolvedValue(true);
 });
 
 it('sem token, cai no login sem chamar a API', async () => {
@@ -163,5 +167,48 @@ it('entrar como nutricionista usa a porta dela e guarda o papel', async () => {
   expect(await screen.findByText('papel: nutricionista')).toBeTruthy();
   expect(api.loginNutritionist).toHaveBeenCalledWith('camila@example.com', 'senha-boa');
   expect(api.login).not.toHaveBeenCalled();
+  expect(saveToken).toHaveBeenCalledWith('t', true);
   expect(saveRole).toHaveBeenCalledWith('nutricionista');
+});
+
+// --- lembrar de mim ---
+
+it('sem "lembrar de mim" marcado, a abertura apaga o token e cai no login', async () => {
+  readRememberMe.mockResolvedValue(false);
+  readToken.mockResolvedValue('token-de-antes');
+  clearToken.mockImplementationOnce(async () => {
+    readToken.mockResolvedValue(null);
+  });
+  await montar();
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearToken).toHaveBeenCalled();
+  expect(readAccountFalso).not.toHaveBeenCalled();
+});
+
+it('com "lembrar de mim" marcado, a sessão é restaurada', async () => {
+  readRememberMe.mockResolvedValue(true);
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com', role: 'paciente' });
+  await montar();
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+  expect(clearToken).not.toHaveBeenCalled();
+});
+
+it('entrar sem lembrar não grava o token nem o papel', async () => {
+  readToken.mockResolvedValue(null);
+  (api.login as jest.Mock).mockResolvedValue({
+    access_token: 't',
+    token_type: 'bearer',
+    role: 'paciente',
+  });
+  await montar();
+  await screen.findByText('deslogado');
+
+  await fireEvent.press(screen.getByText('entrar sem lembrar'));
+
+  expect(await screen.findByText('logado')).toBeTruthy();
+  expect(saveToken).toHaveBeenCalledWith('t', false);
+  expect(saveRole).not.toHaveBeenCalled();
 });

@@ -1,7 +1,8 @@
 /**
  * Sessão do usuário: quem está logado, com qual papel, e como entrar ou sair.
  *
- * O token vive no armazenamento seguro; este contexto guarda só se existe uma
+ * O token vive em `session.ts` — em memória, e no armazenamento seguro só se a
+ * pessoa marcou "lembrar de mim"; este contexto guarda só se existe uma
  * sessão válida e de que papel ela é, para a raiz saber qual navegação mostrar:
  * a do paciente, com as quatro abas, ou a da nutricionista, com as receitas.
  */
@@ -12,7 +13,14 @@ import type { ReactNode } from 'react';
 import * as api from './api';
 import { resetSessionAtivo } from './config';
 import { onSessionExpired } from './http';
-import { clearToken, readRole, readToken, saveRole, saveToken } from './session';
+import {
+  clearToken,
+  readRememberMe,
+  readRole,
+  readToken,
+  saveRole,
+  saveToken,
+} from './session';
 import type { Token, UserRole } from '../types/api';
 
 interface AuthValue {
@@ -22,13 +30,25 @@ interface AuthValue {
   role: UserRole | null;
   /** Aviso para a tela de login, quando a sessão caiu sozinha. */
   notice: string | null;
-  signIn: (email: string, password: string, role?: UserRole) => Promise<void>;
-  signUp: (email: string, password: string, fullName?: string) => Promise<void>;
+  /** `lembrar` grava o token no aparelho; sem ele, fechar o app encerra a sessão. */
+  signIn: (
+    email: string,
+    password: string,
+    role?: UserRole,
+    lembrar?: boolean,
+  ) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName?: string,
+    lembrar?: boolean,
+  ) => Promise<void>;
   signUpNutritionist: (
     email: string,
     password: string,
     fullName: string,
     crn: string,
+    lembrar?: boolean,
   ) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -54,8 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // token não basta: ele pode ter vencido, ou a conta pode ter sido excluída.
     let ativo = true;
     (async () => {
-      // Só em desenvolvimento (RESET_SESSION=1): começa sempre deslogado.
-      if (resetSessionAtivo()) await clearToken();
+      // Sem "lembrar de mim", a abertura cai sempre no login. Apagar aqui também
+      // limpa o token de quem entrou antes de a opção existir. Em desenvolvimento,
+      // RESET_SESSION=1 faz o mesmo mesmo com a opção marcada.
+      if (resetSessionAtivo() || !(await readRememberMe())) await clearToken();
       const token = await readToken();
       if (token === null) {
         if (ativo) setSignedIn(false);
@@ -85,32 +107,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const entrar = useCallback(async (token: Token) => {
-    await saveToken(token.access_token);
-    await saveRole(token.role);
+  const entrar = useCallback(async (token: Token, lembrar: boolean) => {
+    await saveToken(token.access_token, lembrar);
+    // O papel guardado só serve para abrir a sessão lembrada sem rede.
+    if (lembrar) await saveRole(token.role);
     setNotice(null);
     setRole(token.role);
     setSignedIn(true);
   }, []);
 
   const signIn = useCallback(
-    async (email: string, password: string, papel: UserRole = 'paciente') => {
+    async (email: string, password: string, papel: UserRole = 'paciente', lembrar = false) => {
       const porta = papel === 'nutricionista' ? api.loginNutritionist : api.login;
-      await entrar(await porta(email, password));
+      await entrar(await porta(email, password), lembrar);
     },
     [entrar],
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, fullName?: string) => {
-      await entrar(await api.register(email, password, fullName));
+    async (email: string, password: string, fullName?: string, lembrar = false) => {
+      await entrar(await api.register(email, password, fullName), lembrar);
     },
     [entrar],
   );
 
   const signUpNutritionist = useCallback(
-    async (email: string, password: string, fullName: string, crn: string) => {
-      await entrar(await api.registerNutritionist(email, password, fullName, crn));
+    async (email: string, password: string, fullName: string, crn: string, lembrar = false) => {
+      await entrar(await api.registerNutritionist(email, password, fullName, crn), lembrar);
     },
     [entrar],
   );
