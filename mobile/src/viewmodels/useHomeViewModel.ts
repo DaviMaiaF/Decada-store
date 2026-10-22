@@ -3,9 +3,14 @@
  *
  * Decide qual é a próxima etapa da jornada a partir da mesma trilha que fica no
  * topo, para as duas nunca discordarem sobre onde a pessoa parou.
+ *
+ * Também avisa quando a nutricionista enviou um plano para o e-mail desta conta.
+ * Lê a mesma query da aba Dieta: aceitar ou recusar lá some com o aviso aqui.
  */
 
 import { type EtapaDaTrilha, etapasUltrapassadas } from '../components/Trilha';
+import type { ReceivedPrescription } from '../types/api';
+import { useReceivedPrescriptionsViewModel } from './useReceivedPrescriptionsViewModel';
 
 export type AbaDeDestino = 'Dieta' | 'Mercado' | 'Despensa' | 'Economia';
 
@@ -55,7 +60,33 @@ export function proximoPasso(etapas: EtapaDaTrilha[]): ProximoPasso & { detalhe?
   return { ...PASSOS[atual], detalhe: etapas[atual].detalhe };
 }
 
+export type PlanoRecebido = { titulo: string; texto: string };
+
+/** O aviso de plano enviado pela nutricionista, ou `null` quando não há nenhum pendente. */
+export function avisoDePlanoRecebido(planos: ReceivedPrescription[]): PlanoRecebido | null {
+  if (!planos.length) return null;
+  if (planos.length > 1) {
+    return {
+      titulo: `${planos.length} planos alimentares chegaram para você`,
+      texto: 'Sua nutricionista montou planos para você. Confira e escolha qual usar.',
+    };
+  }
+  const [plano] = planos;
+  const autora = [plano.author.full_name, plano.author.crn].filter(Boolean).join(' · ');
+  return {
+    titulo: 'Seu plano alimentar já foi montado',
+    texto: autora
+      ? `${autora} enviou o seu plano. Confira antes de aceitar.`
+      : 'Sua nutricionista enviou o seu plano. Confira antes de aceitar.',
+  };
+}
+
 export function useHomeViewModel(etapas: EtapaDaTrilha[]) {
   const passo = proximoPasso(etapas);
-  return { passo, jornadaConcluida: passo === CONCLUIDO };
+  const { planos } = useReceivedPrescriptionsViewModel();
+  return {
+    passo,
+    jornadaConcluida: passo === CONCLUIDO,
+    planoRecebido: avisoDePlanoRecebido(planos),
+  };
 }

@@ -475,6 +475,12 @@ botão que leva à aba que a resolve e, abaixo, um card para cada aba, para quem
 direto a outro lugar. A compra concluída volta para ela, que então aponta a aba Economia.
 Nas abas, o botão **Início** ao lado da trilha volta a ela a qualquer momento.
 
+Quando a nutricionista envia um plano para o e-mail da conta e ele ainda espera resposta,
+o início mostra acima da próxima etapa o aviso **"Seu plano alimentar já foi montado"**,
+com quem o enviou e o botão **Conferir o plano**, que leva à aba Dieta — é lá que a pessoa
+lê, aceita com consentimento ou recusa. O aviso lê a mesma consulta da Dieta
+(`GET /prescriptions/received`), então some assim que o plano é respondido.
+
 ---
 
 ## Resumo do que entra no MVP
