@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # LTS. O Expo SDK 57 pede Node 20 ou mais novo.
+      # LTS. O Expo SDK 58 pede Node 22.13 ou mais novo.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

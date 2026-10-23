@@ -30,7 +30,7 @@ bem documentado**, não escala de produção.
 
 | Camada | Tecnologia |
 |---|---|
-| Mobile | React Native + Expo (SDK 57), TypeScript |
+| Mobile | React Native + Expo (SDK 58), TypeScript |
 | Backend | Python 3.10+, FastAPI, Pydantic v2 |
 | ORM / migrações | SQLAlchemy 2.x + Alembic |
 | Banco | PostgreSQL 16 |

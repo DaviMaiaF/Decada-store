@@ -32,7 +32,8 @@
           "photosPermission": "A DÉCADA abre suas fotos para você escolher a da despensa ou da geladeira.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }
