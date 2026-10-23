@@ -159,6 +159,7 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
 ```bash
 docker compose up --build                  # sobe tudo: Postgres 16 + API + app (defina HOST_IP no .env)
 docker compose up -d db                    # ou só o Postgres, para rodar back e front à mão
+scripts/atualizar-ip.sh                    # ao trocar de rede: atualiza o HOST_IP e recria o app
 
 cd backend
 python3 -m venv .venv                      # apenas na primeira vez
@@ -171,6 +172,13 @@ cd ../mobile && npx expo start             # app mobile (npm run dev:api-url fix
 cd ../mobile && npm test                   # testes do app
 cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 ```
+
+> **Trocou de rede** (casa, faculdade, hotspot)? O IP do notebook muda e o QR code do
+> Expo fica apontando para o antigo — o app abre, mas não alcança a API. Rode
+> `scripts/atualizar-ip.sh`: ele descobre o IP, grava no `HOST_IP` do `.env` e recria
+> só o container do app. No hotspot do celular, o MTU menor derruba o HTTPS de dentro
+> dos containers (`ECONNRESET`); a regra abaixo corrige até o próximo reboot:
+> `sudo iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1360`
 
 > O `node_modules` do app no compose mora no volume `mobile_node_modules`. Ao subir, o
 > container compara o volume com o `package-lock.json` e roda `npm ci` só se o lock mudou
