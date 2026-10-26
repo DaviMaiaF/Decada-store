@@ -6,7 +6,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { DespensaPorFoto } from '../DespensaPorFoto';
@@ -163,8 +163,10 @@ describe('despensa por foto', () => {
   });
 
   it('o ✓ aparece no toque, sem esperar o servidor', async () => {
-    // Uma gravação que ainda não respondeu.
-    adicionar.mockReturnValue(new Promise(() => {}));
+    // Uma gravação que ainda não respondeu. Ela responde no fim: mutation
+    // pendente reagenda a própria coleta para sempre, e o Jest não encerra.
+    let responder: (valor: unknown) => void = () => {};
+    adicionar.mockReturnValue(new Promise((resolve) => (responder = resolve)));
     await montar();
     await enviarFoto();
 
@@ -172,6 +174,7 @@ describe('despensa por foto', () => {
 
     expect(screen.getByText('✓ banana')).toBeTruthy();
     expect(aoAdicionar).not.toHaveBeenCalled();
+    await act(async () => responder(null));
   });
 
   it('entrega à tela o item que o servidor gravou', async () => {
