@@ -83,3 +83,22 @@ class PrescriptionStatus(str, Enum):
     ENVIADA = "enviada"
     ACEITA = "aceita"
     RECUSADA = "recusada"
+
+
+class PaymentMethod(str, Enum):
+    """Meio de pagamento da compra simulada."""
+
+    PIX = "pix"
+    CARTAO_CREDITO = "cartao_credito"
+
+
+class PaymentStatus(str, Enum):
+    """Situação de um pagamento no gateway simulado.
+
+    `pendente` só é estado de passagem: o Pix espera o recebimento, e o cartão
+    de teste `CONT` fica em análise. Aprovado e recusado são finais.
+    """
+
+    PENDENTE = "pendente"
+    APROVADO = "aprovado"
+    RECUSADO = "recusado"
