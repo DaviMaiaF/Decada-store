@@ -226,25 +226,33 @@ def create_payment(
     if amount is None or amount <= 0:
         raise NothingToPayError("a lista não tem valor estimado para pagar")
 
-    payment = Payment(shopping_list=shopping_list, method=method, amount=amount)
-
+    # O Payment só nasce depois da validação: ligado à lista, ele entraria na
+    # sessão pela relação mesmo com o cartão recusado pelo formulário.
     if method == PaymentMethod.PIX:
         txid = "SIMULADO" + uuid.uuid4().hex[:17].upper()
-        payment.pix_code = build_pix_code(amount, txid)
-        payment.status = PaymentStatus.PENDENTE
-        payment.status_detail = "aguardando pagamento"
+        payment = Payment(
+            method=method,
+            amount=amount,
+            pix_code=build_pix_code(amount, txid),
+            status=PaymentStatus.PENDENTE,
+            status_detail="aguardando pagamento",
+        )
     else:
         if card is None:
             raise InvalidCardError("informe os dados do cartão")
         brand, number = _validate_card(card, now)
         outcome = _TEST_HOLDERS.get(card.holder_name.strip().upper(), _DEFAULT_OUTCOME)
-        payment.card_brand = brand
-        payment.card_last_four = number[-4:]
-        payment.status = outcome.status
-        payment.status_detail = outcome.detail
-        if outcome.status == PaymentStatus.APROVADO:
-            payment.paid_at = now
+        payment = Payment(
+            method=method,
+            amount=amount,
+            card_brand=brand,
+            card_last_four=number[-4:],
+            status=outcome.status,
+            status_detail=outcome.detail,
+            paid_at=now if outcome.status == PaymentStatus.APROVADO else None,
+        )
 
+    payment.shopping_list = shopping_list
     session.add(payment)
     session.flush()
     return payment
