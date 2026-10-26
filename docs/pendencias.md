@@ -15,6 +15,10 @@
   com a comparação entre as três suítes de teste
 - **Código do app em MVVM** (model, view, viewModel): ViewModels em `mobile/src/viewmodels/`,
   convenção e mapa em [`arquitetura-mvvm.md`](arquitetura-mvvm.md)
+- **Pagamento simulado, no molde do Mercado Pago**: Pix com QR e copia-e-cola, e cartão de
+  crédito com os titulares de teste. Nada é cobrado; regras em
+  [`design/telas.md`](design/telas.md#3-mercado), rotas em
+  [`integracao-api.md`](integracao-api.md#pagamento-simulado)
 
 ## O que falta
 

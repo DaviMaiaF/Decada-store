@@ -1,11 +1,11 @@
 # Modelo de dados
 
-Catorze tabelas, quatro grupos. O que separa os grupos é a quem o dado pertence —
+Quinze tabelas, quatro grupos. O que separa os grupos é a quem o dado pertence —
 e isso decide o que acontece quando alguém pede exclusão.
 
 | Grupo | Tabelas | De quem é |
 |---|---|---|
-| Pessoa | `users`, `meal_plans`, `plan_items`, `pantry_items`, `shopping_lists`, `shopping_list_items` | do usuário — sai junto com ele |
+| Pessoa | `users`, `meal_plans`, `plan_items`, `pantry_items`, `shopping_lists`, `shopping_list_items`, `payments` | do usuário — sai junto com ele |
 | Nutricionista | `prescriptions`, `prescription_meals`, `prescription_items` | da nutricionista que montou o plano — sai junto com ela |
 | Catálogo | `products`, `markets`, `recipes`, `recipe_ingredients` | de ninguém — é referência compartilhada |
 | Preço | `price_records` | do mercado, não de quem passou no caixa |
@@ -27,6 +27,7 @@ erDiagram
     pantry_items }o--o| products : "produto confirmado"
 
     shopping_lists ||--o{ shopping_list_items : "itens a comprar"
+    shopping_lists ||--o{ payments : "tentativas de pagamento (simulado)"
     shopping_list_items }o--|| plan_items : "atende a"
     shopping_list_items }o--|| products : "produto escolhido"
 
@@ -51,6 +52,7 @@ do projeto vira código. `tests/test_models.py` trava cada uma delas.
 | `plan_items` → `meal_plans` | `CASCADE` | Item não existe sem o plano. |
 | `pantry_items` → `users` | `CASCADE` | Despensa é dado pessoal. |
 | `shopping_lists` → `meal_plans` | `CASCADE` | Lista deriva do plano. |
+| `payments` → `shopping_lists` | `CASCADE` | Pagamento não existe sem a lista, e é dado da pessoa. |
 | `price_records` → `users` | `SET NULL` | Preço é informação sobre o mercado. Anonimizado, deixa de ser dado pessoal e continua servindo a média da região. |
 | `plan_items` → `products` | `RESTRICT` | Apagar um produto do catálogo deixaria uma confirmação apontando para nada. |
 | `shopping_list_items` → `products` | `RESTRICT` | Mesma razão, e a lista guarda o preço daquele produto. |
@@ -106,6 +108,15 @@ descobrir quem usa o app (decisão 10) —, e a pessoa pode criar a conta depois
 são curtos de propósito: o plano vira PDF, e é o horário que faz o import reconhecer a
 linha como cabeçalho de refeição. Ver `app/schemas/prescription.py`.
 
+**`payments` é simulado, e o banco garante o que importa nele.** Uma lista aceita várias
+tentativas — o cartão recusado e o Pix que veio depois —, mas um índice único parcial
+(`uq_payments_aprovado_por_lista`, `WHERE status = 'aprovado'`) impede dois pagamentos
+aprovados na mesma lista, sem depender de a rota lembrar de checar. *Check constraints*
+mantêm o valor positivo, dado de cartão só em pagamento com cartão e código Pix só em
+Pix. `amount` é **cópia** do total estimado da lista no momento do pagamento, pela mesma
+razão do preço congelado. Do cartão só ficam `card_brand` e `card_last_four` — ver
+[`lgpd.md`](lgpd.md#minimização).
+
 **`is_fictitious` marca dado de desenvolvimento** em `products`, `markets` e
 `recipes`. Preço fictício tem origem `seed`. Nenhum dos dois pode existir em
 produção.
@@ -130,3 +141,4 @@ cd backend
 | `ff0258316c62` | CRN da nutricionista no plano alimentar |
 | `8ecb418bedcf` | Papel (`role`) e CRN no usuário |
 | `1191bed32360` | Plano montado pela nutricionista: `prescriptions`, refeições, itens e `meal_plans.prescribed_meals` |
+| `54ea5109aa75` | `payments`: pagamento simulado da lista, com um aprovado por lista no máximo |

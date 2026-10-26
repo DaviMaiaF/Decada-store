@@ -33,7 +33,7 @@ Legenda:
 
 | Camada | O que tem |
 |---|---|
-| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient`, `PantryItem`, `Prescription`, `PrescriptionMeal`, `PrescriptionItem` |
+| Modelos | `User`, `MealPlan`, `PlanItem`, `Product`, `Market`, `PriceRecord`, `ShoppingList`, `ShoppingListItem`, `Recipe`, `RecipeIngredient`, `PantryItem`, `Prescription`, `PrescriptionMeal`, `PrescriptionItem`, `Payment` |
 | `services/text.py` | normalização de texto para comparação |
 | `services/units.py` | conversão para a unidade base do produto (kg, l, unidade) |
 | `services/parsing.py` | leitura de uma linha do plano: quantidade + unidade + descrição |
@@ -49,6 +49,7 @@ Legenda:
 | `GET /meal-plans` · `GET /meal-plans/{id}/shopping-lists` | o que o usuário já tem, sem os itens: é como o app reabre onde parou |
 | `services/prescriptions.py` | plano da nutricionista: edição, envio, aceite com cópia para o paciente, texto do documento |
 | `services/pdf_writer.py` | PDF com texto, de várias páginas, no formato que o import lê |
+| `services/payment_gateway.py` · `/shopping-lists/{id}/payments` | pagamento **simulado** da lista, no molde do Mercado Pago: Pix com BR Code fictício e cartão que responde pelo titular de teste. Nada é cobrado |
 | `services/pantry_photo.py` · `POST /pantry/photo` | foto do que se tem em casa → alimentos reconhecidos, cada um com os produtos do catálogo que podem ser ele. Só propõe, não grava |
 
 ---
@@ -143,7 +144,8 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
-| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Confirmar marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
+| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento; aprovado o pagamento, marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
+| Pagamento simulado | ✅ | Pix (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
 | Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
@@ -212,6 +214,36 @@ Brasília e Taguatinga. Pedir a lista em outra cidade devolve os itens certos co
 nulo, e o total em R$ 0,00 — dizer "sem preço" item a item não explica a causa. Quando
 *nenhum* item tem preço, a tela nomeia a região e oferece as duas saídas honestas: gerar
 em outra cidade, ou escanear a NFC-e para começar a formar o preço dali.
+
+**O pagamento é simulado, e diz isso em toda tela.** Não há gateway, adquirente nem PSP:
+o [`payment_gateway`](../../backend/app/services/payment_gateway.py) imita o Mercado Pago
+para fechar o fluxo da demonstração, e a resposta da API carrega `simulated: true` para
+a tela não ter como esquecer o aviso. O valor cobrado é o total estimado da lista,
+**copiado** no pagamento — se a lista mudar depois, o que foi pago não muda.
+
+- **Pix** nasce pendente, com um copia-e-cola no formato do BR Code (EMV, com CRC16) e o
+  QR desenhado a partir dele. A chave é `simulado@decada.invalid`: o domínio `.invalid` é
+  reservado e nunca existe, então nem o app de um banco de verdade consegue pagar o
+  código. O recebimento é o botão "Simular pagamento recebido", que faz o papel do aviso
+  que o PSP mandaria (`POST …/payments/{id}/confirmation`).
+- **Cartão** responde na hora, pelo nome do titular, como os cartões de teste do Mercado
+  Pago: `APRO` aprova, `OTHE`, `FUND`, `SECU`, `EXPI` e `CALL` recusam com motivos
+  diferentes, `CONT` fica em análise até a mesma confirmação simulada. Qualquer outro
+  nome aprova, como um cartão comum. O número passa pelo Luhn e precisa de bandeira
+  conhecida (Visa, Mastercard, Amex, Elo, Hipercard); validade e tamanho do CVV também
+  são conferidos. Os números de teste do Mercado Pago funcionam: `4235 6477 2802 5682`
+  (Visa), `5031 4332 1540 6351` (Mastercard), `3753 651535 56885` (Amex).
+
+**Recusado não é erro.** Cartão recusado responde 201 com `status: "recusado"`: a
+tentativa existiu e fica no histórico, e a tela mostra o motivo e deixa tentar de novo.
+Erro é o que o formulário de verdade também recusaria — número, validade ou CVV
+inválidos —, que responde 422 e não grava nada.
+
+**Uma lista é paga uma vez.** Pode haver várias tentativas, mas o banco só aceita um
+pagamento aprovado por lista (índice único parcial), e a API responde 409 a quem tentar
+de novo — inclusive ao Pix que ficou pendente enquanto o cartão aprovava. Ao reabrir uma
+lista já paga, a etapa de pagamento oferece só "Concluir compra", que é também a saída
+quando a marcação dos itens falhou depois da aprovação.
 
 O mapa de rótulos, para não inventar categoria nova no banco:
 
@@ -492,11 +524,11 @@ item a item; import de plano por PDF com texto, com aceite na tela; o plano e a 
 reencontrados ao reabrir o app; escolha da região antes de gerar a lista, com aviso quando
 ela não tem coleta; agrupamento por corredor; marcar item como comprado; receitas com
 percentual de disponibilidade; aba Economia com o que a despensa poupou; trilha da
-jornada; simulação de compra sem um item; **conta de nutricionista**, que monta o plano
+jornada; simulação de compra sem um item; **pagamento simulado** por Pix ou cartão; **conta de nutricionista**, que monta o plano
 alimentar com refeições e substituições e o entrega pelo e-mail do paciente ou em PDF.
 
 **Fica fora:** status e registro de consumo das refeições, refeições do plano importado
 por PDF, hidratação, carrossel semanal, OCR da
 prescrição por foto, projeção mensal, métricas de desperdício, dicas de substituição
-geradas pelo app, validade de item da despensa, exportação para WhatsApp e fotos de
+geradas pelo app, pagamento de verdade (gateway, pedido e entrega), validade de item da despensa, exportação para WhatsApp e fotos de
 receita.
