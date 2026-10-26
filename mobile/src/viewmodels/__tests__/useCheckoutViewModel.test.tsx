@@ -16,9 +16,15 @@ import { useCheckoutViewModel } from '../useCheckoutViewModel';
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   setItemPurchased: jest.fn(),
+  payShoppingList: jest.fn(),
+  readPayments: jest.fn(),
 }));
 
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
+
 const marcarComprado = api.setItemPurchased as jest.Mock;
+const pagar = api.payShoppingList as jest.Mock;
+const lerPagamentos = api.readPayments as jest.Mock;
 
 function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListItem {
   return {
@@ -73,6 +79,7 @@ function Provedor({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  lerPagamentos.mockResolvedValue([]);
   cliente = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
@@ -129,4 +136,42 @@ it('se a chamada falha, volta ao checkout com o erro', async () => {
 
   await waitFor(() => expect(result.current.falhou).toBe(true));
   expect(result.current.concluido).toBe(false);
+});
+
+it('começa no resumo e vai ao pagamento', async () => {
+  const { result } = await renderHook(() => useCheckoutViewModel(lista([item({ id: 'a' })])), {
+    wrapper: Provedor,
+  });
+
+  expect(result.current.etapa).toBe('resumo');
+  await act(async () => result.current.irParaPagamento());
+  expect(result.current.etapa).toBe('pagamento');
+  await act(async () => result.current.voltarAoResumo());
+  expect(result.current.etapa).toBe('resumo');
+});
+
+it('pagamento aprovado marca os itens e conclui sem outro toque', async () => {
+  marcarComprado.mockResolvedValue(undefined);
+  pagar.mockResolvedValue({
+    id: 'pagamento-1',
+    shopping_list_id: 'lista-1',
+    method: 'pix',
+    status: 'aprovado',
+    status_detail: 'pagamento aprovado',
+    amount: '30.00',
+    card_brand: null,
+    card_last_four: null,
+    pix_code: null,
+    paid_at: '2026-10-26T10:00:00Z',
+    created_at: '2026-10-26T10:00:00Z',
+    simulated: true,
+  });
+  const { result } = await renderHook(() => useCheckoutViewModel(lista([item({ id: 'a' })])), {
+    wrapper: Provedor,
+  });
+
+  await act(async () => result.current.pagamento.pagar());
+
+  await waitFor(() => expect(result.current.concluido).toBe(true));
+  expect(marcarComprado).toHaveBeenCalledWith('lista-1', 'a', true);
 });

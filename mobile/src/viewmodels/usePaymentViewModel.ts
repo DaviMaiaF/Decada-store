@@ -15,6 +15,7 @@
  */
 
 import { useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ApiError, confirmPayment, payShoppingList, readPayments } from '../services/api';
@@ -50,12 +51,14 @@ export function usePaymentViewModel(
   const [formulario, setFormulario] = useState<FormularioCartao>(FORMULARIO_VAZIO);
   // A tentativa em tela: o Pix esperando, o cartão recusado.
   const [atual, setAtual] = useState<Payment | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   // O histórico diz se a lista já foi paga numa visita anterior.
   const historico = useQuery({ queryKey: chave, queryFn: () => readPayments(lista.id) });
 
   const aoResponder = (pagamento: Payment) => {
     setAtual(pagamento);
+    setCopiado(false);
     cliente.invalidateQueries({ queryKey: chave });
     if (pagamento.status === 'aprovado') onAprovado?.(pagamento);
   };
@@ -93,6 +96,7 @@ export function usePaymentViewModel(
       if (novo === metodo) return;
       setMetodo(novo);
       setAtual(null);
+      setCopiado(false);
       pagamento.reset();
       recebimento.reset();
     },
@@ -113,6 +117,15 @@ export function usePaymentViewModel(
     podePagar: !pago && !ocupado && !pendente && (metodo === 'pix' || cartao !== null),
     pagar: () => pagamento.mutate(),
     pagando: pagamento.isPending,
+
+    /** Copia o código do Pix, como o botão "copiar" de qualquer app de banco. */
+    copiarPix: async () => {
+      if (pendente?.pix_code) {
+        await Clipboard.setStringAsync(pendente.pix_code);
+        setCopiado(true);
+      }
+    },
+    copiado,
 
     simularRecebimento: () => {
       if (pendente) recebimento.mutate(pendente.id);

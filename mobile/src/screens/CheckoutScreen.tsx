@@ -1,13 +1,15 @@
 /**
  * Finalização da compra — **simulada**.
  *
- * O MVP não fala com mercado nenhum: não há pedido, entrega nem pagamento. Esta
- * tela fecha o fluxo para quem chegou à estimativa e quer "comprar", e diz com
- * todas as letras que é uma simulação, com valores estimados ou fictícios.
+ * O MVP não fala com mercado nenhum: não há pedido nem entrega, e o pagamento
+ * imita o Mercado Pago sem cobrar nada. Esta tela fecha o fluxo para quem
+ * chegou à estimativa e quer "comprar", e diz com todas as letras que é uma
+ * simulação, com valores estimados ou fictícios.
  *
- * Confirmar marca como comprados os itens que faltavam: a pessoa finalizou a
+ * Duas etapas: o resumo e o pagamento (Pix ou cartão). Aprovado o pagamento,
+ * os itens que faltavam são marcados como comprados: a pessoa finalizou a
  * compra com o que escolheu, e deixar a trilha em "9/16" depois disso dizia que
- * ela ainda estava no corredor. A confirmação mora no `useCheckoutViewModel`.
+ * ela ainda estava no corredor. Tudo isso mora no `useCheckoutViewModel`.
  */
 
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -15,6 +17,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Body, Button, Card, Chip, ErrorNotice, SectionTitle } from '../components';
 import { AnimacaoDeSucesso } from '../components/AnimacaoDeSucesso';
 import { ListaDesatualizada } from '../components/ListaDesatualizada';
+import { PagamentoSimulado } from '../components/PagamentoSimulado';
 import { formatMoney, formatQuantity } from '../services/format';
 import { colors, spacing, typography } from '../theme/tokens';
 import type { ShoppingList } from '../types/api';
@@ -36,8 +39,19 @@ export default function CheckoutScreen({
   /** Fecha a compra concluída e leva ao início. */
   onIrAoInicio: () => void;
 }) {
-  const { concluido, aComprar, semPreco, temFicticio, confirmar, confirmando, falhou } =
-    useCheckoutViewModel(lista);
+  const {
+    etapa,
+    irParaPagamento,
+    voltarAoResumo,
+    pagamento,
+    concluido,
+    aComprar,
+    semPreco,
+    temFicticio,
+    confirmar,
+    confirmando,
+    falhou,
+  } = useCheckoutViewModel(lista);
 
   if (concluido) {
     return (
@@ -55,6 +69,38 @@ export default function CheckoutScreen({
         </Card>
         <Button label="Ir para o início" onPress={onIrAoInicio} />
         <Button label="Ver a lista" variant="ghost" onPress={onVoltar} />
+      </ScrollView>
+    );
+  }
+
+  if (etapa === 'pagamento') {
+    return (
+      <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
+        <Text style={styles.titulo}>Pagamento</Text>
+
+        <Card style={styles.aviso}>
+          <Chip label="simulação" tone="warning" />
+          <Body>{AVISO_SIMULACAO}</Body>
+        </Card>
+
+        {pagamento.pago ? (
+          // Lista paga numa visita anterior, ou marcação dos itens que falhou
+          // depois da aprovação: o que falta é só concluir.
+          <>
+            <Card style={styles.pago}>
+              <Chip label="pago" tone="success" />
+              <Body>O pagamento desta lista já foi aprovado.</Body>
+            </Card>
+            {falhou ? (
+              <ErrorNotice message="não foi possível concluir a compra; tente de novo" />
+            ) : null}
+            <Button label="Concluir compra" onPress={confirmar} loading={confirmando} />
+          </>
+        ) : (
+          <PagamentoSimulado vm={pagamento} />
+        )}
+
+        <Button label="Voltar ao resumo" variant="ghost" onPress={voltarAoResumo} />
       </ScrollView>
     );
   }
@@ -100,15 +146,10 @@ export default function CheckoutScreen({
         </View>
       ))}
 
-      {falhou ? (
-        <ErrorNotice message="não foi possível concluir a compra; tente de novo" />
-      ) : null}
-
       <View style={styles.acoes}>
         <Button
-          label="Confirmar compra simulada"
-          onPress={confirmar}
-          loading={confirmando}
+          label="Ir para o pagamento"
+          onPress={irParaPagamento}
           disabled={aComprar.length === 0}
         />
         <Button label="Voltar à lista" variant="ghost" onPress={onVoltar} />
@@ -124,6 +165,7 @@ const styles = StyleSheet.create({
   icone: { alignSelf: 'center' },
   centro: { textAlign: 'center' },
   aviso: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+  pago: { backgroundColor: colors.primaryFixed, gap: spacing.xs2 },
   resumo: { backgroundColor: colors.primaryContainer, gap: spacing.xs2 },
   resumoRotulo: { ...typography.labelSm, color: colors.onPrimaryContainer },
   total: { ...typography.currency, color: colors.onPrimary },

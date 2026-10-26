@@ -9,6 +9,8 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
+import * as Clipboard from 'expo-clipboard';
+
 import * as api from '../../services/api';
 import { ApiError } from '../../services/api';
 import type { Payment, ShoppingList } from '../../types/api';
@@ -20,6 +22,8 @@ jest.mock('../../services/api', () => ({
   readPayments: jest.fn(),
   confirmPayment: jest.fn(),
 }));
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 const pagar = api.payShoppingList as jest.Mock;
 const lerPagamentos = api.readPayments as jest.Mock;
@@ -255,4 +259,16 @@ it('trocar de meio descarta o Pix pendente e o erro', async () => {
   expect(result.current.metodo).toBe('cartao_credito');
   expect(result.current.pixPendente).toBeNull();
   expect(result.current.erro).toBeNull();
+});
+
+it('copia o código do Pix pendente', async () => {
+  pagar.mockResolvedValue(pagamento());
+  const { result } = await montar();
+
+  await act(async () => result.current.pagar());
+  await waitFor(() => expect(result.current.pixPendente).not.toBeNull());
+  await act(async () => result.current.copiarPix());
+
+  expect(Clipboard.setStringAsync).toHaveBeenCalledWith('000201SIMULADO');
+  expect(result.current.copiado).toBe(true);
 });
