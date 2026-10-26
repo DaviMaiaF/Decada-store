@@ -152,6 +152,42 @@ export interface SimulatedItem {
   estimated_cost: string | null;
 }
 
+// --- pagamento simulado ---
+
+export type PaymentMethod = 'pix' | 'cartao_credito';
+export type PaymentStatus = 'pendente' | 'aprovado' | 'recusado';
+
+/** Dados do cartão como o formulário envia. O servidor não os guarda. */
+export interface CardInput {
+  number: string;
+  holder_name: string;
+  expiration_month: number;
+  expiration_year: number;
+  security_code: string;
+}
+
+/**
+ * Uma tentativa de pagamento da lista. **Simulada**: nada é cobrado, e
+ * `simulated` está no contrato para a tela não ter como esquecer de dizer.
+ */
+export interface Payment {
+  id: string;
+  shopping_list_id: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  /** Motivo legível: "aguardando pagamento", "recusado por saldo insuficiente". */
+  status_detail: string | null;
+  amount: string;
+  /** Do cartão só voltam a bandeira e os quatro últimos dígitos. */
+  card_brand: string | null;
+  card_last_four: string | null;
+  /** Copia-e-cola do Pix, no formato do BR Code. */
+  pix_code: string | null;
+  paid_at: string | null;
+  created_at: string;
+  simulated: true;
+}
+
 /** Lista na listagem: sem os itens, que vêm por `readShoppingList`. */
 export interface ShoppingListSummary {
   id: string;

@@ -11,12 +11,15 @@ import { http } from './http';
 import type {
   Account,
   Candidate,
+  CardInput,
   GeneratedList,
   ImportResult,
   MealPlan,
   MealPlanSummary,
   MeasurementUnit,
   PantryItem,
+  Payment,
+  PaymentMethod,
   PhotoRecognition,
   PlanItem,
   Prescription,
@@ -201,6 +204,29 @@ export const setItemPurchased = (listId: string, itemId: string, purchased: bool
   request<ShoppingListItem>(`/shopping-lists/${listId}/items/${itemId}`, {
     method: 'PATCH',
     body: { purchased },
+  });
+
+// --- pagamento simulado ---
+
+/**
+ * Paga a lista — de mentira — pelo total estimado dela.
+ *
+ * Cartão recusado não é erro: volta 201 com `status: 'recusado'`. Erro (422) é
+ * o cartão que o formulário de verdade também recusaria, e 409 é lista já paga.
+ */
+export const payShoppingList = (listId: string, method: PaymentMethod, card?: CardInput) =>
+  request<Payment>(`/shopping-lists/${listId}/payments`, {
+    method: 'POST',
+    body: card ? { method, card } : { method },
+  });
+
+export const readPayments = (listId: string) =>
+  request<Payment[]>(`/shopping-lists/${listId}/payments`);
+
+/** Simula o recebimento: o Pix pago, o cartão que saiu da análise. */
+export const confirmPayment = (listId: string, paymentId: string) =>
+  request<Payment>(`/shopping-lists/${listId}/payments/${paymentId}/confirmation`, {
+    method: 'POST',
   });
 
 // --- despensa ---
