@@ -16,6 +16,9 @@ import { setItemPurchased } from '../services/api';
 import type { ShoppingList } from '../types/api';
 import { usePaymentViewModel } from './usePaymentViewModel';
 
+/** Círculo (350 ms) + ✓ (250 ms) + folga da mola do pulo. */
+const ESPERA_DA_ANIMACAO_MS = 900;
+
 export type EtapaDoCheckout = 'resumo' | 'pagamento';
 
 export function useCheckoutViewModel(lista: ShoppingList) {
@@ -42,8 +45,14 @@ export function useCheckoutViewModel(lista: ShoppingList) {
     onMutate: () => setConcluido(true),
     onError: () => setConcluido(false),
     // Mesmo com falha parcial, alguns itens podem ter sido gravados: a lista
-    // é lida de novo nos dois casos, e a trilha acompanha.
-    onSettled: () => cliente.invalidateQueries({ queryKey: ['shopping-list', lista.id] }),
+    // é lida de novo nos dois casos, e a trilha acompanha. Na conclusão, a
+    // leitura espera o ✓ terminar de se desenhar: a animação roda na thread JS,
+    // e refazer a lista e a trilha no meio dela era a travada que se via.
+    onSettled: (_dados, erro) => {
+      const invalidar = () => cliente.invalidateQueries({ queryKey: ['shopping-list', lista.id] });
+      if (erro) return invalidar();
+      setTimeout(invalidar, ESPERA_DA_ANIMACAO_MS);
+    },
   });
 
   const pagamento = usePaymentViewModel(lista, { onAprovado: () => confirmacao.mutate() });
