@@ -243,7 +243,7 @@ export default function AppNavigator() {
         >
           {/* A despensa precisa da lista corrente por dois motivos: a receita
               conta o que será comprado, e o ingrediente que falta vai para lá. */}
-          {() => <PantryScreen listId={listId} />}
+          {() => <PantryScreen listId={listId} planId={planId} />}
         </Tab.Screen>
 
         <Tab.Screen

@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { DespensaDoPlano } from '../components/DespensaDoPlano';
 import { DespensaPorFoto } from '../components/DespensaPorFoto';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { formatQuantity } from '../services/format';
@@ -38,7 +39,14 @@ import { usePantryViewModel, useRecipeCardViewModel } from '../viewmodels/usePan
 // O teste da tela espera a recarga das receitas por este tempo.
 export { ESPERA_DAS_RECEITAS } from '../viewmodels/usePantryViewModel';
 
-export default function PantryScreen({ listId }: { listId: string | null }) {
+export default function PantryScreen({
+  listId,
+  planId,
+}: {
+  listId: string | null;
+  /** O plano ativo: dele sai a pergunta "você tem isto em casa?". */
+  planId: string | null;
+}) {
   const vm = usePantryViewModel(listId);
   const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
   const { escolhendo, medindo } = adicao;
@@ -59,6 +67,8 @@ export default function PantryScreen({ listId }: { listId: string | null }) {
               da sua dieta sem gastar a mais.
             </Body>
           </View>
+
+          <DespensaDoPlano planId={planId} />
 
           <Card style={styles.cartaoDespensa}>
             <View style={styles.linhaTitulo}>
