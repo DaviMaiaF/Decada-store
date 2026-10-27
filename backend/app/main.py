@@ -9,6 +9,7 @@ from app.api.routes import (
     meal_plans,
     nutritionist_prescriptions,
     pantry,
+    payments,
     products,
     received_prescriptions,
     recipes,
@@ -52,6 +53,7 @@ app.include_router(auth.router)
 app.include_router(meal_plans.router)
 app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
+app.include_router(payments.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
 app.include_router(nutritionist_prescriptions.router)

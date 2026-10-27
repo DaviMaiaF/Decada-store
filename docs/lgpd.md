@@ -17,6 +17,7 @@ documento reúne, cada uma com o teste que a sustenta.
 | Plano montado pela nutricionista | `prescriptions` e filhas | É o trabalho dela. Guarda o nome e o e-mail do paciente para o cabeçalho do PDF e para o envio |
 | O que a pessoa tem em casa | `pantry_items` | Descontar da compra |
 | Listas de compras | `shopping_lists` | Histórico de custo |
+| Pagamentos simulados da lista | `payments` | Saber se a lista foi paga e mostrar as tentativas. Do cartão, só bandeira e os quatro últimos dígitos |
 | Preços que a pessoa contribuiu | `price_records.user_id` | Creditar a coleta — e é o único campo que sobrevive à exclusão, anonimizado |
 
 O plano que a nutricionista monta é dado de saúde do paciente **tratado pela
@@ -88,6 +89,20 @@ e nem eles são gravados até a pessoa confirmar item a item (decisão 11).
 > `::test_fluxo_completo_com_reconhecedor_falso` (o reconhecedor recebe a foto
 > preparada, nunca o arquivo original).
 
+**Do cartão, o pagamento simulado guarda o mínimo.** O formulário envia número,
+titular, validade e CVV porque é assim que um checkout de verdade funciona, e o
+gateway simulado precisa deles para validar e responder. Nenhum deles vai para o banco:
+`payments` tem `card_brand` e `card_last_four`, o bastante para a pessoa reconhecer o
+cartão no histórico, e mais nada. O Pix, por sua vez, não aceita dado de cartão — a API
+recusa o pedido em vez de descartar em silêncio o que não devia ter chegado.
+
+> Testes: `test_models.py::test_pagamento_nao_guarda_dado_sensivel_do_cartao`,
+> `test_payments_api.py::test_cartao_aprovado_devolve_so_bandeira_e_final`,
+> `::test_pix_nao_aceita_dados_de_cartao`.
+
+Mesmo simulado, o cuidado é o mesmo de um pagamento real: quem digita um cartão de
+verdade no formulário de demonstração não deve deixá-lo gravado em lugar nenhum.
+
 O paciente vê do plano recebido só o nome e o CRN de quem o assinou — nunca o e-mail
 da nutricionista. A nutricionista vê do paciente só o que ela mesma digitou e se ele
 aceitou ou recusou.
@@ -97,8 +112,9 @@ aceitou ou recusou.
 `DELETE /auth/me` apaga a conta e devolve um comprovante do que foi removido.
 
 **Vai embora:** a linha em `users`, com e-mail e hash da senha; os planos
-alimentares e seus itens; a despensa; as listas de compras e seus itens. Tudo
-por cascata declarada no modelo, não por código que pode esquecer uma tabela.
+alimentares e seus itens; a despensa; as listas de compras, seus itens e os
+pagamentos simulados delas. Tudo por cascata declarada no modelo, não por código que
+pode esquecer uma tabela.
 
 **Da nutricionista, vão também** os planos que ela montou, com refeições e itens. Plano
 enviado e ainda sem resposta deixa de aparecer para o paciente. O plano que um paciente
@@ -125,7 +141,9 @@ O token de quem foi excluído para de funcionar na requisição seguinte, porque
 > `test_prescriptions.py::test_excluir_a_conta_leva_os_planos_dela`,
 > `test_prescription_delivery.py::test_o_plano_aceito_sobrevive_a_nutricionista_sair`,
 > `::test_plano_pendente_some_quando_a_nutricionista_sai`,
-> `::test_paciente_sair_nao_apaga_o_documento_da_nutricionista`.
+> `::test_paciente_sair_nao_apaga_o_documento_da_nutricionista`,
+> `test_models.py::test_excluir_a_lista_apaga_os_pagamentos`,
+> `test_payment_model.py::test_excluir_a_lista_apaga_os_pagamentos`.
 
 ## Não confirmar o que não precisa ser confirmado
 

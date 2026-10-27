@@ -6,7 +6,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
@@ -22,7 +22,12 @@ jest.mock('../../services/api', () => ({
   addExtraItem: jest.fn(),
   removeShoppingListItem: jest.fn(),
   searchProducts: jest.fn(),
+  payShoppingList: jest.fn(),
+  readPayments: jest.fn(),
+  confirmPayment: jest.fn(),
 }));
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 jest.mock('../../services/session', () => ({
   ...jest.requireActual('../../services/session'),
@@ -37,6 +42,9 @@ const simular = api.simulateShoppingList as jest.Mock;
 const acrescentar = api.addExtraItem as jest.Mock;
 const removerItem = api.removeShoppingListItem as jest.Mock;
 const buscarProdutos = api.searchProducts as jest.Mock;
+const pagar = api.payShoppingList as jest.Mock;
+const lerPagamentos = api.readPayments as jest.Mock;
+const confirmarPagamento = api.confirmPayment as jest.Mock;
 const lerRegiao = session.readRegion as jest.Mock;
 const salvarRegiao = session.saveRegion as jest.Mock;
 
@@ -679,8 +687,40 @@ describe('acrescentar à compra', () => {
 });
 
 describe('checkout simulado', () => {
-  // O MVP não compra de verdade: a tela precisa dizer isso antes da
-  // confirmação. Confirmar só marca como comprado o que faltava.
+  // O MVP não compra de verdade: a tela precisa dizer isso antes do pagamento,
+  // que imita o Mercado Pago. Aprovado o pagamento, só o que faltava é marcado
+  // como comprado.
+  function pix(over: Record<string, unknown> = {}) {
+    return {
+      id: 'pagamento-1',
+      shopping_list_id: 'lista-1',
+      method: 'pix',
+      status: 'pendente',
+      status_detail: 'aguardando pagamento',
+      amount: '174.20',
+      card_brand: null,
+      card_last_four: null,
+      pix_code: '000201SIMULADO',
+      paid_at: null,
+      created_at: '2026-10-26T10:00:00Z',
+      simulated: true,
+      ...over,
+    };
+  }
+
+  beforeEach(() => {
+    lerPagamentos.mockResolvedValue([]);
+    pagar.mockResolvedValue(pix());
+    confirmarPagamento.mockResolvedValue(pix({ status: 'aprovado', status_detail: 'pagamento aprovado' }));
+  });
+
+  async function pagarComPix() {
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+    await fireEvent.press(await screen.findByText('Gerar Pix'));
+    await fireEvent.press(await screen.findByText('Simular pagamento recebido'));
+  }
+
   it('abre a finalização com o aviso de simulação e o total', async () => {
     await montar(lista([item({ id: 'a' })]));
 
@@ -692,7 +732,35 @@ describe('checkout simulado', () => {
     expect(screen.getByText('Peito de frango sem pele')).toBeTruthy();
   });
 
-  it('confirmar marca como comprados os itens que faltavam', async () => {
+  it('o pagamento também avisa que é simulação e começa no Pix', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+
+    expect(await screen.findByText('Pagamento')).toBeTruthy();
+    expect(screen.getByText(/nenhum pedido é feito e nada é cobrado/)).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Pix', selected: true })).toBeTruthy();
+    expect(screen.getByText('Gerar Pix')).toBeTruthy();
+  });
+
+  it('o Pix gerado mostra o QR e o copia-e-cola', async () => {
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+    await fireEvent.press(await screen.findByText('Gerar Pix'));
+
+    expect(await screen.findByLabelText('QR code do Pix simulado')).toBeTruthy();
+    expect(screen.getByText('000201SIMULADO')).toBeTruthy();
+    expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined);
+    expect(marcarItem).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByText('Copiar código Pix'));
+    expect(await screen.findByText('Código copiado')).toBeTruthy();
+  });
+
+  it('pago o Pix, marca como comprados os itens que faltavam', async () => {
     marcarItem.mockResolvedValue({});
     await montar(
       lista([
@@ -706,12 +774,12 @@ describe('checkout simulado', () => {
       ]),
     );
 
-    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
-    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+    await pagarComPix();
 
     expect(await screen.findByText('Compra concluída')).toBeTruthy();
     expect(screen.getByLabelText('Compra concluída')).toBeTruthy();
     expect(screen.getByText(/nenhum pedido é feito e nada é cobrado/)).toBeTruthy();
+    expect(confirmarPagamento).toHaveBeenCalledWith('lista-1', 'pagamento-1');
     // Só o que faltava: o já marcado e o que a despensa dispensou ficam como estão.
     expect(marcarItem).toHaveBeenCalledTimes(1);
     expect(marcarItem).toHaveBeenCalledWith('lista-1', 'a', true);
@@ -719,40 +787,116 @@ describe('checkout simulado', () => {
     expect(simular).not.toHaveBeenCalled();
   });
 
+  it('cartão aprovado conclui a compra', async () => {
+    marcarItem.mockResolvedValue({});
+    pagar.mockResolvedValue(
+      pix({
+        method: 'cartao_credito',
+        status: 'aprovado',
+        pix_code: null,
+        card_brand: 'visa',
+        card_last_four: '5682',
+      }),
+    );
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Cartão de crédito' }));
+    await fireEvent.changeText(screen.getByLabelText('Número do cartão'), '4235647728025682');
+    await fireEvent.changeText(screen.getByLabelText('Nome do titular'), 'APRO');
+    await fireEvent.changeText(screen.getByLabelText('Validade'), '1130');
+    await fireEvent.changeText(screen.getByLabelText('CVV'), '123');
+    await fireEvent.press(screen.getByText('Pagar R$ 174,20'));
+
+    expect(await screen.findByText('Compra concluída')).toBeTruthy();
+    expect(pagar).toHaveBeenCalledWith('lista-1', 'cartao_credito', {
+      number: '4235647728025682',
+      holder_name: 'APRO',
+      expiration_month: 11,
+      expiration_year: 2030,
+      security_code: '123',
+    });
+  });
+
+  it('cartão recusado mostra o motivo e não conclui', async () => {
+    pagar.mockResolvedValue(
+      pix({
+        method: 'cartao_credito',
+        status: 'recusado',
+        status_detail: 'recusado por saldo insuficiente',
+        pix_code: null,
+      }),
+    );
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Cartão de crédito' }));
+    expect(screen.getByText(/APRO aprova, OTHE recusa/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Número do cartão'), '4235647728025682');
+    await fireEvent.changeText(screen.getByLabelText('Nome do titular'), 'FUND');
+    await fireEvent.changeText(screen.getByLabelText('Validade'), '1130');
+    await fireEvent.changeText(screen.getByLabelText('CVV'), '123');
+    await fireEvent.press(screen.getByText('Pagar R$ 174,20'));
+
+    expect(await screen.findByText(/recusado por saldo insuficiente/)).toBeTruthy();
+    expect(screen.queryByText('Compra concluída')).toBeNull();
+    expect(marcarItem).not.toHaveBeenCalled();
+  });
+
+  it('lista paga em outra visita oferece só concluir', async () => {
+    marcarItem.mockResolvedValue({});
+    lerPagamentos.mockResolvedValue([pix({ status: 'aprovado' })]);
+    await montar(lista([item({ id: 'a' })]));
+
+    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
+    await fireEvent.press(screen.getByText('Ir para o pagamento'));
+
+    expect(await screen.findByText('O pagamento desta lista já foi aprovado.')).toBeTruthy();
+    expect(screen.queryByText('Gerar Pix')).toBeNull();
+    await fireEvent.press(screen.getByText('Concluir compra'));
+
+    expect(await screen.findByText('Compra concluída')).toBeTruthy();
+    expect(pagar).not.toHaveBeenCalled();
+  });
+
   it('a compra concluída leva ao início', async () => {
     marcarItem.mockResolvedValue({});
     const onCompraConcluida = jest.fn();
     await montar(lista([item({ id: 'a' })]), jest.fn(), onCompraConcluida);
 
-    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
-    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+    await pagarComPix();
     await fireEvent.press(await screen.findByText('Ir para o início'));
 
     expect(onCompraConcluida).toHaveBeenCalledTimes(1);
   });
 
-  it('a conclusão aparece sem esperar o servidor responder', async () => {
-    // Promessa que nunca resolve: se a tela dependesse da resposta, travaria.
-    marcarItem.mockReturnValue(new Promise(() => {}));
+  it('a conclusão aparece sem esperar a marcação dos itens', async () => {
+    // Promessa que só resolve depois da verificação: se a tela dependesse da
+    // resposta, travaria. Ela precisa resolver no fim — mutation pendente
+    // reagenda a própria coleta para sempre, e o Jest não encerra.
+    let responder: (valor: unknown) => void = () => {};
+    marcarItem.mockReturnValue(new Promise((resolve) => (responder = resolve)));
     await montar(lista([item({ id: 'a' })]));
 
-    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
-    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+    await pagarComPix();
 
     expect(await screen.findByText('Compra concluída')).toBeTruthy();
+    await act(async () => responder({}));
   });
 
-  it('se marcar falhar, a compra não aparece como concluída', async () => {
+  it('se marcar falhar, a compra fica paga mas não concluída', async () => {
     marcarItem.mockRejectedValue(new Error('rede'));
     await montar(lista([item({ id: 'a' })]));
 
-    await fireEvent.press(await screen.findByText('Finalizar compra (simulada)'));
-    await fireEvent.press(screen.getByText('Confirmar compra simulada'));
+    await pagarComPix();
 
     expect(
       await screen.findByText(/não foi possível concluir a compra/),
     ).toBeTruthy();
     expect(screen.queryByText('Compra concluída')).toBeNull();
+    expect(screen.getByText('Concluir compra')).toBeTruthy();
   });
 
   it('item dispensado pela despensa fica fora do checkout', async () => {

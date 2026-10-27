@@ -90,9 +90,11 @@ Sem isso, um token velho deixava a pessoa presa em telas que só devolviam
 
 ## O que o app consome
 
-Das 35 rotas de domínio, o app consome 34. A que falta é
+Das 40 rotas de domínio, o app consome 38. Ficam de fora
 `GET /pantry/{item_id}/candidates` — a tela de despensa resolve a busca de
-produto por `/products/search`. O `/health` existe para saber se o servidor está
+produto por `/products/search` — e `GET /shopping-lists/{id}/payments/{payment}`:
+o pagamento simulado só muda de status pela confirmação, cuja resposta já traz o
+pagamento atualizado, então não há o que consultar. O `/health` existe para saber se o servidor está
 de pé; o app não o usa.
 
 ### Conta
@@ -127,6 +129,20 @@ de pé; o app não o usa.
 | POST | `/shopping-lists/{id}/items` | `addExtraItem` |
 | DELETE | `/shopping-lists/{id}/items/{item}` | `removeShoppingListItem` |
 | PATCH | `/shopping-lists/{id}/items/{item}` | `setItemPurchased` |
+
+### Pagamento simulado
+
+Nada é cobrado: o backend imita o Mercado Pago (ver
+[`telas.md`](design/telas.md#3-mercado)). Toda resposta traz `simulated: true`.
+
+| Método | Rota | Função |
+|---|---|---|
+| POST | `/shopping-lists/{id}/payments` | `payShoppingList` — Pix, ou cartão com os dados do formulário |
+| GET | `/shopping-lists/{id}/payments` | `readPayments` — é por aqui que o checkout sabe que a lista já foi paga |
+| POST | `/shopping-lists/{id}/payments/{payment}/confirmation` | `confirmPayment` — simula o Pix recebido ou o cartão que saiu da análise |
+
+Cartão **recusado** volta `201` com `status: "recusado"`: é uma tentativa, não um
+erro, e o `usePaymentViewModel` mostra o `status_detail` e deixa tentar de novo.
 
 ### Despensa, catálogo e receitas
 
@@ -178,9 +194,9 @@ a folha de compartilhar.
 | `0` | O servidor não respondeu — rede fora, ou tempo esgotado | "não foi possível falar com o servidor em `http://…:8000` — …", com o endereço que o app tentou. Não é bug do app nem do backend |
 | `401` | Sessão expirada, token adulterado ou conta excluída | Apaga o token, volta para o login e avisa "sua sessão expirou, entre de novo". No login e no cadastro, o `401` é só senha errada — ou conta do outro papel, que responde igual de propósito: a mensagem aparece no formulário e nada é apagado |
 | `404` | Recurso que não existe, **que é de outra pessoa**, ou rota do outro papel | Trata como inexistente |
-| `409` | Conflito — produto que já está na lista, ou plano que o paciente já aceitou | Mostra a mensagem do servidor |
+| `409` | Conflito — produto que já está na lista, plano que o paciente já aceitou, lista já paga ou pagamento que não está mais pendente | Mostra a mensagem do servidor |
 | `413` | Foto da despensa acima de 10 MB | Mostra a mensagem do servidor |
-| `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista, foto sem aceite | Mostra a mensagem do servidor |
+| `422` | Regra de negócio ou validação — PDF sem texto, item da prescrição que não pode sair da lista, foto sem aceite, cartão com número, validade ou CVV inválido | Mostra a mensagem do servidor |
 | `503` | O reconhecimento da foto não respondeu, recusou a foto ou não está configurado (sem `ANTHROPIC_API_KEY`) | Mostra a mensagem do servidor. Não é erro de quem enviou: vale tentar de novo ou digitar o item |
 
 O `0` não é um status HTTP: é a marca de que não houve resposta. Sem ele, "o

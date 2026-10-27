@@ -23,6 +23,7 @@ from app.models.enums import MeasurementUnit, PriceConfidence, PriceOrigin
 
 if TYPE_CHECKING:
     from app.models.meal_plan import MealPlan, PlanItem
+    from app.models.payment import Payment
     from app.models.product import Product
 
 
@@ -43,6 +44,9 @@ class ShoppingList(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     meal_plan: Mapped["MealPlan"] = relationship(back_populates="shopping_lists")
     items: Mapped[list["ShoppingListItem"]] = relationship(
+        back_populates="shopping_list", cascade="all, delete-orphan"
+    )
+    payments: Mapped[list["Payment"]] = relationship(
         back_populates="shopping_list", cascade="all, delete-orphan"
     )
 

@@ -24,6 +24,7 @@ TABELAS_ESPERADAS = {
     "prescriptions",
     "prescription_meals",
     "prescription_items",
+    "payments",
 }
 
 
@@ -52,6 +53,19 @@ def test_excluir_nutricionista_apaga_os_planos_que_ela_montou():
     assert _regra_de_exclusao("prescription_meals", "prescription_id") == "CASCADE"
     assert _regra_de_exclusao("prescription_items", "meal_id") == "CASCADE"
     assert "prescription_id" not in Base.metadata.tables["meal_plans"].c
+
+
+def test_excluir_a_lista_apaga_os_pagamentos():
+    # Usuário → plano → lista → pagamento: a exclusão da conta leva tudo junto.
+    assert _regra_de_exclusao("payments", "shopping_list_id") == "CASCADE"
+
+
+def test_pagamento_nao_guarda_dado_sensivel_do_cartao():
+    # Minimização (decisão 5): só bandeira e final. Número, validade e CVV
+    # passam pelo serviço e são descartados.
+    colunas = set(Base.metadata.tables["payments"].c.keys())
+    assert {"card_brand", "card_last_four"} <= colunas
+    assert not colunas & {"card_number", "cvv", "security_code", "expiration", "holder_name"}
 
 
 def test_excluir_usuario_apaga_a_despensa():

@@ -17,6 +17,12 @@ from app.services.pantry_photo import (
     InvalidImageError,
     RecognitionUnavailableError,
 )
+from app.services.payment_gateway import (
+    InvalidCardError,
+    ListAlreadyPaidError,
+    NothingToPayError,
+    PaymentNotPendingError,
+)
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
 from app.services.prescriptions import PrescriptionLockedError
 from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
@@ -43,6 +49,13 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (PrescribedItemError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # Plano já aceito pelo paciente: o pedido entra em conflito com o estado dele.
     (PrescriptionLockedError, status.HTTP_409_CONFLICT),
+    # Pagamento simulado: cartão que o formulário de verdade recusaria e lista
+    # sem valor são pedidos compreensíveis e recusados; lista já paga e
+    # pagamento que não está mais pendente conflitam com o estado.
+    (InvalidCardError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (NothingToPayError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (ListAlreadyPaidError, status.HTTP_409_CONFLICT),
+    (PaymentNotPendingError, status.HTTP_409_CONFLICT),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )

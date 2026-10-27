@@ -8,6 +8,8 @@ from app.models.base import Base
 from app.models.enums import (
     BaseUnit,
     MeasurementUnit,
+    PaymentMethod,
+    PaymentStatus,
     PlanItemStatus,
     PrescriptionStatus,
     PriceConfidence,
@@ -17,6 +19,7 @@ from app.models.enums import (
 from app.models.market import Market
 from app.models.meal_plan import MealPlan, PlanItem
 from app.models.pantry import PantryItem
+from app.models.payment import Payment
 from app.models.prescription import Prescription, PrescriptionItem, PrescriptionMeal
 from app.models.price_record import PriceRecord
 from app.models.product import Product
@@ -31,6 +34,9 @@ __all__ = [
     "MealPlan",
     "MeasurementUnit",
     "PantryItem",
+    "Payment",
+    "PaymentMethod",
+    "PaymentStatus",
     "PlanItem",
     "PlanItemStatus",
     "Prescription",

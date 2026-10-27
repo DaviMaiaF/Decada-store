@@ -1,27 +1,25 @@
 /**
- * Ícone de sucesso animado: o círculo se desenha, o conjunto dá um leve pulo e
- * o ✓ é traçado por cima — no espírito do alerta de sucesso do SweetAlert2.
+ * Ícone de sucesso animado: o círculo surge com um leve pulo e o ✓ é revelado
+ * da esquerda para a direita — no espírito do alerta de sucesso do SweetAlert2.
  *
- * Feito com Animated e react-native-svg, que o app já tem: nenhuma dependência
- * nova por causa de um segundo e meio de animação. Quem pediu ao sistema para
- * reduzir o movimento vê o ícone pronto, sem traço nenhum.
+ * Tudo roda no driver nativo (só `transform` e `opacity`), então a thread JS
+ * ocupada — a compra concluindo, a lista sendo relida — não engasga a animação.
+ * O traço desenhado por `strokeDashoffset` não andava no driver nativo e travava
+ * justamente nesse momento. O ✓ é revelado por uma janela que se abre: a janela
+ * desliza para dentro e o desenho desliza para fora no mesmo ritmo, e ele fica
+ * parado no lugar. Quem pediu ao sistema para reduzir o movimento vê o ícone
+ * pronto.
  */
 
 import { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Easing } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { colors } from '../theme/tokens';
 
-const CirculoAnimado = Animated.createAnimatedComponent(Circle);
-const TracoAnimado = Animated.createAnimatedComponent(Path);
-
 const TAMANHO = 96;
 const ESPESSURA = 5;
 const RAIO = (TAMANHO - ESPESSURA) / 2;
-const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
-// O ✓ é dois segmentos: (28,50)→(42,64) e (42,64)→(70,34). Comprimento somado.
-const COMPRIMENTO_CHECK = Math.hypot(14, 14) + Math.hypot(28, 30);
 
 export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
   const circulo = useRef(new Animated.Value(0)).current;
@@ -41,27 +39,26 @@ export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
           escala.setValue(1);
           return;
         }
-        // Valores de traço não andam no driver nativo: a animação roda em JS.
         Animated.sequence([
           Animated.parallel([
             Animated.timing(circulo, {
               toValue: 1,
-              duration: 350,
+              duration: 250,
               easing: Easing.out(Easing.cubic),
-              useNativeDriver: false,
+              useNativeDriver: true,
             }),
             Animated.spring(escala, {
               toValue: 1,
               friction: 6,
               tension: 140,
-              useNativeDriver: false,
+              useNativeDriver: true,
             }),
           ]),
           Animated.timing(check, {
             toValue: 1,
-            duration: 250,
+            duration: 300,
             easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ]).start();
       });
@@ -78,46 +75,55 @@ export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
       accessibilityLabel="Compra concluída"
       style={{ width: tamanho, height: tamanho, transform: [{ scale: escala }] }}
     >
-      <Svg width={tamanho} height={tamanho} viewBox={`0 0 ${TAMANHO} ${TAMANHO}`}>
-        {/* O anel claro fica parado; o traço verde é que corre por cima dele. */}
-        <Circle
-          cx={TAMANHO / 2}
-          cy={TAMANHO / 2}
-          r={RAIO}
-          stroke={colors.primaryFixed}
-          strokeWidth={ESPESSURA}
-          fill="none"
-        />
-        <CirculoAnimado
-          cx={TAMANHO / 2}
-          cy={TAMANHO / 2}
-          r={RAIO}
-          stroke={colors.onPrimaryFixedVariant}
-          strokeWidth={ESPESSURA}
-          strokeLinecap="round"
-          fill="none"
-          strokeDasharray={`${CIRCUNFERENCIA} ${CIRCUNFERENCIA}`}
-          strokeDashoffset={circulo.interpolate({
-            inputRange: [0, 1],
-            outputRange: [CIRCUNFERENCIA, 0],
-          })}
-          // Começa no topo, como o do SweetAlert2, e não às três horas.
-          transform={`rotate(-90 ${TAMANHO / 2} ${TAMANHO / 2})`}
-        />
-        <TracoAnimado
-          d="M28 50 L42 64 L70 34"
-          stroke={colors.onPrimaryFixedVariant}
-          strokeWidth={ESPESSURA + 1}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-          strokeDasharray={`${COMPRIMENTO_CHECK} ${COMPRIMENTO_CHECK}`}
-          strokeDashoffset={check.interpolate({
-            inputRange: [0, 1],
-            outputRange: [COMPRIMENTO_CHECK, 0],
-          })}
-        />
-      </Svg>
+      <Animated.View style={{ width: tamanho, height: tamanho, opacity: circulo }}>
+        <Svg width={tamanho} height={tamanho} viewBox={`0 0 ${TAMANHO} ${TAMANHO}`}>
+          <Circle
+            cx={TAMANHO / 2}
+            cy={TAMANHO / 2}
+            r={RAIO}
+            stroke={colors.onPrimaryFixedVariant}
+            strokeWidth={ESPESSURA}
+            fill="none"
+          />
+        </Svg>
+      </Animated.View>
+
+      {/* Janela do ✓: abre sozinha da esquerda; o desenho vai no sentido contrário. */}
+      <Animated.View
+        style={[
+          styles.janela,
+          {
+            transform: [
+              { translateX: check.interpolate({ inputRange: [0, 1], outputRange: [-tamanho, 0] }) },
+            ],
+          },
+        ]}
+      >
+        <Animated.View
+          style={{
+            width: tamanho,
+            height: tamanho,
+            transform: [
+              { translateX: check.interpolate({ inputRange: [0, 1], outputRange: [tamanho, 0] }) },
+            ],
+          }}
+        >
+          <Svg width={tamanho} height={tamanho} viewBox={`0 0 ${TAMANHO} ${TAMANHO}`}>
+            <Path
+              d="M28 50 L42 64 L70 34"
+              stroke={colors.onPrimaryFixedVariant}
+              strokeWidth={ESPESSURA + 1}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </Svg>
+        </Animated.View>
+      </Animated.View>
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  janela: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
+});
