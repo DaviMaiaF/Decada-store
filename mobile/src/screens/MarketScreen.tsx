@@ -26,6 +26,7 @@ import type { ProductSuggestion, ShoppingList, ShoppingListItem, SimulatedItem }
 import {
   useAddExtraItemViewModel,
   useMarketViewModel,
+  usePantryQuestionViewModel,
   useRegionFormViewModel,
   useShoppingListViewModel,
   useSimulatedQuantityField,
@@ -44,12 +45,15 @@ export default function MarketScreen({
   listId,
   onGenerated,
   onCompraConcluida,
+  onIrADespensa,
 }: {
   planId: string | null;
   listId: string | null;
   onGenerated: (listId: string) => void;
   /** Depois da compra concluída, leva ao início. */
   onCompraConcluida: () => void;
+  /** Leva à aba Despensa, para dizer o que há em casa antes de gerar. */
+  onIrADespensa: () => void;
 }) {
   const vm = useMarketViewModel(listId);
 
@@ -64,6 +68,7 @@ export default function MarketScreen({
         ) : (
           <FormularioRegiaoEGeracao
             planId={planId}
+            onIrADespensa={onIrADespensa}
             onGenerated={(novaLista) => {
               vm.manterRegiao();
               onGenerated(novaLista);
@@ -108,15 +113,18 @@ export default function MarketScreen({
 
 function FormularioRegiaoEGeracao({
   planId,
+  onIrADespensa,
   onGenerated,
   onCancel,
 }: {
   planId: string;
+  onIrADespensa: () => void;
   onGenerated: (listId: string) => void;
   /** Só existe quando se está trocando a região de uma lista que já existe. */
   onCancel?: () => void;
 }) {
   const vm = useRegionFormViewModel(planId, onGenerated);
+  const despensa = usePantryQuestionViewModel();
 
   return (
     <>
@@ -124,6 +132,34 @@ function FormularioRegiaoEGeracao({
         Gere a lista com os itens que você confirmou. O que já estiver na sua
         despensa é descontado automaticamente.
       </Body>
+
+      {despensa.total > 0 ? (
+        <Card style={styles.cardRegiao}>
+          <SectionTitle>Sua despensa</SectionTitle>
+          <Body muted>
+            {despensa.total === 1
+              ? '1 item em casa será descontado da lista.'
+              : `${despensa.total} itens em casa serão descontados da lista.`}
+          </Body>
+          <Button label="Revisar a despensa" variant="ghost" onPress={onIrADespensa} />
+        </Card>
+      ) : null}
+
+      {despensa.perguntar ? (
+        <Card style={styles.cardRegiao}>
+          <SectionTitle>O que você já tem em casa?</SectionTitle>
+          <Body muted>
+            A lista desconta o que está na despensa e depois não muda sozinha. Com a
+            despensa vazia, ela vem com a compra inteira.
+          </Body>
+          <Button label="Cadastrar minha despensa" onPress={onIrADespensa} />
+          <Button label="Não tenho nada em casa" variant="ghost" onPress={despensa.naoTenhoNada} />
+        </Card>
+      ) : null}
+
+      {despensa.semDespensa ? (
+        <Body muted>Sem despensa, a lista sai com a compra inteira.</Body>
+      ) : null}
 
       <Card style={styles.cardRegiao}>
         <SectionTitle>Região dos preços</SectionTitle>

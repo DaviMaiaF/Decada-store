@@ -227,6 +227,9 @@ export default function AppNavigator() {
               listId={listId}
               onGenerated={setListaDaSessao}
               onCompraConcluida={() => setNoInicio(true)}
+              onIrADespensa={() => {
+                if (navegacao.isReady()) navegacao.navigate('Despensa');
+              }}
             />
           )}
         </Tab.Screen>

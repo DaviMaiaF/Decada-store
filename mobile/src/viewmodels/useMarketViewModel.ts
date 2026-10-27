@@ -3,7 +3,8 @@
  * simulação e o item avulso.
  *
  * A tela tem quatro partes com estado próprio, e cada uma tem o seu hook:
- * a aba em si (`useMarketViewModel`), o formulário de região
+ * a aba em si (`useMarketViewModel`), a pergunta da despensa
+ * (`usePantryQuestionViewModel`), o formulário de região
  * (`useRegionFormViewModel`), a lista carregada (`useShoppingListViewModel`) e
  * o acréscimo de item avulso (`useAddExtraItemViewModel`).
  */
@@ -15,6 +16,7 @@ import {
   ApiError,
   addExtraItem,
   generateShoppingList,
+  readPantry,
   readShoppingList,
   removeShoppingListItem,
   searchProducts,
@@ -71,6 +73,32 @@ export function useMarketViewModel(listId: string | null) {
     manterRegiao: () => setTrocandoRegiao(false),
     finalizar: () => setFinalizando(true),
     voltarALista: () => setFinalizando(false),
+  };
+}
+
+/**
+ * O que há em casa, perguntado antes de gerar a lista.
+ *
+ * A despensa é descontada quando a lista é gerada, e a lista fica congelada: quem
+ * gera com a despensa vazia leva a compra inteira. Por isso a pergunta vem antes,
+ * mas não trava — "não tenho nada" e simplesmente gerar são respostas válidas.
+ * Lê a mesma chave da aba Despensa, então cadastrar lá aparece aqui na volta.
+ */
+export function usePantryQuestionViewModel() {
+  const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
+  const [semNada, setSemNada] = useState(false);
+
+  const total = despensa.data?.length ?? 0;
+  // Sem saber a despensa (carregando ou erro), não há o que perguntar nem avisar.
+  const sabe = despensa.isSuccess;
+
+  return {
+    total,
+    /** Despensa vazia e a pessoa ainda não respondeu. */
+    perguntar: sabe && total === 0 && !semNada,
+    /** Respondeu que não tem nada: a lista sai com a compra inteira. */
+    semDespensa: sabe && total === 0 && semNada,
+    naoTenhoNada: () => setSemNada(true),
   };
 }
 
