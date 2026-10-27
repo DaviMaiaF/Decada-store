@@ -141,6 +141,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | ✅ | Busca no catálogo, quantidade na unidade do produto, e o item entra no corredor dele |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
+| Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa". Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
@@ -148,6 +149,14 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Pagamento simulado | ✅ | Pix (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
 | Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
+
+**A despensa é perguntada antes de a lista nascer.** O desconto acontece na geração e a
+lista fica congelada: quem gera com a despensa vazia leva a compra inteira, e cadastrar a
+despensa depois não corrige a lista. Por isso o formulário de região abre com a pergunta
+(`usePantryQuestionViewModel`, que lê a mesma consulta `['pantry']` da aba Despensa). Ela
+**não trava** a geração — "Não tenho nada em casa" e gerar direto são respostas válidas — e
+essa resposta vale só enquanto a tela está aberta: não há campo no servidor para ela, e a
+etapa da trilha não a conta como cumprida.
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
 em que a pessoa marcou, e não um booleano: sair da tela e voltar não perde o
@@ -265,6 +274,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
 | Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
+| "Do seu plano": você tem isto em casa? | ✅ | Não estava no protótipo. Lista os produtos já confirmados do plano que ainda não estão na despensa; "Tenho" grava o item vinculado ao produto e sem quantidade, "Não tenho" só o tira da pergunta. Ver abaixo |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
 | "+ Chia" → lista de mercado | ✅ | Um botão por ingrediente que falta, na quantidade que a receita pede |
@@ -272,6 +282,15 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | "Economia estimada: R$ 14,00" | ⛔ | Ver divergência 4 |
 | "Desperdício Zero +R$ 42" | ⛔ | Aba Economia |
 | Validade / "itens perto da validade" | ⛔ | `PantryItem` no MVP guarda item e quantidade, sem validade |
+
+**O guia "Do seu plano".** Cadastrar a despensa do zero é trabalhoso o bastante para a
+pessoa não fazer, e ela só abate da compra se existir quando a lista é gerada. O plano já
+diz o que ela vai precisar, então o cartão pergunta só por isso
+(`usePantryGuideViewModel`). Quem decide é a pessoa (decisão 11): nada entra sem o toque em
+"Tenho". O item entra como o da foto — vinculado ao produto e **sem quantidade** —, então
+conta para as receitas na hora e só abate da compra depois que a pessoa disser quanto tem.
+"Não tenho" não grava nada e vale só para a sessão. Produto repetido no plano aparece uma
+vez, e com a despensa sem carregar o cartão não pergunta.
 
 **O que já está na lista não vira botão.** A receita pode acusar falta de um ingrediente
 que já está na compra — falta porque ela pede mais do que a lista traz, não porque ninguém
@@ -483,7 +502,7 @@ tem o aceite: o botão de enviar só libera com ele marcado. Descrito na seção
 ## A trilha da jornada
 
 As quatro abas do protótipo continuam livres, e por cima delas passou a existir uma
-trilha: **Enviar → Confirmar → Região → Comprar**, marcando o que já foi cumprido e o
+trilha: **Enviar → Confirmar → Despensa → Região → Comprar**, marcando o que já foi cumprido e o
 quanto falta da etapa em andamento ("6/15").
 
 O protótipo não previa isso porque cada tela foi desenhada isolada. Na prática, quem
@@ -498,6 +517,11 @@ próprio título.
 Etapa com alguma seguinte cumprida aparece **ultrapassada** (círculo verde com ✓), mesmo
 sem ter sido cumprida por inteiro: quem gerou a lista com 9 de 16 itens confirmados já
 passou da confirmação. O progresso parcial ("9/16") só aparece na etapa em andamento.
+
+A etapa **Despensa** vem antes da região pelo mesmo motivo da pergunta no Mercado: a
+despensa é descontada na geração. Ela se cumpre quando há ao menos um item na despensa; quem
+gera a lista sem ela a deixa **ultrapassada** (como a confirmação parcial), e a trilha segue.
+O botão do início nessa etapa é "Cadastrar a despensa", que leva à aba Despensa.
 
 ### Tela de início
 
@@ -517,7 +541,7 @@ lê, aceita com consentimento ou recusa. O aviso lê a mesma consulta da Dieta
 
 ## Resumo do que entra no MVP
 
-**Entra:** item avulso na lista de compras — o ingrediente que falta para a receita e o
+**Entra:** a despensa perguntada antes de gerar a lista, na trilha, no Mercado e no guia "Do seu plano"; item avulso na lista de compras — o ingrediente que falta para a receita e o
 que acabou em casa; despensa (`PantryItem`) com quantidade, o desconto dela na lista de
 compras e a correção do item já salvo; **a despensa preenchida por foto**, com confirmação
 item a item; import de plano por PDF com texto, com aceite na tela; o plano e a lista
