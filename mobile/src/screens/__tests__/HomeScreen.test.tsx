@@ -37,7 +37,7 @@ function render(ui: ReactElement) {
 }
 
 function jornada(cumpridas: boolean[], detalhes: (string | undefined)[] = []) {
-  return ['Enviar', 'Confirmar', 'Região', 'Comprar'].map((rotulo, i) => ({
+  return ['Enviar', 'Confirmar', 'Despensa', 'Região', 'Comprar'].map((rotulo, i) => ({
     rotulo,
     cumprida: cumpridas[i],
     detalhe: detalhes[i],
@@ -45,7 +45,7 @@ function jornada(cumpridas: boolean[], detalhes: (string | undefined)[] = []) {
 }
 
 it('sem nada feito, o passo é enviar o plano na Dieta', () => {
-  const passo = proximoPasso(jornada([false, false, false, false]));
+  const passo = proximoPasso(jornada([false, false, false, false, false]));
 
   expect(passo.aba).toBe('Dieta');
   expect(passo.botao).toBe('Enviar o plano');
@@ -54,7 +54,7 @@ it('sem nada feito, o passo é enviar o plano na Dieta', () => {
 it('etapa ultrapassada não volta a ser o próximo passo', () => {
   // Lista gerada com a confirmação parcial: o passo é comprar, não confirmar.
   const passo = proximoPasso(
-    jornada([true, false, true, false], [undefined, '9/16', undefined, '3/9']),
+    jornada([true, false, false, true, false], [undefined, '9/16', undefined, undefined, '3/9']),
   );
 
   expect(passo.aba).toBe('Mercado');
@@ -63,7 +63,7 @@ it('etapa ultrapassada não volta a ser o próximo passo', () => {
 });
 
 it('com a compra concluída, aponta a economia', () => {
-  const passo = proximoPasso(jornada([true, true, true, true]));
+  const passo = proximoPasso(jornada([true, true, true, true, true]));
 
   expect(passo.titulo).toBe('Compra concluída');
   expect(passo.aba).toBe('Economia');
@@ -72,7 +72,7 @@ it('com a compra concluída, aponta a economia', () => {
 it('o botão leva à aba da próxima etapa', async () => {
   const onIr = jest.fn();
   await render(
-    <HomeScreen etapas={jornada([true, true, false, false])} onIr={onIr} />,
+    <HomeScreen etapas={jornada([true, true, true, false, false])} onIr={onIr} />,
   );
 
   await fireEvent.press(screen.getByText('Gerar a lista'));
@@ -82,7 +82,7 @@ it('o botão leva à aba da próxima etapa', async () => {
 
 it('cada card leva à sua aba', async () => {
   const onIr = jest.fn();
-  await render(<HomeScreen etapas={jornada([false, false, false, false])} onIr={onIr} />);
+  await render(<HomeScreen etapas={jornada([false, false, false, false, false])} onIr={onIr} />);
 
   for (const aba of ['Dieta', 'Mercado', 'Despensa', 'Economia']) {
     await fireEvent.press(screen.getByLabelText(`Ir para ${aba}`));
@@ -92,7 +92,7 @@ it('cada card leva à sua aba', async () => {
 });
 
 it('sem plano recebido, não mostra o aviso', async () => {
-  await render(<HomeScreen etapas={jornada([false, false, false, false])} onIr={jest.fn()} />);
+  await render(<HomeScreen etapas={jornada([false, false, false, false, false])} onIr={jest.fn()} />);
 
   expect(screen.queryByText('Conferir o plano')).toBeNull();
 });
@@ -109,7 +109,7 @@ it('com plano enviado pela nutricionista, avisa e leva à Dieta para conferir', 
     },
   ]);
   const onIr = jest.fn();
-  await render(<HomeScreen etapas={jornada([true, true, false, false])} onIr={onIr} />);
+  await render(<HomeScreen etapas={jornada([true, true, false, false, false])} onIr={onIr} />);
 
   expect(await screen.findByText('Seu plano alimentar já foi montado')).toBeTruthy();
   await fireEvent.press(screen.getByText('Conferir o plano'));

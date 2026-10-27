@@ -1,6 +1,6 @@
 /**
- * Trilha da jornada: enviar o plano, confirmar os produtos, escolher a região e
- * comprar.
+ * Trilha da jornada: enviar o plano, confirmar os produtos, dizer o que já há em
+ * casa, escolher a região e comprar.
  *
  * As quatro abas continuam livres — quem quiser pular a ordem, pula. O que
  * faltava era dizer que existe uma ordem: quem abria o Mercado antes de

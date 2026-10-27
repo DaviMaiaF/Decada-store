@@ -44,14 +44,14 @@ afterEach(() => {
 });
 
 function jornada(cumpridas: boolean[]) {
-  return ['Enviar', 'Confirmar', 'Região', 'Comprar'].map((rotulo, i) => ({
+  return ['Enviar', 'Confirmar', 'Despensa', 'Região', 'Comprar'].map((rotulo, i) => ({
     rotulo,
     cumprida: cumpridas[i],
   }));
 }
 
 it('no meio da jornada, devolve a etapa atual e não a conclusão', async () => {
-  const { result } = await renderHook(() => useHomeViewModel(jornada([true, false, false, false])), {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([true, false, false, false, false])), {
     wrapper: Provedor,
   });
 
@@ -60,7 +60,7 @@ it('no meio da jornada, devolve a etapa atual e não a conclusão', async () => 
 });
 
 it('com tudo cumprido, marca a jornada como concluída', async () => {
-  const { result } = await renderHook(() => useHomeViewModel(jornada([true, true, true, true])), {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([true, true, true, true, true])), {
     wrapper: Provedor,
   });
 
@@ -71,17 +71,17 @@ it('com tudo cumprido, marca a jornada como concluída', async () => {
 it('acompanha a trilha quando ela muda', async () => {
   const { result, rerender } = await renderHook(
     ({ cumpridas }: { cumpridas: boolean[] }) => useHomeViewModel(jornada(cumpridas)),
-    { initialProps: { cumpridas: [false, false, false, false] }, wrapper: Provedor },
+    { initialProps: { cumpridas: [false, false, false, false, false] }, wrapper: Provedor },
   );
   expect(result.current.passo.aba).toBe('Dieta');
 
-  await rerender({ cumpridas: [true, true, false, false] });
+  await rerender({ cumpridas: [true, true, true, false, false] });
 
   expect(result.current.passo.aba).toBe('Mercado');
 });
 
 it('sem plano enviado pela nutricionista, não há aviso', async () => {
-  const { result } = await renderHook(() => useHomeViewModel(jornada([false, false, false, false])), {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([false, false, false, false, false])), {
     wrapper: Provedor,
   });
 
@@ -91,7 +91,7 @@ it('sem plano enviado pela nutricionista, não há aviso', async () => {
 
 it('com um plano enviado ao e-mail da conta, avisa quem montou', async () => {
   lerRecebidos.mockResolvedValue([recebido('plano-1', 'CRN-1 12345')]);
-  const { result } = await renderHook(() => useHomeViewModel(jornada([true, true, false, false])), {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([true, true, true, false, false])), {
     wrapper: Provedor,
   });
 
@@ -104,11 +104,20 @@ it('com um plano enviado ao e-mail da conta, avisa quem montou', async () => {
 
 it('com mais de um plano, diz quantos chegaram', async () => {
   lerRecebidos.mockResolvedValue([recebido('plano-1'), recebido('plano-2')]);
-  const { result } = await renderHook(() => useHomeViewModel(jornada([false, false, false, false])), {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([false, false, false, false, false])), {
     wrapper: Provedor,
   });
 
   await waitFor(() =>
     expect(result.current.planoRecebido?.titulo).toBe('2 planos alimentares chegaram para você'),
   );
+});
+
+it('com o plano confirmado e a despensa em branco, o passo é cadastrar a despensa', async () => {
+  const { result } = await renderHook(() => useHomeViewModel(jornada([true, true, false, false, false])), {
+    wrapper: Provedor,
+  });
+
+  expect(result.current.passo.aba).toBe('Despensa');
+  expect(result.current.passo.botao).toBe('Cadastrar a despensa');
 });
