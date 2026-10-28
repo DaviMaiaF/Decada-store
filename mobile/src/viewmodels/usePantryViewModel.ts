@@ -67,10 +67,15 @@ export function usePantryViewModel(listId: string | null) {
     enabled: listId !== null,
   });
 
-  /** Depois de mexer na despensa, as receitas mudam junto. */
+  /**
+   * Depois de mexer na despensa, as receitas mudam junto. A lista de compras
+   * também: o servidor compara o desconto gravado com a despensa de agora, e
+   * sem recarregar o aviso de despensa alterada só apareceria na volta do app.
+   */
   function recarregar() {
     cliente.invalidateQueries({ queryKey: ['pantry'] });
     cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+    cliente.invalidateQueries({ queryKey: ['shopping-list'] });
   }
 
   const recargaDasReceitas = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,7 +91,8 @@ export function usePantryViewModel(listId: string | null) {
    * e recarregar a despensa e as receitas a cada um redesenhava a tela inteira
    * entre um toque e outro. O item que o servidor devolveu entra direto no
    * cache — a lista vem do mais recente ao mais antigo, então vai no começo —,
-   * e as receitas são recarregadas uma vez só, quando os toques param.
+   * e as receitas e a lista de compras são recarregadas uma vez só, quando os
+   * toques param.
    */
   function guardadoPelaFoto(item: PantryItem) {
     cliente.setQueryData<PantryItem[]>(['pantry'], (atual) => [item, ...(atual ?? [])]);
@@ -94,6 +100,7 @@ export function usePantryViewModel(listId: string | null) {
     recargaDasReceitas.current = setTimeout(() => {
       recargaDasReceitas.current = null;
       cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
     }, ESPERA_DAS_RECEITAS);
   }
 

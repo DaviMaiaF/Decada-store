@@ -38,6 +38,8 @@ export function usePantryGuideViewModel(planId: string | null) {
     onSuccess: (novo: PantryItem) => {
       cliente.setQueryData<PantryItem[]>(['pantry'], (atual) => [novo, ...(atual ?? [])]);
       cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+      // A lista já gerada traz o aviso de despensa alterada: ela relê também.
+      cliente.invalidateQueries({ queryKey: ['shopping-list'] });
     },
   });
 
