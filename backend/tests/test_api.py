@@ -1091,3 +1091,41 @@ def test_editar_o_produto_depois_de_gerar_a_lista_aparece_na_leitura(
     # O retrato não muda sozinho: o produto e o total continuam os da geração.
     assert relida["items"][0]["product"]["id"] == str(frango.id)
     assert relida["estimated_total"] == em_dia["estimated_total"]
+
+
+def test_cadastrar_na_despensa_depois_de_gerar_a_lista_aparece_na_leitura(
+    client, marina, db_session
+):
+    # Quem cadastra o frango depois de gerar a lista continuava com a compra
+    # inteira e sem aviso nenhum.
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()["shopping_list"]["id"]
+    em_dia = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+
+    client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={
+            "raw_description": "meio quilo de frango",
+            "product_id": str(frango.id),
+            "quantity": "0.5",
+            "unit": "kg",
+        },
+    )
+
+    relida = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    plano = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
+
+    assert relida["outdated_items"] == [
+        {
+            "plan_item_id": plano["items"][0]["id"],
+            "description": plano["items"][0]["raw_description"],
+            "change": "despensa_alterada",
+        }
+    ]
+    # O desconto continua o da geração até a pessoa gerar de novo.
+    assert relida["items"][0]["quantity"] == em_dia["items"][0]["quantity"]

@@ -13,7 +13,8 @@ Regras que este módulo faz valer:
   - o mesmo produto não entra duas vezes na lista: itens do plano que pedem o
     mesmo produto são somados numa linha, e a despensa abate uma vez só;
   - item vindo da prescrição não pode ser removido; item avulso pode;
-  - a lista não se corrige quando o plano muda: ela diz o que divergiu.
+  - a lista não se corrige quando o plano ou a despensa mudam: ela diz o que
+    divergiu.
 
 Depois de gerada, a lista aceita item avulso: o que a pessoa acrescenta à
 compra sem que o plano o tenha pedido. Ele muda a compra, nunca a prescrição —
@@ -26,15 +27,23 @@ volta para a unidade da prescrição só reintroduziria arredondamento; quem exi
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models import MealPlan, PlanItem, Product, ShoppingList, ShoppingListItem
-from app.models.enums import MeasurementUnit, PlanChange, PlanItemStatus
-from app.services.pantry import coverage, ensure_measurable, user_pantry
+from app.models import (
+    MealPlan,
+    PantryItem,
+    PlanItem,
+    Product,
+    ShoppingList,
+    ShoppingListItem,
+)
+from app.models.enums import MeasurementUnit, PaymentStatus, PlanChange, PlanItemStatus
+from app.services.pantry import available_quantity, coverage, ensure_measurable, user_pantry
 from app.services.pricing import (
     ShoppingListCost,
     list_total,
@@ -245,8 +254,10 @@ class OutdatedItem:
     change: PlanChange
 
 
-def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
-    """O que mudou no plano desde que a lista foi gerada.
+def outdated_items(
+    shopping_list: ShoppingList, pantry_items: Sequence[PantryItem]
+) -> list[OutdatedItem]:
+    """O que mudou no plano, ou na despensa, desde que a lista foi gerada.
 
     A lista é um retrato: produto e preço ficam congelados na geração, e é isso
     que torna o total reproduzível. O preço do retrato, a pessoa sabe que é do
@@ -257,6 +268,10 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
     Só compara o que a geração usa: item confirmado com produto. Item de
     grandeza incompatível com o produto não conta como novo — a geração o
     deixaria de fora outra vez, e o aviso nunca sairia da tela.
+
+    A despensa entra pelo mesmo motivo: a pessoa cadastra o frango depois de
+    gerar a lista e continua vendo a compra inteira. `pantry_items` é a
+    despensa de agora, a mesma que `user_pantry` devolve para a geração.
     """
     in_list = {
         item.plan_item_id: item for item in shopping_list.items if item.plan_item_id is not None
@@ -311,5 +326,49 @@ def outdated_items(shopping_list: ShoppingList) -> list[OutdatedItem]:
             < covered_by_row[plan_item.product_id]
         ):
             changes.append(OutdatedItem(plan_item, PlanChange.NAO_CONFIRMADO))
+
+    changes.extend(_pantry_changes(shopping_list, pantry_items, changes))
+
+    return changes
+
+
+def _pantry_changes(
+    shopping_list: ShoppingList,
+    pantry_items: Sequence[PantryItem],
+    plan_changes: Sequence[OutdatedItem],
+) -> list[OutdatedItem]:
+    """Linhas cujo desconto da despensa não é mais o que a despensa daria hoje.
+
+    Refaz a conta da geração sobre o que a linha cobria — o que compra mais o
+    que veio de casa — e compara com o que foi gravado. Ficam de fora:
+      - a lista com pagamento aprovado e a linha já comprada: depois da compra a
+        pessoa guarda na despensa o que trouxe, e o aviso pediria uma lista nova
+        de algo que já está em casa;
+      - o avulso: o aviso mostra a descrição do item do plano, e ele não tem;
+      - a linha que o plano já desatualizou: gerar de novo resolve as duas
+        coisas, e dois avisos para o mesmo item só repetiriam o pedido.
+    """
+    if any(payment.status is PaymentStatus.APROVADO for payment in shopping_list.payments):
+        return []
+
+    already_reported = {change.plan_item.id for change in plan_changes}
+    changes: list[OutdatedItem] = []
+
+    for list_item in shopping_list.items:
+        if (
+            list_item.plan_item is None
+            or list_item.purchased
+            or list_item.plan_item_id in already_reported
+        ):
+            continue
+
+        covered = list_item.quantity + list_item.quantity_from_pantry
+        available, _ = available_quantity(pantry_items, list_item.product)
+        # Mesmo teto da geração: ter três quilos em casa não faz a linha ter
+        # pedido três quilos. Por isso sobra em casa não é divergência.
+        from_pantry_now = min(available, covered).quantize(Decimal("0.001"))
+
+        if from_pantry_now != list_item.quantity_from_pantry.quantize(Decimal("0.001")):
+            changes.append(OutdatedItem(list_item.plan_item, PlanChange.DESPENSA_ALTERADA))
 
     return changes

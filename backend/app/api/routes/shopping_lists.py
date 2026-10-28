@@ -21,6 +21,7 @@ from app.schemas.shopping_list import (
     SimulatedItemOut,
     SimulationIn,
 )
+from app.services.pantry import user_pantry
 from app.services.shopping import (
     add_extra_item,
     generate_shopping_list,
@@ -162,10 +163,11 @@ def read_shopping_list(
     Os itens vêm em lista plana, com a categoria dentro do produto: agrupar por
     corredor é decisão de quem exibe, não do servidor.
 
-    Traz também o que mudou no plano desde a geração, para a tela avisar que a
-    lista ficou para trás em vez de mostrar o produto antigo calada.
+    Traz também o que mudou no plano e na despensa desde a geração, para a tela
+    avisar que a lista ficou para trás em vez de mostrar o retrato antigo calada.
     """
     shopping_list = _get_list(session, user, list_id)
+    pantry_items = user_pantry(session, user.id)
 
     return ShoppingListOut.model_validate(shopping_list).model_copy(
         update={
@@ -175,7 +177,7 @@ def read_shopping_list(
                     description=outdated.plan_item.raw_description,
                     change=outdated.change,
                 )
-                for outdated in outdated_items(shopping_list)
+                for outdated in outdated_items(shopping_list, pantry_items)
             ]
         }
     )
