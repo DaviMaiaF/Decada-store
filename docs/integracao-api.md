@@ -117,6 +117,7 @@ de pé; o app não o usa.
 | GET | `/meal-plans/{id}` | `readMealPlan` |
 | GET | `/meal-plans/{id}/items/{item}/candidates` | `readCandidates` |
 | POST | `/meal-plans/{id}/items/{item}/confirmation` | `confirmItem` |
+| POST | `/meal-plans/{id}/pantry-review` | `reviewPantry` — conclui a etapa Despensa; repetir não muda a data |
 
 ### Lista de compras
 

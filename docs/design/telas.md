@@ -141,7 +141,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | ✅ | Busca no catálogo, quantidade na unidade do produto, e o item entra no corredor dele |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
-| Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa". Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
+| Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa", que conclui a etapa Despensa. Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
@@ -155,8 +155,9 @@ lista fica congelada: quem gera com a despensa vazia leva a compra inteira, e ca
 despensa depois não corrige a lista. Por isso o formulário de região abre com a pergunta
 (`usePantryQuestionViewModel`, que lê a mesma consulta `['pantry']` da aba Despensa). Ela
 **não trava** a geração — "Não tenho nada em casa" e gerar direto são respostas válidas — e
-essa resposta vale só enquanto a tela está aberta: não há campo no servidor para ela, e a
-etapa da trilha não a conta como cumprida.
+essa resposta fica gravada no plano (`pantry_reviewed_at`, ver "A trilha da jornada"):
+quem já respondeu não é perguntado de novo ao reabrir o app, e a etapa Despensa da trilha
+conta como cumprida.
 
 **E a despensa que muda depois avisa.** Cadastrar, editar ou tirar da despensa depois de
 gerar não corrige a lista, mas ela deixa de ficar calada. A cada leitura o servidor refaz,
@@ -293,6 +294,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
+| Voltar e "Concluí a despensa" | ✅ | Não estava no protótipo. "Voltar" devolve à aba de onde a pessoa veio, ou ao início; "Concluí a despensa" cumpre a etapa da trilha (`POST /meal-plans/{id}/pantry-review`) e leva ao Mercado. Ver "A trilha da jornada" |
 | Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
 | "Do seu plano": você tem isto em casa? | ✅ | Não estava no protótipo. Lista os produtos já confirmados do plano que ainda não estão na despensa; "Tenho" grava o item vinculado ao produto e sem quantidade, "Não tenho" só o tira da pergunta. Ver abaixo |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
@@ -539,9 +541,17 @@ sem ter sido cumprida por inteiro: quem gerou a lista com 9 de 16 itens confirma
 passou da confirmação. O progresso parcial ("9/16") só aparece na etapa em andamento.
 
 A etapa **Despensa** vem antes da região pelo mesmo motivo da pergunta no Mercado: a
-despensa é descontada na geração. Ela se cumpre quando há ao menos um item na despensa; quem
-gera a lista sem ela a deixa **ultrapassada** (como a confirmação parcial), e a trilha segue.
-O botão do início nessa etapa é "Cadastrar a despensa", que leva à aba Despensa.
+despensa é descontada na geração. Ela se cumpre quando a pessoa **diz que terminou** — pelo
+"Concluí a despensa" da aba ou pelo "Não tenho nada em casa" do Mercado —, e isso fica
+gravado no plano, em `meal_plans.pantry_reviewed_at`. Antes ela se cumpria com ao menos um
+item na despensa, e a etapa ficava verde sem a pessoa ter passado por ela: a despensa é da
+conta, e itens de um plano anterior bastavam. Quem gera a lista sem concluir a deixa
+**ultrapassada** (como a confirmação parcial), e a trilha segue.
+
+O botão do início nessa etapa é "Cadastrar a despensa", que leva à aba Despensa. Lá, além do
+"Concluí a despensa", que leva ao Mercado, há um "Voltar" para a aba de onde a pessoa veio
+(as abas guardam o histórico, `backBehavior="history"`); quem chegou pelo início volta ao
+início.
 
 ### Tela de início
 
