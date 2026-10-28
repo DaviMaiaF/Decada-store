@@ -121,8 +121,17 @@ export interface ShoppingListItem {
   is_extra: boolean;
 }
 
-/** Por que um item do plano não bate mais com a lista já gerada. */
-export type PlanChange = 'produto_trocado' | 'nao_confirmado' | 'novo_confirmado';
+/**
+ * Por que um item do plano não bate mais com a lista já gerada.
+ *
+ * `despensa_alterada` não é mudança do plano: é a despensa de hoje abatendo
+ * daquela linha outra quantidade que a gravada na geração.
+ */
+export type PlanChange =
+  | 'produto_trocado'
+  | 'nao_confirmado'
+  | 'novo_confirmado'
+  | 'despensa_alterada';
 
 /** Item do plano que mudou depois de a lista ser gerada. */
 export interface OutdatedItem {
