@@ -172,6 +172,8 @@ export default function AppNavigator() {
 
       <Tab.Navigator
         initialRouteName={abaInicial}
+        // "Voltar" da Despensa precisa saber de qual aba a pessoa veio.
+        backBehavior="history"
         screenOptions={{
           headerShown: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.outlineVariant },
@@ -241,7 +243,23 @@ export default function AppNavigator() {
         >
           {/* A despensa precisa da lista corrente por dois motivos: a receita
               conta o que será comprado, e o ingrediente que falta vai para lá. */}
-          {() => <PantryScreen listId={listId} planId={planId} />}
+          {() => (
+            <PantryScreen
+              listId={listId}
+              planId={planId}
+              onVoltar={() => {
+                // Veio de outra aba (a pergunta do Mercado ou a barra de abas):
+                // volta para ela. Veio do início, as abas nasceram aqui e não há
+                // para onde voltar dentro delas.
+                if (navegacao.isReady() && navegacao.canGoBack()) navegacao.goBack();
+                else setNoInicio(true);
+              }}
+              onConcluida={() => {
+                // A próxima etapa da trilha é a região, que fica no Mercado.
+                if (navegacao.isReady()) navegacao.navigate('Mercado');
+              }}
+            />
+          )}
         </Tab.Screen>
 
         <Tab.Screen
