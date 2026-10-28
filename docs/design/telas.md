@@ -147,7 +147,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento; aprovado o pagamento, marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
 | Pagamento simulado | ✅ | Pix (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
-| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
+| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado, confirmado depois da geração ou despensa que hoje abateria outra quantidade (`despensa_alterada`). Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; o título diz se mudou o plano, a despensa ou os dois. A lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
 **A despensa é perguntada antes de a lista nascer.** O desconto acontece na geração e a
@@ -157,6 +157,26 @@ despensa depois não corrige a lista. Por isso o formulário de região abre com
 **não trava** a geração — "Não tenho nada em casa" e gerar direto são respostas válidas — e
 essa resposta vale só enquanto a tela está aberta: não há campo no servidor para ela, e a
 etapa da trilha não a conta como cumprida.
+
+**E a despensa que muda depois avisa.** Cadastrar, editar ou tirar da despensa depois de
+gerar não corrige a lista, mas ela deixa de ficar calada. A cada leitura o servidor refaz,
+para cada linha, a conta da geração sobre o que a linha cobria (o que compra mais o que veio
+de casa) e compara com o `quantity_from_pantry` gravado; se diferir, a linha entra em
+`outdated_items` como `despensa_alterada`. É calculado, não gravado: não há coluna nova. Com
+só essa divergência, o aviso diz "Sua despensa mudou depois desta lista" e explica que o
+desconto foi calculado com a despensa de antes. Ficam de fora, de propósito:
+
+- **sobra acima do pedido** — o abatimento é limitado ao que a linha pedia, então ter
+  mais em casa não muda nada;
+- **item sem quantidade** — não abate, e a lista já sabia disso;
+- **linha comprada e lista paga** — depois da compra a pessoa guarda o que trouxe na
+  despensa, e o aviso pediria uma lista nova do que já está em casa;
+- **avulso** — o aviso mostra a descrição do item do plano, e o avulso não tem; ele é
+  abatido na criação e para aí;
+- **linha que o plano já desatualizou** — gerar de novo resolve as duas, e um aviso basta.
+
+Para o aviso aparecer sem recarregar o app, tudo que mexe na despensa (cadastro, edição,
+remoção, a foto e o guia "Do seu plano") invalida também `['shopping-list']`.
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
 em que a pessoa marcou, e não um booleano: sair da tela e voltar não perde o

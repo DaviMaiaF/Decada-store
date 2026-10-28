@@ -130,6 +130,13 @@ de pé; o app não o usa.
 | DELETE | `/shopping-lists/{id}/items/{item}` | `removeShoppingListItem` |
 | PATCH | `/shopping-lists/{id}/items/{item}` | `setItemPurchased` |
 
+O `GET /shopping-lists/{id}` traz `outdated_items`, o que divergiu desde a geração. Cada
+item tem um `change`: `produto_trocado`, `nao_confirmado` e `novo_confirmado` vêm do plano;
+`despensa_alterada` diz que a despensa de hoje abateria daquela linha outra quantidade que a
+gravada. O `ListaDesatualizada` escolhe o título por eles. Como a divergência da despensa é
+calculada na leitura, cadastrar, editar ou remover item da despensa invalida
+`['shopping-list']` além de `['pantry']`.
+
 ### Pagamento simulado
 
 Nada é cobrado: o backend imita o Mercado Pago (ver
