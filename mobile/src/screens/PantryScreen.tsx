@@ -15,6 +15,10 @@
  *
  * O que ficou pela metade não fica preso assim: tocar em um item já salvo abre o
  * mesmo par produto + quantidade, e é por ali que o item solto passa a abater.
+ *
+ * A aba é também uma etapa da trilha. "Voltar" devolve a pessoa para onde ela
+ * estava (o Mercado, se veio da pergunta de lá, ou o início), e "Concluí a
+ * despensa" cumpre a etapa e leva à próxima.
  */
 
 import {
@@ -28,6 +32,7 @@ import {
 } from 'react-native';
 
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { ConclusaoDaDespensa } from '../components/ConclusaoDaDespensa';
 import { DespensaDoPlano } from '../components/DespensaDoPlano';
 import { DespensaPorFoto } from '../components/DespensaPorFoto';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
@@ -42,10 +47,16 @@ export { ESPERA_DAS_RECEITAS } from '../viewmodels/usePantryViewModel';
 export default function PantryScreen({
   listId,
   planId,
+  onVoltar,
+  onConcluida,
 }: {
   listId: string | null;
   /** O plano ativo: dele sai a pergunta "você tem isto em casa?". */
   planId: string | null;
+  /** De volta para onde a pessoa estava antes de abrir a aba. */
+  onVoltar: () => void;
+  /** Etapa concluída: segue para a próxima, a região. */
+  onConcluida: () => void;
 }) {
   const vm = usePantryViewModel(listId);
   const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
@@ -59,6 +70,15 @@ export default function PantryScreen({
       contentContainerStyle={styles.conteudo}
       ListHeaderComponent={
         <View style={styles.topo}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            onPress={onVoltar}
+            style={({ pressed }) => [styles.voltar, pressed && styles.voltarPressionado]}
+          >
+            <Text style={styles.voltarTexto}>‹ Voltar</Text>
+          </Pressable>
+
           <View style={styles.cabecalho}>
             <Chip label="APROVEITAMENTO INTELIGENTE" tone="success" />
             <Text style={styles.titulo}>O que tem na sua casa?</Text>
@@ -347,6 +367,10 @@ export default function PantryScreen({
             ) : null}
           </Card>
 
+          {/* Logo depois do cadastro, antes das receitas: é onde a pessoa acaba de
+              dizer o que tem em casa. */}
+          <ConclusaoDaDespensa planId={planId} onConcluida={onConcluida} />
+
           <View style={styles.linhaTitulo}>
             <SectionTitle>Sugestões de receita</SectionTitle>
           </View>
@@ -518,6 +542,14 @@ const styles = StyleSheet.create({
   conteudo: { padding: spacing.margin, paddingBottom: spacing.xl3 },
   topo: { gap: spacing.md, marginBottom: spacing.sm },
   cabecalho: { gap: spacing.xs },
+  voltar: {
+    alignSelf: 'flex-start',
+    minHeight: MIN_TOUCH_HEIGHT,
+    justifyContent: 'center',
+    paddingRight: spacing.sm,
+  },
+  voltarPressionado: { opacity: 0.6 },
+  voltarTexto: { ...typography.labelLg, color: colors.primary },
   titulo: { ...typography.headlineLg, color: colors.primary },
 
   cartaoDespensa: { gap: spacing.sm },

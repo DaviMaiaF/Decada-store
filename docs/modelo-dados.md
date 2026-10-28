@@ -142,3 +142,4 @@ cd backend
 | `8ecb418bedcf` | Papel (`role`) e CRN no usuário |
 | `1191bed32360` | Plano montado pela nutricionista: `prescriptions`, refeições, itens e `meal_plans.prescribed_meals` |
 | `54ea5109aa75` | `payments`: pagamento simulado da lista, com um aprovado por lista no máximo |
+| `82e821fa2951` | `meal_plans.pantry_reviewed_at`: quando a pessoa concluiu a etapa Despensa do plano |

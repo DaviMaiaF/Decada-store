@@ -54,6 +54,11 @@ export interface MealPlan {
   /** Refeições, substituições e orientação do plano montado pela nutricionista
    * no app. Só para ler: a compra sai de `items`. Nulo no plano vindo de PDF. */
   prescribed_meals: PrescribedPlan | null;
+  /**
+   * Quando a pessoa concluiu a etapa Despensa deste plano; nulo se ainda não.
+   * Ter itens na despensa não basta: ela é da conta e pode ser de antes do plano.
+   */
+  pantry_reviewed_at: string | null;
 }
 
 /** Plano na listagem: sem os itens, que vêm por `readMealPlan`. */
@@ -121,8 +126,17 @@ export interface ShoppingListItem {
   is_extra: boolean;
 }
 
-/** Por que um item do plano não bate mais com a lista já gerada. */
-export type PlanChange = 'produto_trocado' | 'nao_confirmado' | 'novo_confirmado';
+/**
+ * Por que um item do plano não bate mais com a lista já gerada.
+ *
+ * `despensa_alterada` não é mudança do plano: é a despensa de hoje abatendo
+ * daquela linha outra quantidade que a gravada na geração.
+ */
+export type PlanChange =
+  | 'produto_trocado'
+  | 'nao_confirmado'
+  | 'novo_confirmado'
+  | 'despensa_alterada';
 
 /** Item do plano que mudou depois de a lista ser gerada. */
 export interface OutdatedItem {

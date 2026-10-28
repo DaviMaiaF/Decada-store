@@ -35,7 +35,6 @@ import { Trilha } from '../components/Trilha';
 import {
   readMealPlan,
   readMealPlans,
-  readPantry,
   readShoppingList,
   readShoppingLists,
 } from '../services/api';
@@ -90,10 +89,6 @@ export default function AppNavigator() {
     enabled: listId !== null,
   });
 
-  // Mesma chave da aba Despensa: o cache é um só. A despensa entra no desconto
-  // quando a lista é gerada, então dizer o que há em casa vem antes da região.
-  const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
-
   const itensDoPlano = plano.data?.items ?? [];
   const confirmados = itensDoPlano.filter((item) => item.status === 'confirmado').length;
 
@@ -108,7 +103,10 @@ export default function AppNavigator() {
       cumprida: itensDoPlano.length > 0 && confirmados === itensDoPlano.length,
       detalhe: itensDoPlano.length > 0 ? `${confirmados}/${itensDoPlano.length}` : undefined,
     },
-    { rotulo: 'Despensa', cumprida: (despensa.data?.length ?? 0) > 0 },
+    // Cumpre quando a pessoa diz que terminou, para este plano. Ter algum item
+    // na despensa não bastava: ela é da conta, e itens de antes deixavam a
+    // etapa verde sem a pessoa ter passado por ela.
+    { rotulo: 'Despensa', cumprida: plano.data?.pantry_reviewed_at != null },
     { rotulo: 'Região', cumprida: listId !== null },
     {
       rotulo: 'Comprar',
@@ -174,6 +172,8 @@ export default function AppNavigator() {
 
       <Tab.Navigator
         initialRouteName={abaInicial}
+        // "Voltar" da Despensa precisa saber de qual aba a pessoa veio.
+        backBehavior="history"
         screenOptions={{
           headerShown: false,
           tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.outlineVariant },
@@ -243,7 +243,23 @@ export default function AppNavigator() {
         >
           {/* A despensa precisa da lista corrente por dois motivos: a receita
               conta o que será comprado, e o ingrediente que falta vai para lá. */}
-          {() => <PantryScreen listId={listId} planId={planId} />}
+          {() => (
+            <PantryScreen
+              listId={listId}
+              planId={planId}
+              onVoltar={() => {
+                // Veio de outra aba (a pergunta do Mercado ou a barra de abas):
+                // volta para ela. Veio do início, as abas nasceram aqui e não há
+                // para onde voltar dentro delas.
+                if (navegacao.isReady() && navegacao.canGoBack()) navegacao.goBack();
+                else setNoInicio(true);
+              }}
+              onConcluida={() => {
+                // A próxima etapa da trilha é a região, que fica no Mercado.
+                if (navegacao.isReady()) navegacao.navigate('Mercado');
+              }}
+            />
+          )}
         </Tab.Screen>
 
         <Tab.Screen

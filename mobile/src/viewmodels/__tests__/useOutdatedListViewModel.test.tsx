@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import * as api from '../../services/api';
-import type { ShoppingList } from '../../types/api';
+import type { PlanChange, ShoppingList } from '../../types/api';
 import { descreverDivergencia, useOutdatedListViewModel } from '../useOutdatedListViewModel';
 
 jest.mock('../../services/api', () => ({
@@ -60,6 +60,46 @@ it('descreve cada tipo de divergência', () => {
   expect(
     descreverDivergencia({ plan_item_id: 'a', description: 'Aveia', change: 'novo_confirmado' }),
   ).toBe('Aveia — confirmado depois da lista');
+  expect(
+    descreverDivergencia({ plan_item_id: 'a', description: 'Aveia', change: 'despensa_alterada' }),
+  ).toBe('Aveia — despensa mudou');
+});
+
+describe('título do aviso', () => {
+  async function aviso(changes: PlanChange[]) {
+    const desatualizada = lista({
+      outdated_items: changes.map((change, i) => ({
+        plan_item_id: `item-${i}`,
+        description: 'Aveia',
+        change,
+      })),
+    });
+    const { result } = await renderHook(
+      () => useOutdatedListViewModel(desatualizada, jest.fn()),
+      { wrapper: Provedor },
+    );
+    return result.current;
+  }
+
+  it('só o plano mudou: fala do plano', async () => {
+    const vm = await aviso(['produto_trocado']);
+
+    expect(vm.titulo).toBe('Seu plano mudou depois desta lista');
+    expect(vm.explicacao).toContain('aba Dieta');
+  });
+
+  it('só a despensa mudou: fala da despensa, não do plano', async () => {
+    const vm = await aviso(['despensa_alterada']);
+
+    expect(vm.titulo).toBe('Sua despensa mudou depois desta lista');
+    expect(vm.explicacao).toContain('despensa de antes');
+  });
+
+  it('os dois mudaram: fala dos dois', async () => {
+    const vm = await aviso(['novo_confirmado', 'despensa_alterada']);
+
+    expect(vm.titulo).toBe('Seu plano e sua despensa mudaram depois desta lista');
+  });
 });
 
 it('lista em dia não mostra aviso', async () => {

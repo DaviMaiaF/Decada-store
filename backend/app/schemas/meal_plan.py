@@ -40,6 +40,8 @@ class MealPlanOut(ApiModel):
     # Refeições, substituições e orientação, quando o plano foi montado pela
     # nutricionista no app. Só leitura: a compra sai de `items`. Nulo no PDF.
     prescribed_meals: PrescribedPlanOut | None = None
+    # Quando a pessoa concluiu a etapa Despensa deste plano. Nulo: ainda não.
+    pantry_reviewed_at: datetime | None = None
 
 
 class MealPlanSummaryOut(ApiModel):

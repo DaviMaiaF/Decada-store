@@ -117,6 +117,7 @@ de pé; o app não o usa.
 | GET | `/meal-plans/{id}` | `readMealPlan` |
 | GET | `/meal-plans/{id}/items/{item}/candidates` | `readCandidates` |
 | POST | `/meal-plans/{id}/items/{item}/confirmation` | `confirmItem` |
+| POST | `/meal-plans/{id}/pantry-review` | `reviewPantry` — conclui a etapa Despensa; repetir não muda a data |
 
 ### Lista de compras
 
@@ -129,6 +130,13 @@ de pé; o app não o usa.
 | POST | `/shopping-lists/{id}/items` | `addExtraItem` |
 | DELETE | `/shopping-lists/{id}/items/{item}` | `removeShoppingListItem` |
 | PATCH | `/shopping-lists/{id}/items/{item}` | `setItemPurchased` |
+
+O `GET /shopping-lists/{id}` traz `outdated_items`, o que divergiu desde a geração. Cada
+item tem um `change`: `produto_trocado`, `nao_confirmado` e `novo_confirmado` vêm do plano;
+`despensa_alterada` diz que a despensa de hoje abateria daquela linha outra quantidade que a
+gravada. O `ListaDesatualizada` escolhe o título por eles. Como a divergência da despensa é
+calculada na leitura, cadastrar, editar ou remover item da despensa invalida
+`['shopping-list']` além de `['pantry']`.
 
 ### Pagamento simulado
 

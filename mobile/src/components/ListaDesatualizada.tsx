@@ -1,11 +1,12 @@
 /**
- * Aviso de lista que ficou para trás do plano.
+ * Aviso de lista que ficou para trás do plano ou da despensa.
  *
  * A lista é um retrato: produto e preço ficam congelados na geração. Quem troca
  * o produto na aba Dieta depois disso via o antigo no Mercado e no checkout sem
  * explicação nenhuma. A lista não se corrige sozinha — o total deixaria de ser
  * reproduzível, e as marcações de "comprado" iriam junto —, então a tela diz o
- * que divergiu e oferece gerar de novo, na mesma região.
+ * que divergiu e oferece gerar de novo, na mesma região. O mesmo vale para o que
+ * a pessoa cadastra na despensa depois de gerar: o desconto é o da geração.
  */
 
 import { StyleSheet } from 'react-native';
@@ -28,11 +29,8 @@ export function ListaDesatualizada({
 
   return (
     <Card style={styles.aviso}>
-      <SectionTitle>Seu plano mudou depois desta lista</SectionTitle>
-      <Body muted>
-        A lista mostra o que estava confirmado quando foi gerada. Gere de novo para
-        trazer o que você mudou na aba Dieta.
-      </Body>
+      <SectionTitle>{vm.titulo}</SectionTitle>
+      <Body muted>{vm.explicacao}</Body>
       {vm.divergencias.map(({ id, texto }) => (
         <Body key={id}>• {texto}</Body>
       ))}

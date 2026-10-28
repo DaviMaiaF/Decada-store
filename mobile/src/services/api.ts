@@ -153,6 +153,10 @@ export const confirmItem = (
     body: { product_id: productId, match_score: matchScore },
   });
 
+/** A pessoa terminou de dizer o que tem em casa para este plano. Repetir não muda nada. */
+export const reviewPantry = (planId: string) =>
+  request<MealPlan>(`/meal-plans/${planId}/pantry-review`, { method: 'POST' });
+
 // --- lista de compras ---
 
 export const generateShoppingList = (planId: string, stateCode: string, city: string) =>

@@ -10,8 +10,23 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app.models import MealPlan, PantryItem, PlanItem, Product, ShoppingList, User
-from app.models.enums import MeasurementUnit, PlanChange, PlanItemStatus
+from app.models import (
+    MealPlan,
+    PantryItem,
+    Payment,
+    PlanItem,
+    Product,
+    ShoppingList,
+    User,
+)
+from app.models.enums import (
+    MeasurementUnit,
+    PaymentMethod,
+    PaymentStatus,
+    PlanChange,
+    PlanItemStatus,
+)
+from app.services.pantry import user_pantry
 from app.services.shopping import (
     PrescribedItemError,
     ProductAlreadyInListError,
@@ -72,6 +87,11 @@ def _item(
         product=produto,
         status=status,
     )
+
+
+def _divergencias(db_session, lista: ShoppingList):
+    """O que divergiu, com a despensa de agora do dono da lista."""
+    return outdated_items(lista, user_pantry(db_session, lista.meal_plan.user_id))
 
 
 def _guardar(db_session, item: PantryItem, usuario: User) -> None:
@@ -390,7 +410,7 @@ def test_linha_somada_nao_deixa_a_lista_desatualizada(db_session, usuario, catal
         db_session, plano, "DF", "Brasília", reference=AGORA
     ).shopping_list
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 def test_desconfirmar_so_a_segunda_ocorrencia_desatualiza_a_lista(
@@ -408,7 +428,7 @@ def test_desconfirmar_so_a_segunda_ocorrencia_desatualiza_a_lista(
     segundo.status = PlanItemStatus.PENDENTE
     db_session.flush()
 
-    assert [(c.plan_item, c.change) for c in outdated_items(lista)] == [
+    assert [(c.plan_item, c.change) for c in _divergencias(db_session, lista)] == [
         (segundo, PlanChange.NAO_CONFIRMADO)
     ]
 
@@ -428,7 +448,7 @@ def test_item_pendente_do_mesmo_produto_nao_desatualiza_quem_nunca_o_somou(
         db_session, plano, "DF", "Brasília", reference=AGORA
     ).shopping_list
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 # --------------------------------------------------------------------------
@@ -611,14 +631,14 @@ def test_item_da_prescricao_nao_sai_da_lista(db_session, usuario, catalogo_carre
 # --------------------------------------------------------------------------
 
 
-def _mudancas(lista: ShoppingList) -> list[tuple[str, PlanChange]]:
-    return [(m.plan_item.raw_description, m.change) for m in outdated_items(lista)]
+def _mudancas(db_session, lista: ShoppingList) -> list[tuple[str, PlanChange]]:
+    return [(m.plan_item.raw_description, m.change) for m in _divergencias(db_session, lista)]
 
 
 def test_lista_recem_gerada_esta_em_dia(db_session, usuario, catalogo_carregado):
     lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 def test_trocar_o_produto_no_plano_deixa_a_lista_desatualizada(
@@ -630,7 +650,9 @@ def test_trocar_o_produto_no_plano_deixa_a_lista_desatualizada(
     lista.meal_plan.items[0].product = queijo
     db_session.flush()
 
-    assert _mudancas(lista) == [("1,2 kg de peito de frango sem pele", PlanChange.PRODUTO_TROCADO)]
+    assert _mudancas(db_session, lista) == [
+        ("1,2 kg de peito de frango sem pele", PlanChange.PRODUTO_TROCADO)
+    ]
     # A lista não se corrige sozinha: o retrato continua com o produto antigo.
     assert lista.items[0].product.name == FRANGO
 
@@ -641,7 +663,7 @@ def test_item_que_deixou_de_estar_confirmado_aparece(db_session, usuario, catalo
     lista.meal_plan.items[0].status = PlanItemStatus.PENDENTE
     db_session.flush()
 
-    assert [m for _, m in _mudancas(lista)] == [PlanChange.NAO_CONFIRMADO]
+    assert [m for _, m in _mudancas(db_session, lista)] == [PlanChange.NAO_CONFIRMADO]
 
 
 def test_item_confirmado_depois_da_geracao_aparece(db_session, usuario, catalogo_carregado):
@@ -651,7 +673,7 @@ def test_item_confirmado_depois_da_geracao_aparece(db_session, usuario, catalogo
                                        catalogo_carregado(QUEIJO)))
     db_session.flush()
 
-    assert _mudancas(lista) == [("200 g de queijo minas", PlanChange.NOVO_CONFIRMADO)]
+    assert _mudancas(db_session, lista) == [("200 g de queijo minas", PlanChange.NOVO_CONFIRMADO)]
 
 
 def test_item_ainda_pendente_nao_desatualiza_a_lista(db_session, usuario, catalogo_carregado):
@@ -661,7 +683,7 @@ def test_item_ainda_pendente_nao_desatualiza_a_lista(db_session, usuario, catalo
                                        status=PlanItemStatus.PENDENTE))
     db_session.flush()
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 def test_item_que_a_geracao_recusaria_nao_conta_como_novo(
@@ -675,7 +697,7 @@ def test_item_que_a_geracao_recusaria_nao_conta_como_novo(
                                        catalogo_carregado(QUEIJO)))
     db_session.flush()
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 def test_avulso_nao_e_divergencia_do_plano(db_session, usuario, catalogo_carregado):
@@ -683,7 +705,7 @@ def test_avulso_nao_e_divergencia_do_plano(db_session, usuario, catalogo_carrega
     add_extra_item(db_session, lista, catalogo_carregado(AVEIA), Decimal("500"), G,
                    reference=AGORA)
 
-    assert outdated_items(lista) == []
+    assert _divergencias(db_session, lista) == []
 
 
 def test_gerar_de_novo_poe_a_lista_em_dia(db_session, usuario, catalogo_carregado):
@@ -695,5 +717,154 @@ def test_gerar_de_novo_poe_a_lista_em_dia(db_session, usuario, catalogo_carregad
         db_session, antiga.meal_plan, "DF", "Brasília", reference=AGORA
     ).shopping_list
 
-    assert outdated_items(nova) == []
+    assert _divergencias(db_session, nova) == []
     assert nova.items[0].product.name == QUEIJO
+
+
+# --------------------------------------------------------------------------
+# lista que ficou para trás: a despensa mudou depois da geração
+# --------------------------------------------------------------------------
+
+DESCRICAO_FRANGO = "1,2 kg de peito de frango sem pele"
+
+
+def _frango_em_casa(db_session, usuario, produto: Product, quantidade: str | None) -> PantryItem:
+    item = PantryItem(
+        raw_description="frango",
+        product=produto,
+        quantity=Decimal(quantidade) if quantidade is not None else None,
+        unit=KG if quantidade is not None else None,
+    )
+    _guardar(db_session, item, usuario)
+    return item
+
+
+def test_cadastrar_na_despensa_depois_da_geracao_avisa(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.DESPENSA_ALTERADA)]
+    # A lista não se corrige sozinha: continua mandando comprar tudo.
+    assert lista.items[0].quantity == Decimal("1.200")
+
+
+def test_tirar_da_despensa_depois_da_geracao_avisa(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    em_casa = _frango_em_casa(db_session, usuario, frango, "0.5")
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    db_session.delete(em_casa)
+    db_session.flush()
+
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.DESPENSA_ALTERADA)]
+
+
+def test_reduzir_a_despensa_depois_da_geracao_avisa(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    em_casa = _frango_em_casa(db_session, usuario, frango, "0.5")
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    em_casa.quantity = Decimal("0.2")
+    db_session.flush()
+
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.DESPENSA_ALTERADA)]
+
+
+def test_despensa_igual_a_da_geracao_nao_avisa(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_item_da_despensa_sem_quantidade_nao_avisa(db_session, usuario, catalogo_carregado):
+    # Sem quantidade não abate nada, e a lista já mandava comprar tudo.
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    _frango_em_casa(db_session, usuario, frango, None)
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_sobra_acima_do_que_a_linha_pedia_nao_avisa(db_session, usuario, catalogo_carregado):
+    # A geração abateu 1,2 kg de 2 kg; com 3 kg o abatimento ainda é 1,2 kg.
+    frango = catalogo_carregado(FRANGO)
+    em_casa = _frango_em_casa(db_session, usuario, frango, "2")
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    em_casa.quantity = Decimal("3")
+    db_session.flush()
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_linha_ja_comprada_nao_avisa(db_session, usuario, catalogo_carregado):
+    # Depois da compra a pessoa guarda o frango em casa; pedir lista nova
+    # disso seria o aviso na hora errada.
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    lista.items[0].purchased_at = AGORA
+
+    _frango_em_casa(db_session, usuario, frango, "1.2")
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_lista_com_pagamento_aprovado_nao_avisa_da_despensa(
+    db_session, usuario, catalogo_carregado
+):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    lista.payments.append(
+        Payment(
+            method=PaymentMethod.PIX,
+            status=PaymentStatus.APROVADO,
+            amount=Decimal("10.00"),
+            paid_at=AGORA,
+        )
+    )
+    db_session.flush()
+
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_avulso_nao_avisa_da_despensa(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    aveia = catalogo_carregado(AVEIA)
+    add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+    _guardar(db_session, PantryItem(raw_description="aveia", product=aveia,
+                                    quantity=Decimal("200"), unit=G), usuario)
+
+    assert _divergencias(db_session, lista) == []
+
+
+def test_linha_que_o_plano_ja_desatualizou_avisa_uma_vez_so(
+    db_session, usuario, catalogo_carregado
+):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    lista.meal_plan.items[0].status = PlanItemStatus.PENDENTE
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.NAO_CONFIRMADO)]
+
+
+def test_gerar_de_novo_absorve_a_despensa_nova(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    antiga = _lista_de_um_item(db_session, usuario, frango)
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    nova = generate_shopping_list(
+        db_session, antiga.meal_plan, "DF", "Brasília", reference=AGORA
+    ).shopping_list
+
+    assert _divergencias(db_session, nova) == []
+    assert nova.items[0].quantity == Decimal("0.700")

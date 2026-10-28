@@ -22,6 +22,8 @@ jest.mock('../../services/api', () => ({
   searchProducts: jest.fn(),
   addExtraItem: jest.fn(),
   readShoppingList: jest.fn(),
+  readMealPlan: jest.fn(),
+  reviewPantry: jest.fn(),
 }));
 
 // A revisão da foto tem os próprios testes; aqui importa só o que a tela faz
@@ -58,6 +60,8 @@ const lerReceitas = api.readRecipeSuggestions as jest.Mock;
 const buscarProdutos = api.searchProducts as jest.Mock;
 const acrescentarNaLista = api.addExtraItem as jest.Mock;
 const lerLista = api.readShoppingList as jest.Mock;
+const lerPlano = api.readMealPlan as jest.Mock;
+const revisarDespensa = api.reviewPantry as jest.Mock;
 
 function produto(nome: string, over: Partial<Product> = {}): Product {
   return {
@@ -112,10 +116,18 @@ function disponibilidade(over: Partial<RecipeAvailability> = {}): RecipeAvailabi
 let cliente: QueryClient;
 
 /** Sem lista de compras por padrão: é o estado de quem ainda não gerou uma. */
-async function montar(listId: string | null = null) {
+const onVoltar = jest.fn();
+const onConcluida = jest.fn();
+
+async function montar(listId: string | null = null, planId: string | null = null) {
   await render(
     <QueryClientProvider client={cliente}>
-      <PantryScreen listId={listId} planId={null} />
+      <PantryScreen
+        listId={listId}
+        planId={planId}
+        onVoltar={onVoltar}
+        onConcluida={onConcluida}
+      />
     </QueryClientProvider>,
   );
 }
@@ -611,7 +623,7 @@ describe('quantidade do item da despensa', () => {
   async function chegarNaQuantidade(candidato = 'Aveia em flocos') {
     await render(
       <QueryClientProvider client={cliente}>
-        <PantryScreen listId={null} planId={null} />
+        <PantryScreen listId={null} planId={null} onVoltar={jest.fn()} onConcluida={jest.fn()} />
       </QueryClientProvider>,
     );
     await fireEvent.changeText(
@@ -758,5 +770,59 @@ describe('itens confirmados pela foto', () => {
     await new Promise((resolve) => setTimeout(resolve, ESPERA_DAS_RECEITAS + 200));
     expect(lerReceitas.mock.calls.length).toBe(leiturasAntes + 1);
     expect(screen.getByText('3 itens')).toBeTruthy();
+  });
+});
+
+describe('etapa Despensa', () => {
+  const PLANO = {
+    id: 'plano-1',
+    title: null,
+    nutritionist_name: null,
+    nutritionist_crn: null,
+    consent_at: '2026-10-01T10:00:00Z',
+    consent_version: '1',
+    created_at: '2026-10-01T10:00:00Z',
+    items: [],
+    prescribed_meals: null,
+    pantry_reviewed_at: null,
+  };
+
+  it('"Voltar" devolve para onde a pessoa estava', async () => {
+    await montar();
+
+    await fireEvent.press(screen.getByLabelText('Voltar'));
+
+    expect(onVoltar).toHaveBeenCalled();
+  });
+
+  it('"Concluí a despensa" cumpre a etapa e segue para a próxima', async () => {
+    lerPlano.mockResolvedValue(PLANO);
+    revisarDespensa.mockResolvedValue({ ...PLANO, pantry_reviewed_at: '2026-10-28T10:00:00Z' });
+    await montar(null, 'plano-1');
+
+    await fireEvent.press(await screen.findByText('Concluí a despensa'));
+
+    await waitFor(() => expect(onConcluida).toHaveBeenCalled());
+    expect(revisarDespensa).toHaveBeenCalledWith('plano-1');
+    expect(await screen.findByText('DESPENSA REVISADA ✓')).toBeTruthy();
+    expect(screen.queryByText('Concluí a despensa')).toBeNull();
+  });
+
+  it('despensa já concluída não pede de novo e ainda leva ao Mercado', async () => {
+    lerPlano.mockResolvedValue({ ...PLANO, pantry_reviewed_at: '2026-10-28T10:00:00Z' });
+    await montar(null, 'plano-1');
+
+    await fireEvent.press(await screen.findByText('Ir para o Mercado'));
+
+    expect(onConcluida).toHaveBeenCalled();
+    expect(screen.queryByText('Concluí a despensa')).toBeNull();
+    expect(revisarDespensa).not.toHaveBeenCalled();
+  });
+
+  it('sem plano não há etapa a concluir', async () => {
+    await montar();
+
+    await screen.findByText('O que tem na sua casa?');
+    expect(screen.queryByText('Concluí a despensa')).toBeNull();
   });
 });

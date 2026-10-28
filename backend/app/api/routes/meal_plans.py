@@ -1,4 +1,5 @@
-"""Rotas do plano alimentar: import por PDF, consulta e confirmação do casamento."""
+"""Rotas do plano alimentar: import por PDF, consulta, confirmação do casamento
+e conclusão da etapa Despensa."""
 
 import uuid
 from datetime import datetime, timezone
@@ -179,3 +180,20 @@ def confirm_item(
     session.commit()
     session.refresh(item)
     return item
+
+
+@router.post("/{plan_id}/pantry-review", response_model=MealPlanOut)
+def review_pantry(session: DbSession, user: CurrentPatient, plan_id: uuid.UUID) -> MealPlan:
+    """A pessoa terminou de dizer o que tem em casa para este plano.
+
+    Cumpre a etapa Despensa da trilha. Chamar de novo não muda nada: a data que
+    vale é a da primeira conclusão, e tocar o botão duas vezes não é erro.
+    """
+    plan = _get_plan(session, user, plan_id)
+
+    if plan.pantry_reviewed_at is None:
+        plan.pantry_reviewed_at = datetime.now(timezone.utc)
+        session.commit()
+        session.refresh(plan)
+
+    return plan

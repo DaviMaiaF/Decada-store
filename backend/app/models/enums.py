@@ -55,6 +55,9 @@ class PlanChange(str, Enum):
     NAO_CONFIRMADO = "nao_confirmado"
     # Confirmado depois da geração: a lista não o conhece.
     NOVO_CONFIRMADO = "novo_confirmado"
+    # A despensa de hoje abateria desta linha outra quantidade que a gravada:
+    # a pessoa cadastrou, mudou ou tirou algo de casa depois de gerar a lista.
+    DESPENSA_ALTERADA = "despensa_alterada"
 
 
 class PriceConfidence(str, Enum):

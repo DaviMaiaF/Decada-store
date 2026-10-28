@@ -63,6 +63,7 @@ function plano(items: PlanItem[]): MealPlan {
     created_at: '2026-10-01T10:00:00Z',
     items,
     prescribed_meals: null,
+    pantry_reviewed_at: null,
   };
 }
 
@@ -130,6 +131,20 @@ it('"tenho" grava o item vinculado ao produto, sem quantidade, e sai da pergunta
     product_id: 'produto-Arroz',
   });
   await waitFor(() => expect(result.current.perguntas).toHaveLength(0));
+});
+
+it('"tenho" faz a lista de compras reler, para o aviso de despensa alterada', async () => {
+  lerPlano.mockResolvedValue(plano([itemDoPlano('Arroz')]));
+  adicionarApi.mockResolvedValue(naDespensa('Arroz'));
+  const { result } = await montar();
+  await waitFor(() => expect(result.current.perguntas).toHaveLength(1));
+  const invalidar = jest.spyOn(cliente, 'invalidateQueries');
+
+  await act(async () => result.current.tenho(result.current.perguntas[0]));
+
+  await waitFor(() =>
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['shopping-list'] }),
+  );
 });
 
 it('"não tenho" tira da pergunta sem gravar nada', async () => {

@@ -141,13 +141,13 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | "Dica de economia da semana" | ⛔ | Ver divergência 3 |
 | Adicionar item avulso | ✅ | Busca no catálogo, quantidade na unidade do produto, e o item entra no corredor dele |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
-| Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa". Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
+| Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa", que conclui a etapa Despensa. Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento; aprovado o pagamento, marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
 | Pagamento simulado | ✅ | Pix (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
-| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado ou confirmado depois da geração. Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; a lista salva nunca se corrige sozinha |
+| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado, confirmado depois da geração ou despensa que hoje abateria outra quantidade (`despensa_alterada`). Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; o título diz se mudou o plano, a despensa ou os dois. A lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
 **A despensa é perguntada antes de a lista nascer.** O desconto acontece na geração e a
@@ -155,8 +155,29 @@ lista fica congelada: quem gera com a despensa vazia leva a compra inteira, e ca
 despensa depois não corrige a lista. Por isso o formulário de região abre com a pergunta
 (`usePantryQuestionViewModel`, que lê a mesma consulta `['pantry']` da aba Despensa). Ela
 **não trava** a geração — "Não tenho nada em casa" e gerar direto são respostas válidas — e
-essa resposta vale só enquanto a tela está aberta: não há campo no servidor para ela, e a
-etapa da trilha não a conta como cumprida.
+essa resposta fica gravada no plano (`pantry_reviewed_at`, ver "A trilha da jornada"):
+quem já respondeu não é perguntado de novo ao reabrir o app, e a etapa Despensa da trilha
+conta como cumprida.
+
+**E a despensa que muda depois avisa.** Cadastrar, editar ou tirar da despensa depois de
+gerar não corrige a lista, mas ela deixa de ficar calada. A cada leitura o servidor refaz,
+para cada linha, a conta da geração sobre o que a linha cobria (o que compra mais o que veio
+de casa) e compara com o `quantity_from_pantry` gravado; se diferir, a linha entra em
+`outdated_items` como `despensa_alterada`. É calculado, não gravado: não há coluna nova. Com
+só essa divergência, o aviso diz "Sua despensa mudou depois desta lista" e explica que o
+desconto foi calculado com a despensa de antes. Ficam de fora, de propósito:
+
+- **sobra acima do pedido** — o abatimento é limitado ao que a linha pedia, então ter
+  mais em casa não muda nada;
+- **item sem quantidade** — não abate, e a lista já sabia disso;
+- **linha comprada e lista paga** — depois da compra a pessoa guarda o que trouxe na
+  despensa, e o aviso pediria uma lista nova do que já está em casa;
+- **avulso** — o aviso mostra a descrição do item do plano, e o avulso não tem; ele é
+  abatido na criação e para aí;
+- **linha que o plano já desatualizou** — gerar de novo resolve as duas, e um aviso basta.
+
+Para o aviso aparecer sem recarregar o app, tudo que mexe na despensa (cadastro, edição,
+remoção, a foto e o guia "Do seu plano") invalida também `['shopping-list']`.
 
 **O item comprado é do servidor, não da tela.** `purchased_at` guarda o instante
 em que a pessoa marcou, e não um booleano: sair da tela e voltar não perde o
@@ -273,6 +294,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Adicionar e remover item | ✅ | Digita, escolhe o produto do catálogo e diz quanto tem |
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
+| Voltar e "Concluí a despensa" | ✅ | Não estava no protótipo. "Voltar" devolve à aba de onde a pessoa veio, ou ao início; "Concluí a despensa" cumpre a etapa da trilha (`POST /meal-plans/{id}/pantry-review`) e leva ao Mercado. Ver "A trilha da jornada" |
 | Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
 | "Do seu plano": você tem isto em casa? | ✅ | Não estava no protótipo. Lista os produtos já confirmados do plano que ainda não estão na despensa; "Tenho" grava o item vinculado ao produto e sem quantidade, "Não tenho" só o tira da pergunta. Ver abaixo |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
@@ -519,9 +541,17 @@ sem ter sido cumprida por inteiro: quem gerou a lista com 9 de 16 itens confirma
 passou da confirmação. O progresso parcial ("9/16") só aparece na etapa em andamento.
 
 A etapa **Despensa** vem antes da região pelo mesmo motivo da pergunta no Mercado: a
-despensa é descontada na geração. Ela se cumpre quando há ao menos um item na despensa; quem
-gera a lista sem ela a deixa **ultrapassada** (como a confirmação parcial), e a trilha segue.
-O botão do início nessa etapa é "Cadastrar a despensa", que leva à aba Despensa.
+despensa é descontada na geração. Ela se cumpre quando a pessoa **diz que terminou** — pelo
+"Concluí a despensa" da aba ou pelo "Não tenho nada em casa" do Mercado —, e isso fica
+gravado no plano, em `meal_plans.pantry_reviewed_at`. Antes ela se cumpria com ao menos um
+item na despensa, e a etapa ficava verde sem a pessoa ter passado por ela: a despensa é da
+conta, e itens de um plano anterior bastavam. Quem gera a lista sem concluir a deixa
+**ultrapassada** (como a confirmação parcial), e a trilha segue.
+
+O botão do início nessa etapa é "Cadastrar a despensa", que leva à aba Despensa. Lá, além do
+"Concluí a despensa", que leva ao Mercado, há um "Voltar" para a aba de onde a pessoa veio
+(as abas guardam o histórico, `backBehavior="history"`); quem chegou pelo início volta ao
+início.
 
 ### Tela de início
 

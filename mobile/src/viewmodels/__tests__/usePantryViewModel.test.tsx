@@ -260,7 +260,63 @@ it('remover apaga o item pela API', async () => {
   await waitFor(() => expect(removerApi).toHaveBeenCalledWith('a'));
 });
 
-it('item da foto entra no cache e as receitas recarregam uma vez só', async () => {
+describe('a lista de compras relê depois de mexer na despensa', () => {
+  // O servidor compara o desconto gravado na lista com a despensa de agora;
+  // sem reler, o aviso de despensa alterada só apareceria na volta do app.
+  const LISTA = {
+    id: 'lista-1',
+    meal_plan_id: 'plano-1',
+    state_code: 'DF',
+    city: 'Brasília',
+    estimated_total: '10.00',
+    calculated_at: '2026-10-17T10:00:00Z',
+    items: [],
+    outdated_items: [],
+  };
+
+  async function montarComLista() {
+    lerLista.mockResolvedValue(LISTA);
+    const montado = await montar('lista-1');
+    await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(1));
+    return montado;
+  }
+
+  it('ao cadastrar', async () => {
+    adicionarApi.mockResolvedValue({});
+    const { result } = await montarComLista();
+    await act(async () => result.current.adicao.setTexto('azeite da vó'));
+    await act(async () => result.current.adicao.comecarEscolha());
+
+    await act(async () => result.current.adicao.guardarSoTexto());
+
+    await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+  });
+
+  it('ao editar', async () => {
+    atualizarApi.mockResolvedValue({});
+    const { result } = await montarComLista();
+    await act(async () =>
+      result.current.edicao.abrir(
+        item({ id: 'a', product: produto('Arroz'), quantity: '2.000', unit: 'kg' }),
+      ),
+    );
+
+    await act(async () => result.current.edicao.salvar());
+
+    await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+  });
+
+  it('ao remover', async () => {
+    removerApi.mockResolvedValue(undefined);
+    const { result } = await montarComLista();
+
+    await act(async () => result.current.remover('a'));
+
+    await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+  });
+});
+
+it('item da foto entra no cache e as receitas e a lista recarregam uma vez só', async () => {
   jest.useFakeTimers();
   try {
     const { result } = await montar();
@@ -276,8 +332,10 @@ it('item da foto entra no cache e as receitas recarregam uma vez só', async () 
 
     await act(async () => jest.advanceTimersByTime(ESPERA_DAS_RECEITAS));
 
-    expect(invalidar).toHaveBeenCalledTimes(1);
+    expect(invalidar).toHaveBeenCalledTimes(2);
     expect(invalidar).toHaveBeenCalledWith({ queryKey: ['recipe-suggestions'] });
+    // A lista relê para o aviso de despensa alterada aparecer sem sair da tela.
+    expect(invalidar).toHaveBeenCalledWith({ queryKey: ['shopping-list'] });
   } finally {
     jest.useRealTimers();
   }

@@ -48,6 +48,7 @@ function plano(itens: PlanItem[]): MealPlan {
     consent_at: '2026-09-27T10:00:00Z',
     consent_version: 'v1',
     prescribed_meals: null,
+    pantry_reviewed_at: null,
     created_at: '2026-09-27T10:00:00Z',
     items: itens,
   };
