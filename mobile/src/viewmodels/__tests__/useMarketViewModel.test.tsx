@@ -27,6 +27,8 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readShoppingList: jest.fn(),
   readPantry: jest.fn(),
+  readMealPlan: jest.fn(),
+  reviewPantry: jest.fn(),
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
   removeShoppingListItem: jest.fn(),
@@ -42,6 +44,8 @@ jest.mock('../../services/session', () => ({
 
 const lerLista = api.readShoppingList as jest.Mock;
 const lerDespensa = api.readPantry as jest.Mock;
+const lerPlano = api.readMealPlan as jest.Mock;
+const revisarApi = api.reviewPantry as jest.Mock;
 const gerarApi = api.generateShoppingList as jest.Mock;
 const marcarApi = api.setItemPurchased as jest.Mock;
 const removerApi = api.removeShoppingListItem as jest.Mock;
@@ -359,9 +363,20 @@ describe('useAddExtraItemViewModel', () => {
 });
 
 describe('usePantryQuestionViewModel', () => {
-  it('despensa vazia: pergunta; "não tenho nada" vira aviso', async () => {
+  beforeEach(() => {
+    lerPlano.mockResolvedValue({ id: 'plano-1', items: [], pantry_reviewed_at: null });
+    revisarApi.mockResolvedValue({
+      id: 'plano-1',
+      items: [],
+      pantry_reviewed_at: '2026-10-28T10:00:00Z',
+    });
+  });
+
+  it('despensa vazia: pergunta; "não tenho nada" vira aviso e conclui a etapa', async () => {
     lerDespensa.mockResolvedValue([]);
-    const { result } = await renderHook(() => usePantryQuestionViewModel(), { wrapper: Provedor });
+    const { result } = await renderHook(() => usePantryQuestionViewModel('plano-1'), {
+      wrapper: Provedor,
+    });
 
     await waitFor(() => expect(result.current.perguntar).toBe(true));
     expect(result.current.semDespensa).toBe(false);
@@ -370,13 +385,31 @@ describe('usePantryQuestionViewModel', () => {
 
     expect(result.current.perguntar).toBe(false);
     expect(result.current.semDespensa).toBe(true);
+    await waitFor(() => expect(revisarApi).toHaveBeenCalledWith('plano-1'));
+  });
+
+  it('quem já concluiu a despensa deste plano não é perguntado de novo', async () => {
+    lerDespensa.mockResolvedValue([]);
+    lerPlano.mockResolvedValue({
+      id: 'plano-1',
+      items: [],
+      pantry_reviewed_at: '2026-10-28T10:00:00Z',
+    });
+    const { result } = await renderHook(() => usePantryQuestionViewModel('plano-1'), {
+      wrapper: Provedor,
+    });
+
+    await waitFor(() => expect(result.current.semDespensa).toBe(true));
+    expect(result.current.perguntar).toBe(false);
   });
 
   it('com itens, conta quantos e não pergunta', async () => {
     lerDespensa.mockResolvedValue([
       { id: 'p1', raw_description: 'arroz', product: null, quantity: null, unit: null },
     ]);
-    const { result } = await renderHook(() => usePantryQuestionViewModel(), { wrapper: Provedor });
+    const { result } = await renderHook(() => usePantryQuestionViewModel('plano-1'), {
+      wrapper: Provedor,
+    });
 
     await waitFor(() => expect(result.current.total).toBe(1));
     expect(result.current.perguntar).toBe(false);
@@ -384,7 +417,9 @@ describe('usePantryQuestionViewModel', () => {
 
   it('se a despensa não carrega, não pergunta nem avisa', async () => {
     lerDespensa.mockRejectedValue(new Error('rede'));
-    const { result } = await renderHook(() => usePantryQuestionViewModel(), { wrapper: Provedor });
+    const { result } = await renderHook(() => usePantryQuestionViewModel('plano-1'), {
+      wrapper: Provedor,
+    });
 
     await waitFor(() => expect(lerDespensa).toHaveBeenCalled());
     expect(result.current.perguntar).toBe(false);

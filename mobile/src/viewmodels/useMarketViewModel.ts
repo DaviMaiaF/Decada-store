@@ -27,6 +27,7 @@ import { formatMoney } from '../services/format';
 import { readRegion, saveRegion } from '../services/session';
 import { simulatedDifference, simulatedTotal } from '../services/simulation';
 import { parseDecimal, suggestedAmount } from '../services/units';
+import { usePantryReviewViewModel } from './usePantryReviewViewModel';
 import type {
   MeasurementUnit,
   Product,
@@ -82,11 +83,16 @@ export function useMarketViewModel(listId: string | null) {
  * A despensa é descontada quando a lista é gerada, e a lista fica congelada: quem
  * gera com a despensa vazia leva a compra inteira. Por isso a pergunta vem antes,
  * mas não trava — "não tenho nada" e simplesmente gerar são respostas válidas.
+ * "Não tenho nada" conclui a etapa Despensa da trilha, como o botão da aba.
  * Lê a mesma chave da aba Despensa, então cadastrar lá aparece aqui na volta.
  */
-export function usePantryQuestionViewModel() {
+export function usePantryQuestionViewModel(planId: string | null) {
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
-  const [semNada, setSemNada] = useState(false);
+  const revisao = usePantryReviewViewModel(planId);
+  const [respondeuAgora, setRespondeuAgora] = useState(false);
+  // A resposta vale para o plano, não só para a tela: quem já disse "não tenho
+  // nada" não é perguntado de novo ao reabrir o app.
+  const semNada = respondeuAgora || revisao.concluida;
 
   const total = despensa.data?.length ?? 0;
   // Sem saber a despensa (carregando ou erro), não há o que perguntar nem avisar.
@@ -98,7 +104,11 @@ export function usePantryQuestionViewModel() {
     perguntar: sabe && total === 0 && !semNada,
     /** Respondeu que não tem nada: a lista sai com a compra inteira. */
     semDespensa: sabe && total === 0 && semNada,
-    naoTenhoNada: () => setSemNada(true),
+    /** Também conclui a etapa Despensa da trilha: a pessoa respondeu. */
+    naoTenhoNada: () => {
+      setRespondeuAgora(true);
+      revisao.concluir();
+    },
   };
 }
 

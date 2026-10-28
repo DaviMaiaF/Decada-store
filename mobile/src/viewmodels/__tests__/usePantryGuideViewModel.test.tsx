@@ -63,6 +63,7 @@ function plano(items: PlanItem[]): MealPlan {
     created_at: '2026-10-01T10:00:00Z',
     items,
     prescribed_meals: null,
+    pantry_reviewed_at: null,
   };
 }
 

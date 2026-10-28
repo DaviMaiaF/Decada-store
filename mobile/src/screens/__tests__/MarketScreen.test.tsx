@@ -17,6 +17,8 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readShoppingList: jest.fn(),
   readPantry: jest.fn(),
+  readMealPlan: jest.fn(),
+  reviewPantry: jest.fn(),
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
   simulateShoppingList: jest.fn(),
@@ -38,6 +40,8 @@ jest.mock('../../services/session', () => ({
 
 const lerLista = api.readShoppingList as jest.Mock;
 const lerDespensa = api.readPantry as jest.Mock;
+const lerPlano = api.readMealPlan as jest.Mock;
+const revisarDespensa = api.reviewPantry as jest.Mock;
 const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
 const simular = api.simulateShoppingList as jest.Mock;
@@ -130,6 +134,12 @@ beforeEach(() => {
   // esse temporizador de pé — o suficiente para o Jest não encerrar sozinho.
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
+  lerPlano.mockResolvedValue({ id: 'plano-1', items: [], pantry_reviewed_at: null });
+  revisarDespensa.mockResolvedValue({
+    id: 'plano-1',
+    items: [],
+    pantry_reviewed_at: '2026-10-28T10:00:00Z',
   });
   lerDespensa.mockResolvedValue([]);
   lerRegiao.mockResolvedValue({ stateCode: 'DF', city: 'Brasília' });
@@ -613,6 +623,8 @@ describe('pergunta da despensa antes de gerar', () => {
     await fireEvent.press(await screen.findByText('Não tenho nada em casa'));
 
     expect(screen.queryByText('O que você já tem em casa?')).toBeNull();
+    // A resposta conclui a etapa Despensa da trilha.
+    await waitFor(() => expect(revisarDespensa).toHaveBeenCalled());
     expect(screen.getByText('Sem despensa, a lista sai com a compra inteira.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Gerar lista de compras'));
     await waitFor(() => expect(gerarLista).toHaveBeenCalled());

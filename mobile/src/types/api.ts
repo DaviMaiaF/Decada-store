@@ -54,6 +54,11 @@ export interface MealPlan {
   /** Refeições, substituições e orientação do plano montado pela nutricionista
    * no app. Só para ler: a compra sai de `items`. Nulo no plano vindo de PDF. */
   prescribed_meals: PrescribedPlan | null;
+  /**
+   * Quando a pessoa concluiu a etapa Despensa deste plano; nulo se ainda não.
+   * Ter itens na despensa não basta: ela é da conta e pode ser de antes do plano.
+   */
+  pantry_reviewed_at: string | null;
 }
 
 /** Plano na listagem: sem os itens, que vêm por `readMealPlan`. */

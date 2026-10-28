@@ -124,7 +124,7 @@ function FormularioRegiaoEGeracao({
   onCancel?: () => void;
 }) {
   const vm = useRegionFormViewModel(planId, onGenerated);
-  const despensa = usePantryQuestionViewModel();
+  const despensa = usePantryQuestionViewModel(planId);
 
   return (
     <>

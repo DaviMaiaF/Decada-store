@@ -35,7 +35,6 @@ import { Trilha } from '../components/Trilha';
 import {
   readMealPlan,
   readMealPlans,
-  readPantry,
   readShoppingList,
   readShoppingLists,
 } from '../services/api';
@@ -90,10 +89,6 @@ export default function AppNavigator() {
     enabled: listId !== null,
   });
 
-  // Mesma chave da aba Despensa: o cache é um só. A despensa entra no desconto
-  // quando a lista é gerada, então dizer o que há em casa vem antes da região.
-  const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
-
   const itensDoPlano = plano.data?.items ?? [];
   const confirmados = itensDoPlano.filter((item) => item.status === 'confirmado').length;
 
@@ -108,7 +103,10 @@ export default function AppNavigator() {
       cumprida: itensDoPlano.length > 0 && confirmados === itensDoPlano.length,
       detalhe: itensDoPlano.length > 0 ? `${confirmados}/${itensDoPlano.length}` : undefined,
     },
-    { rotulo: 'Despensa', cumprida: (despensa.data?.length ?? 0) > 0 },
+    // Cumpre quando a pessoa diz que terminou, para este plano. Ter algum item
+    // na despensa não bastava: ela é da conta, e itens de antes deixavam a
+    // etapa verde sem a pessoa ter passado por ela.
+    { rotulo: 'Despensa', cumprida: plano.data?.pantry_reviewed_at != null },
     { rotulo: 'Região', cumprida: listId !== null },
     {
       rotulo: 'Comprar',
