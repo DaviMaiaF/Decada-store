@@ -52,6 +52,11 @@ class MealPlan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # referência, para o plano sobreviver à nutricionista excluir a conta.
     # Nulo no plano importado por PDF.
     prescribed_meals: Mapped[dict | None] = mapped_column(JSON)
+    # Quando a pessoa disse que terminou de dizer o que tem em casa para este
+    # plano. É o que cumpre a etapa Despensa da trilha: ter algum item na
+    # despensa não basta, porque a despensa é da conta e pode ter vindo de
+    # antes deste plano. Nulo enquanto ela não concluiu.
+    pantry_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped["User"] = relationship(back_populates="meal_plans")
     items: Mapped[list["PlanItem"]] = relationship(

@@ -118,6 +118,58 @@ def test_plano_de_outra_pessoa_devolve_404(client, marina, outra_pessoa):
     assert resposta.status_code == 404
 
 
+def test_plano_novo_nasce_com_a_despensa_por_revisar(client, marina):
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
+
+    plano = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
+
+    # Ter itens na despensa da conta não conta: ela pode ser de antes deste plano.
+    assert plano["pantry_reviewed_at"] is None
+
+
+def test_concluir_a_despensa_marca_o_plano(client, marina):
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
+
+    resposta = client.post(f"/meal-plans/{plano_id}/pantry-review", headers=_headers(marina))
+
+    assert resposta.status_code == 200
+    assert resposta.json()["pantry_reviewed_at"] is not None
+    relido = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
+    assert relido["pantry_reviewed_at"] == resposta.json()["pantry_reviewed_at"]
+
+
+def test_concluir_a_despensa_de_novo_mantem_a_primeira_data(client, marina):
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
+    primeira = client.post(
+        f"/meal-plans/{plano_id}/pantry-review", headers=_headers(marina)
+    ).json()["pantry_reviewed_at"]
+
+    segunda = client.post(f"/meal-plans/{plano_id}/pantry-review", headers=_headers(marina))
+
+    assert segunda.status_code == 200
+    assert segunda.json()["pantry_reviewed_at"] == primeira
+
+
+def test_concluir_a_despensa_do_plano_de_outra_pessoa_devolve_404(
+    client, marina, outra_pessoa
+):
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
+
+    resposta = client.post(
+        f"/meal-plans/{plano_id}/pantry-review", headers=_headers(outra_pessoa)
+    )
+
+    assert resposta.status_code == 404
+    relido = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
+    assert relido["pantry_reviewed_at"] is None
+
+
+def test_concluir_a_despensa_exige_autenticacao(client, marina):
+    plano_id = importar_plano(client, marina)["meal_plan"]["id"]
+
+    assert client.post(f"/meal-plans/{plano_id}/pantry-review").status_code == 401
+
+
 def test_lista_os_planos_do_mais_recente_ao_mais_antigo(client, marina):
     importar_plano(client, marina, ["100 g de arroz integral"])
     importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
