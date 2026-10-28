@@ -18,7 +18,7 @@ export type ProximoPasso = { titulo: string; texto: string; botao: string; aba: 
 
 /**
  * O que fazer em cada etapa da trilha, na mesma ordem dela:
- * Enviar → Confirmar → Região → Comprar.
+ * Enviar → Confirmar → Despensa → Região → Comprar.
  */
 const PASSOS: ProximoPasso[] = [
   {
@@ -32,6 +32,12 @@ const PASSOS: ProximoPasso[] = [
     texto: 'Diga qual produto do mercado corresponde a cada item do plano.',
     botao: 'Confirmar produtos',
     aba: 'Dieta',
+  },
+  {
+    titulo: 'Diga o que você já tem em casa',
+    texto: 'A despensa abate da lista o que você não precisa comprar.',
+    botao: 'Cadastrar a despensa',
+    aba: 'Despensa',
   },
   {
     titulo: 'Escolha a região e gere a lista',

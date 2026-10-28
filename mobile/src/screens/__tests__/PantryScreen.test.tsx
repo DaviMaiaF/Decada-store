@@ -115,7 +115,7 @@ let cliente: QueryClient;
 async function montar(listId: string | null = null) {
   await render(
     <QueryClientProvider client={cliente}>
-      <PantryScreen listId={listId} />
+      <PantryScreen listId={listId} planId={null} />
     </QueryClientProvider>,
   );
 }
@@ -611,7 +611,7 @@ describe('quantidade do item da despensa', () => {
   async function chegarNaQuantidade(candidato = 'Aveia em flocos') {
     await render(
       <QueryClientProvider client={cliente}>
-        <PantryScreen listId={null} />
+        <PantryScreen listId={null} planId={null} />
       </QueryClientProvider>,
     );
     await fireEvent.changeText(

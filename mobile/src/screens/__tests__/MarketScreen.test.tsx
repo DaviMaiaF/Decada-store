@@ -16,6 +16,7 @@ import type { ShoppingList, ShoppingListItem } from '../../types/api';
 jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   readShoppingList: jest.fn(),
+  readPantry: jest.fn(),
   generateShoppingList: jest.fn(),
   setItemPurchased: jest.fn(),
   simulateShoppingList: jest.fn(),
@@ -36,6 +37,7 @@ jest.mock('../../services/session', () => ({
 }));
 
 const lerLista = api.readShoppingList as jest.Mock;
+const lerDespensa = api.readPantry as jest.Mock;
 const gerarLista = api.generateShoppingList as jest.Mock;
 const marcarItem = api.setItemPurchased as jest.Mock;
 const simular = api.simulateShoppingList as jest.Mock;
@@ -116,6 +118,7 @@ async function montar(
         listId="lista-1"
         onGenerated={onGenerated}
         onCompraConcluida={onCompraConcluida}
+        onIrADespensa={jest.fn()}
       />
     </QueryClientProvider>,
   );
@@ -128,6 +131,7 @@ beforeEach(() => {
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
+  lerDespensa.mockResolvedValue([]);
   lerRegiao.mockResolvedValue({ stateCode: 'DF', city: 'Brasília' });
   salvarRegiao.mockResolvedValue(undefined);
 });
@@ -555,6 +559,7 @@ it('permite escolher a região e gera a lista com os dados informados', async ()
         listId={null}
         onGenerated={onGenerated}
         onCompraConcluida={jest.fn()}
+        onIrADespensa={jest.fn()}
       />
     </QueryClientProvider>,
   );
@@ -576,6 +581,54 @@ it('permite escolher a região e gera a lista com os dados informados', async ()
   });
 });
 
+
+describe('pergunta da despensa antes de gerar', () => {
+  async function montarSemLista(onIrADespensa: jest.Mock = jest.fn()) {
+    await render(
+      <QueryClientProvider client={cliente}>
+        <MarketScreen
+          planId="plano-1"
+          listId={null}
+          onGenerated={jest.fn()}
+          onCompraConcluida={jest.fn()}
+          onIrADespensa={onIrADespensa}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it('com a despensa vazia, pergunta o que há em casa e leva ao cadastro', async () => {
+    const onIrADespensa = jest.fn();
+    await montarSemLista(onIrADespensa);
+
+    expect(await screen.findByText('O que você já tem em casa?')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Cadastrar minha despensa'));
+
+    expect(onIrADespensa).toHaveBeenCalled();
+  });
+
+  it('"não tenho nada" troca a pergunta por um aviso e não trava a geração', async () => {
+    await montarSemLista();
+
+    await fireEvent.press(await screen.findByText('Não tenho nada em casa'));
+
+    expect(screen.queryByText('O que você já tem em casa?')).toBeNull();
+    expect(screen.getByText('Sem despensa, a lista sai com a compra inteira.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Gerar lista de compras'));
+    await waitFor(() => expect(gerarLista).toHaveBeenCalled());
+  });
+
+  it('com itens na despensa, diz quantos serão descontados e não pergunta', async () => {
+    lerDespensa.mockResolvedValue([
+      { id: 'p1', raw_description: 'arroz', product: null, quantity: null, unit: null },
+      { id: 'p2', raw_description: 'ovos', product: null, quantity: null, unit: null },
+    ]);
+    await montarSemLista();
+
+    expect(await screen.findByText('2 itens em casa serão descontados da lista.')).toBeTruthy();
+    expect(screen.queryByText('O que você já tem em casa?')).toBeNull();
+  });
+});
 
 describe('item avulso', () => {
   const chia = produto('Chia sementes', 'mercearia');

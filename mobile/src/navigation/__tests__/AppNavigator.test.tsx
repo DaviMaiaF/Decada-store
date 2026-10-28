@@ -165,7 +165,7 @@ describe('trilha da jornada', () => {
   it('sem plano, a etapa atual é enviar', async () => {
     await montar();
 
-    expect(await screen.findByLabelText('Etapa 1 de 4: Enviar')).toBeTruthy();
+    expect(await screen.findByLabelText('Etapa 1 de 5: Enviar')).toBeTruthy();
   });
 
   it('com plano, a etapa atual passa a ser confirmar', async () => {
@@ -175,7 +175,7 @@ describe('trilha da jornada', () => {
 
     // Quem abria o Mercado antes de confirmar via uma tela vazia sem entender
     // que o problema era a etapa anterior.
-    expect(await screen.findByLabelText('Etapa 2 de 4: Confirmar')).toBeTruthy();
+    expect(await screen.findByLabelText('Etapa 2 de 5: Confirmar')).toBeTruthy();
   });
 
   it('mostra o quanto falta da etapa em andamento', async () => {

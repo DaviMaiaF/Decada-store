@@ -35,6 +35,7 @@ import { Trilha } from '../components/Trilha';
 import {
   readMealPlan,
   readMealPlans,
+  readPantry,
   readShoppingList,
   readShoppingLists,
 } from '../services/api';
@@ -89,6 +90,10 @@ export default function AppNavigator() {
     enabled: listId !== null,
   });
 
+  // Mesma chave da aba Despensa: o cache é um só. A despensa entra no desconto
+  // quando a lista é gerada, então dizer o que há em casa vem antes da região.
+  const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
+
   const itensDoPlano = plano.data?.items ?? [];
   const confirmados = itensDoPlano.filter((item) => item.status === 'confirmado').length;
 
@@ -103,6 +108,7 @@ export default function AppNavigator() {
       cumprida: itensDoPlano.length > 0 && confirmados === itensDoPlano.length,
       detalhe: itensDoPlano.length > 0 ? `${confirmados}/${itensDoPlano.length}` : undefined,
     },
+    { rotulo: 'Despensa', cumprida: (despensa.data?.length ?? 0) > 0 },
     { rotulo: 'Região', cumprida: listId !== null },
     {
       rotulo: 'Comprar',
@@ -221,6 +227,9 @@ export default function AppNavigator() {
               listId={listId}
               onGenerated={setListaDaSessao}
               onCompraConcluida={() => setNoInicio(true)}
+              onIrADespensa={() => {
+                if (navegacao.isReady()) navegacao.navigate('Despensa');
+              }}
             />
           )}
         </Tab.Screen>
@@ -234,7 +243,7 @@ export default function AppNavigator() {
         >
           {/* A despensa precisa da lista corrente por dois motivos: a receita
               conta o que será comprado, e o ingrediente que falta vai para lá. */}
-          {() => <PantryScreen listId={listId} />}
+          {() => <PantryScreen listId={listId} planId={planId} />}
         </Tab.Screen>
 
         <Tab.Screen
