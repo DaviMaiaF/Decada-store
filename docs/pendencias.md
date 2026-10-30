@@ -19,9 +19,11 @@
   crédito com os titulares de teste. Nada é cobrado; regras em
   [`design/telas.md`](design/telas.md#3-mercado), rotas em
   [`integracao-api.md`](integracao-api.md#pagamento-simulado)
+- **API publicada**: no Render, com Postgres gerenciado no Neon, imagem de produção
+  (`backend/Dockerfile.prod`) e `SECRET_KEY` própria obrigatória fora de desenvolvimento.
+  O app abre de qualquer rede por APK Android e EAS Update. Como funciona e como manter
+  em [`publicacao.md`](publicacao.md)
 
 ## O que falta
 
-| # | Pendência | Observação |
-|---|---|---|
-| 1 | **API publicada** (Railway, Render ou Vercel) | Não há deploy. O Dockerfile atual é de desenvolvimento (`--reload`); precisa de Postgres gerenciado e `SECRET_KEY` próprio |
+Nenhuma pendência aberta do retorno do professor.
