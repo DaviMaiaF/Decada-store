@@ -39,6 +39,14 @@
         }
       ],
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ad872add-88c9-476b-8168-b0cc5d25c71f"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ad872add-88c9-476b-8168-b0cc5d25c71f"
+    }
   }
 }
