@@ -24,6 +24,8 @@ export const motion = {
     enter: 500,
     // Meio ciclo do movimento de fundo: lento a ponto de não chamar a atenção.
     ambient: 4000,
+    // Entre um item e o próximo de uma lista que entra em cascata.
+    stagger: 60,
   },
 
   // Em px: o quanto um elemento sobe ao entrar na tela.
