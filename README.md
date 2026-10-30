@@ -16,7 +16,7 @@ O app **não prescreve dieta**: ele operacionaliza uma prescrição que já exis
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
-![React Native](https://img.shields.io/badge/React_Native-Expo_57-61DAFB?logo=react&logoColor=black)
+![React Native](https://img.shields.io/badge/React_Native-Expo_58-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
 Projeto acadêmico — Engenharia de Software, UCB. Prioridade: MVP funcional e bem
@@ -25,6 +25,10 @@ documentado.
 > **Status:** beta. Backend e app mobile funcionando de ponta a ponta com dados de
 > preço **fictícios** (seed de desenvolvimento). A leitura de NFC-e, fonte real de
 > preço, está fora do MVP.
+>
+> **Para usar sem instalar nada no computador:** a API está publicada em
+> `https://decada-api.onrender.com` e o app abre no celular por APK (Android) ou Expo Go,
+> de qualquer rede — passo a passo em [`docs/abrir-no-celular.md`](docs/abrir-no-celular.md).
 
 ## Funcionalidades
 
@@ -68,6 +72,8 @@ Dieta, Mercado, Despensa e Economia — e uma tela de início.
 | [`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md) | Arquitetura do app em MVVM: o que cabe em cada camada e o teste que guarda a regra |
 | [`docs/design/telas.md`](docs/design/telas.md) | Contrato tela a tela: o que existe, o que falta |
 | [`docs/demo/roteiro.md`](docs/demo/roteiro.md) | Roteiro de demonstração de cinco minutos |
+| [`docs/abrir-no-celular.md`](docs/abrir-no-celular.md) | Como abrir o app publicado no celular, por APK ou Expo Go, sem o notebook |
+| [`docs/publicacao.md`](docs/publicacao.md) | O ambiente publicado: Render, Neon, EAS Update; variáveis, deploy, rollback e seed |
 | [`docs/estado-do-projeto.md`](docs/estado-do-projeto.md) | Levantamento do estado das branches |
 
 ## O que falta
@@ -92,12 +98,14 @@ continua sendo a NFC-e.
 | Testes | pytest (backend), Jest + React Native Testing Library (mobile) |
 | Reconhecimento de foto | API do Claude (opcional) |
 | Ambiente | Docker Compose para banco, API e app |
+| Publicação | API no Render (Docker), banco no Neon, app por EAS Build (APK) e EAS Update |
 
 ## Pré-requisitos
 
 - Docker e Docker Compose (caminho mais simples — dispensa o resto)
 - Para rodar fora do Docker: Python 3.10+ e Node.js 20+
-- Um celular com o app **Expo Go** na mesma rede Wi-Fi do computador (ou um emulador)
+- Um celular com o app **Expo Go** na mesma rede Wi-Fi do computador (ou um emulador).
+  Para só usar o app, sem rodar o código, veja [Ambiente publicado](#ambiente-publicado)
 - Opcional: chave da API do Claude (`ANTHROPIC_API_KEY`) para a despensa por foto
 
 ## Subir tudo com um comando
@@ -281,6 +289,26 @@ docker compose ps
 
 O serviço `db` deve aparecer como `running (healthy)`.
 
+## Ambiente publicado
+
+Uma cópia de **demonstração** roda fora de qualquer notebook:
+
+| | |
+|---|---|
+| API | `https://decada-api.onrender.com` — [`/docs`](https://decada-api.onrender.com/docs), `/health` |
+| Banco | Postgres gerenciado no Neon |
+| App | APK Android (EAS Build) ou Expo Go, recebendo o código pela EAS Update no canal `demo` |
+
+Roda com `APP_ENV=demo`: catálogo e preços fictícios, **sem** a conta de
+desenvolvimento e só com contas de teste — nada de plano alimentar real ali (decisão 13
+do [`CLAUDE.md`](CLAUDE.md)). No plano gratuito do Render a API dorme depois de ~15 min
+sem uso e a primeira chamada leva até 1 min; abra o `/health` antes de apresentar.
+
+- **Usar no celular:** [`docs/abrir-no-celular.md`](docs/abrir-no-celular.md).
+- **Publicar:** merge na `main` publica a API (com migração); o app sai com
+  `cd mobile && eas update --channel demo --environment preview --message "…"`.
+  Detalhes, variáveis, rollback e seed em [`docs/publicacao.md`](docs/publicacao.md).
+
 ## Demonstração
 
 Roteiro de cinco minutos, com os números esperados em cada passo, em
@@ -328,8 +356,9 @@ O seed cria uma conta pronta, para não precisar cadastrar uma a cada banco novo
 | senha | `decada-beta-2026` |
 
 Não é exceção na autenticação — é um usuário comum, com senha passando pelo mesmo
-bcrypt. O que a protege é a trava de ambiente do seed, que se recusa a rodar se
-`APP_ENV` não for `dev`.
+bcrypt. Ela só é criada com `APP_ENV=dev`: no ambiente publicado (`demo`) o seed carrega
+o catálogo mas não esta conta, cuja senha está no repositório, e em `prod` o seed se
+recusa a rodar.
 
 Verificação:
 
@@ -369,9 +398,9 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `APP_ENV` | `dev` | Ambiente da aplicação |
+| `APP_ENV` | `dev` | Ambiente da aplicação: `dev`, `demo` (servidor publicado) ou `prod` |
 | `CONSENT_VERSION` | `v1` | Versão vigente do termo de consentimento (LGPD) |
-| `SECRET_KEY` | valor de desenvolvimento | Assina os tokens. **Troque em produção** |
+| `SECRET_KEY` | valor de desenvolvimento | Assina os tokens. Fora de `dev`, a API **se recusa a subir** com o valor padrão |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | Validade do token, em minutos (7 dias) |
 | `ANTHROPIC_API_KEY` | vazio | Chave da API do Claude para a despensa por foto. Sem ela, só a foto fica indisponível (503). Crie em console.anthropic.com → API Keys; **nunca versione** |
 | `VISION_MODEL` | `claude-haiku-5-5` | Modelo que reconhece os alimentos na foto |
@@ -380,6 +409,7 @@ Todas as variáveis ficam no `.env` da raiz (veja `.env.example`). O backend as 
 | `POSTGRES_DB` | `decada` | Nome do banco |
 | `POSTGRES_HOST` | `localhost` | Host do banco visto pelo backend |
 | `POSTGRES_PORT` | `5432` | Porta publicada pelo container |
+| `DATABASE_URL` | vazio | URL única do banco (Neon, Render). Se definida, vence as `POSTGRES_*` |
 
 Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 `docker compose up -d` novamente.
@@ -399,6 +429,8 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   │   └── main.py        # aplicação FastAPI
 │   ├── alembic/           # migrações
 │   ├── tests/
+│   ├── Dockerfile         # imagem de desenvolvimento (compose)
+│   ├── Dockerfile.prod    # imagem de produção (Render)
 │   └── pyproject.toml
 ├── mobile/
 │   ├── src/
@@ -409,12 +441,16 @@ Se a porta 5432 já estiver em uso, altere `POSTGRES_PORT` no `.env` e rode
 │   │   ├── theme/         # tokens do sistema de design
 │   │   ├── types/         # Model: contrato da API
 │   │   └── viewmodels/    # ViewModel: um hook por tela, com estado, queries e ações
-│   └── App.tsx
+│   ├── App.tsx
+│   ├── app.json           # configuração do Expo e vínculo com o projeto EAS
+│   └── eas.json           # perfil do APK de demonstração (canal demo)
 ├── docs/
 │   ├── design/        # protótipos, sistema de design, contrato das telas
 │   ├── arquitetura-mvvm.md # camadas do app e a convenção entre elas
 │   ├── lgpd.md        # consentimento, minimização e exclusão
-│   └── modelo-dados.md # diagrama ER e regras de exclusão
+│   ├── modelo-dados.md # diagrama ER e regras de exclusão
+│   ├── publicacao.md  # ambiente publicado: Render, Neon, EAS
+│   └── abrir-no-celular.md # roteiro para abrir o app publicado
 ├── .github/workflows/     # CI: pytest + ruff, tsc + jest
 ├── docker-compose.yml
 └── CLAUDE.md              # contexto do projeto para o Claude Code
