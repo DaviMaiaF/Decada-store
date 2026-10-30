@@ -7,6 +7,7 @@ status, formato da resposta e, principalmente, que ninguém enxerga dado de
 outra pessoa.
 """
 
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -287,6 +288,65 @@ def test_nao_da_para_confirmar_item_de_plano_alheio(client, marina, outra_pessoa
     )
 
     assert resposta.status_code == 404
+
+
+def test_remover_item_tira_do_plano_e_mantem_os_outros(client, marina):
+    plano = importar_plano(
+        client, marina, ["1,2 kg de peito de frango sem pele", "500 g de arroz"]
+    )
+    plano_id = plano["meal_plan"]["id"]
+    errado, certo = plano["meal_plan"]["items"][:2]
+
+    resposta = client.delete(
+        f"/meal-plans/{plano_id}/items/{errado['id']}", headers=_headers(marina)
+    )
+
+    assert resposta.status_code == 204
+    itens = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()["items"]
+    assert [i["id"] for i in itens] == [certo["id"]]
+
+
+def test_remover_item_inexistente_responde_404(client, marina):
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
+
+    resposta = client.delete(
+        f"/meal-plans/{plano['meal_plan']['id']}/items/{uuid.uuid4()}",
+        headers=_headers(marina),
+    )
+
+    assert resposta.status_code == 404
+
+
+def test_nao_da_para_remover_item_de_plano_alheio(client, marina, outra_pessoa):
+    plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
+    plano_id = plano["meal_plan"]["id"]
+    item = plano["meal_plan"]["items"][0]
+
+    resposta = client.delete(
+        f"/meal-plans/{plano_id}/items/{item['id']}", headers=_headers(outra_pessoa)
+    )
+
+    assert resposta.status_code == 404
+    itens = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()["items"]
+    assert len(itens) == 1
+
+
+def test_remover_item_confirmado_nao_quebra_a_lista_ja_gerada(client, marina, db_session):
+    plano_id, _ = plano_confirmado(client, marina, db_session)
+    lista = client.post(
+        f"/meal-plans/{plano_id}/shopping-lists",
+        headers=_headers(marina),
+        json={"state_code": "DF", "city": "Brasília"},
+    ).json()["shopping_list"]
+    item = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()["items"][0]
+
+    resposta = client.delete(
+        f"/meal-plans/{plano_id}/items/{item['id']}", headers=_headers(marina)
+    )
+
+    assert resposta.status_code == 204
+    lida = client.get(f"/shopping-lists/{lista['id']}", headers=_headers(marina))
+    assert lida.status_code == 200
 
 
 # --------------------------------------------------------------------------

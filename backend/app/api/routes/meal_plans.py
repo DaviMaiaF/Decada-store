@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -180,6 +180,21 @@ def confirm_item(
     session.commit()
     session.refresh(item)
     return item
+
+
+@router.delete("/{plan_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_item(
+    session: DbSession, user: CurrentPatient, plan_id: uuid.UUID, item_id: uuid.UUID
+) -> Response:
+    """Tira do plano um item lido errado.
+
+    É definitivo, como a exclusão de conta (decisão 9). A linha da lista de
+    compras que atendia ao item sai junto (`ON DELETE CASCADE`).
+    """
+    plan = _get_plan(session, user, plan_id)
+    session.delete(_get_item(plan, item_id))
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{plan_id}/pantry-review", response_model=MealPlanOut)
