@@ -8,9 +8,11 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Animated } from 'react-native';
 
 import AppNavigator from '../AppNavigator';
 import * as api from '../../services/api';
+import { motion } from '../../theme/motion';
 import type { MealPlanSummary, ShoppingListSummary } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
@@ -151,6 +153,19 @@ describe('voltar ao início', () => {
     await fireEvent.press(screen.getByLabelText('Voltar ao início'));
 
     expect(await screen.findByText('Olá!')).toBeTruthy();
+  });
+
+  it('o botão "Início" encolhe de leve ao toque, em vez de piscar', async () => {
+    const timing = jest.spyOn(Animated, 'timing');
+    lerPlanos.mockResolvedValue([planoSalvo()]);
+
+    await abrir();
+    await fireEvent.press(await screen.findByLabelText('Ir para Despensa'));
+    timing.mockClear();
+    await fireEvent(screen.getByLabelText('Voltar ao início'), 'pressIn');
+
+    expect(timing.mock.calls.map(([, config]) => config.toValue)).toContain(motion.pressedScale);
+    timing.mockRestore();
   });
 
   it('no próprio início não há botão de voltar a ele', async () => {

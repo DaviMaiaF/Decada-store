@@ -7,9 +7,11 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Animated } from 'react-native';
 
 import PantryScreen, { ESPERA_DAS_RECEITAS } from '../PantryScreen';
 import * as api from '../../services/api';
+import { motion } from '../../theme/motion';
 import type { PantryItem, Product, Recipe, RecipeAvailability } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
@@ -793,6 +795,21 @@ describe('etapa Despensa', () => {
     await fireEvent.press(screen.getByLabelText('Voltar'));
 
     expect(onVoltar).toHaveBeenCalled();
+  });
+
+  it('"Voltar" e "Adicionar" encolhem de leve ao toque', async () => {
+    const timing = jest.spyOn(Animated, 'timing');
+    await montar();
+    await fireEvent.changeText(screen.getByLabelText('Adicionar ingrediente'), 'ovos');
+
+    for (const rotulo of ['Voltar', 'Adicionar à despensa']) {
+      timing.mockClear();
+      await fireEvent(screen.getByLabelText(rotulo), 'pressIn');
+      expect(timing.mock.calls.map(([, config]) => config.toValue)).toContain(
+        motion.pressedScale,
+      );
+    }
+    timing.mockRestore();
   });
 
   it('"Concluí a despensa" cumpre a etapa e segue para a próxima', async () => {

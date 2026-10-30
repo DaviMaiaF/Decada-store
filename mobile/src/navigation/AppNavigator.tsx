@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -31,6 +31,7 @@ import HomeScreen, { type AbaDeDestino } from '../screens/HomeScreen';
 import MarketScreen from '../screens/MarketScreen';
 import PantryScreen from '../screens/PantryScreen';
 import UploadScreen from '../screens/UploadScreen';
+import { Tocavel } from '../components/Tocavel';
 import { Trilha } from '../components/Trilha';
 import {
   readMealPlan,
@@ -133,15 +134,15 @@ export default function AppNavigator() {
   const topo = (comInicio: boolean) => (
     <SafeAreaView edges={['top']} style={[styles.topo, styles.topoLinha]}>
       {comInicio ? (
-        <Pressable
+        <Tocavel
           accessibilityRole="button"
           accessibilityLabel="Voltar ao início"
           onPress={() => setNoInicio(true)}
-          style={({ pressed }) => [styles.botaoInicio, pressed && styles.botaoInicioPressionado]}
+          style={styles.botaoInicio}
         >
           <IconeInicio color={colors.primary} size={20} />
           <Text style={styles.botaoInicioTexto}>Início</Text>
-        </Pressable>
+        </Tocavel>
       ) : null}
       <View style={styles.trilha}>
         <Trilha etapas={etapas} />
@@ -287,7 +288,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  botaoInicioPressionado: { opacity: 0.6 },
   botaoInicioTexto: { ...typography.labelSm, color: colors.primary },
   inicio: { flex: 1, backgroundColor: colors.surface },
   carregando: {
