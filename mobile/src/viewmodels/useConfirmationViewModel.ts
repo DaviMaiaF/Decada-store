@@ -15,6 +15,7 @@ import {
   readCandidates,
   readMealPlan,
   readReceivedPrescriptions,
+  removePlanItem,
 } from '../services/api';
 import type { Candidate, PlanItem } from '../types/api';
 import { RECEIVED_KEY } from './useReceivedPrescriptionsViewModel';
@@ -165,9 +166,22 @@ export function usePlanItemViewModel(planId: string, item: PlanItem) {
     },
   });
 
+  // Apagar não tem volta: o primeiro toque só pede a confirmação.
+  const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
+  const remocao = useMutation({
+    mutationFn: () => removePlanItem(planId, item.id),
+    onSuccess: () => invalidarAposConfirmar(cliente, planId),
+  });
+
   return {
     aberto,
     confirmado,
+    confirmandoRemocao,
+    removendo: remocao.isPending,
+    remocaoFalhou: remocao.isError,
+    pedirRemocao: () => setConfirmandoRemocao(true),
+    cancelarRemocao: () => setConfirmandoRemocao(false),
+    remover: () => remocao.mutate(),
     sugestao: candidatos.data?.[0] ?? null,
     candidatos: candidatos.data ?? null,
     buscando: candidatos.isPending,

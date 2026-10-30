@@ -19,11 +19,13 @@ jest.mock('../../services/api', () => ({
   readMealPlan: jest.fn(),
   readCandidates: jest.fn(),
   confirmItem: jest.fn(),
+  removePlanItem: jest.fn(),
 }));
 
 const lerPlano = api.readMealPlan as jest.Mock;
 const lerCandidatos = api.readCandidates as jest.Mock;
 const confirmar = api.confirmItem as jest.Mock;
+const remover = api.removePlanItem as jest.Mock;
 
 function item(over: Partial<PlanItem> & { id: string }): PlanItem {
   return {
@@ -395,4 +397,25 @@ it('avisa de plano novo enviado pela nutricionista', async () => {
   await fireEvent.press(await screen.findByText('Ver plano novo'));
 
   expect(onNewPlan).toHaveBeenCalled();
+});
+
+it('remove um item lido errado só depois de confirmar', async () => {
+  remover.mockResolvedValue(undefined);
+  await montar();
+
+  await fireEvent.press(await screen.findByText('Remover item'));
+  expect(remover).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByText('Confirmar remoção'));
+
+  await waitFor(() => expect(remover).toHaveBeenCalledWith('plano-1', 'item-1'));
+});
+
+it('manter o item desfaz o pedido de remoção', async () => {
+  await montar();
+
+  await fireEvent.press(await screen.findByText('Remover item'));
+  await fireEvent.press(screen.getByText('Manter item'));
+
+  expect(remover).not.toHaveBeenCalled();
+  expect(screen.getByText('Remover item')).toBeTruthy();
 });

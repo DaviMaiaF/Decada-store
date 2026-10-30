@@ -175,6 +175,12 @@ function ItemDoPlano({
     confirmacaoFalhou,
     alternarAberto,
     confirmar,
+    confirmandoRemocao,
+    removendo,
+    remocaoFalhou,
+    pedirRemocao,
+    cancelarRemocao,
+    remover,
   } = usePlanItemViewModel(planId, item);
 
   return (
@@ -302,6 +308,23 @@ function ItemDoPlano({
           ) : null}
         </View>
       ) : null}
+
+      {/* Para o item que o PDF leu errado e não deveria estar no plano. */}
+      {confirmandoRemocao ? (
+        <View style={styles.acoes}>
+          <Body muted>Remover este item do plano? Não dá para desfazer.</Body>
+          <Button
+            label="Confirmar remoção"
+            variant="secondary"
+            onPress={remover}
+            loading={removendo}
+          />
+          <Button label="Manter item" variant="ghost" onPress={cancelarRemocao} />
+        </View>
+      ) : (
+        <Button label="Remover item" variant="ghost" onPress={pedirRemocao} />
+      )}
+      {remocaoFalhou ? <ErrorNotice message="não foi possível remover este item" /> : null}
     </Card>
   );
 }

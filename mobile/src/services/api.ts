@@ -153,6 +153,10 @@ export const confirmItem = (
     body: { product_id: productId, match_score: matchScore },
   });
 
+/** Tira do plano um item lido errado. Definitivo. */
+export const removePlanItem = (planId: string, itemId: string) =>
+  request<void>(`/meal-plans/${planId}/items/${itemId}`, { method: 'DELETE' });
+
 /** A pessoa terminou de dizer o que tem em casa para este plano. Repetir não muda nada. */
 export const reviewPantry = (planId: string) =>
   request<MealPlan>(`/meal-plans/${planId}/pantry-review`, { method: 'POST' });

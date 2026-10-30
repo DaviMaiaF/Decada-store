@@ -24,12 +24,14 @@ jest.mock('../../services/api', () => ({
   readMealPlan: jest.fn(),
   readCandidates: jest.fn(),
   confirmItem: jest.fn(),
+  removePlanItem: jest.fn(),
 }));
 
 const lerRecebidos = api.readReceivedPrescriptions as jest.Mock;
 const lerPlano = api.readMealPlan as jest.Mock;
 const lerCandidatos = api.readCandidates as jest.Mock;
 const confirmarApi = api.confirmItem as jest.Mock;
+const removerApi = api.removePlanItem as jest.Mock;
 
 function item(over: Partial<PlanItem> & { id: string }): PlanItem {
   return {
@@ -218,5 +220,39 @@ describe('usePlanItemViewModel', () => {
     await act(async () => result.current.alternarAberto());
 
     await waitFor(() => expect(lerCandidatos).toHaveBeenCalledWith('plano-1', 'a'));
+  });
+
+  it('remover pede confirmação, apaga o item e invalida plano e lista', async () => {
+    lerCandidatos.mockResolvedValue([]);
+    removerApi.mockResolvedValue(undefined);
+    const invalidar = jest.spyOn(cliente, 'invalidateQueries');
+    const { result } = await renderHook(
+      () => usePlanItemViewModel('plano-1', item({ id: 'a' })),
+      { wrapper: Provedor },
+    );
+
+    await act(async () => result.current.pedirRemocao());
+    expect(result.current.confirmandoRemocao).toBe(true);
+    expect(removerApi).not.toHaveBeenCalled();
+
+    await act(async () => result.current.remover());
+
+    await waitFor(() => expect(removerApi).toHaveBeenCalledWith('plano-1', 'a'));
+    await waitFor(() => expect(invalidar).toHaveBeenCalledWith({ queryKey: ['meal-plan', 'plano-1'] }));
+    await waitFor(() => expect(invalidar).toHaveBeenCalledWith({ queryKey: ['shopping-list'] }));
+  });
+
+  it('cancelar a remoção não chama a API', async () => {
+    lerCandidatos.mockResolvedValue([]);
+    const { result } = await renderHook(
+      () => usePlanItemViewModel('plano-1', item({ id: 'a' })),
+      { wrapper: Provedor },
+    );
+
+    await act(async () => result.current.pedirRemocao());
+    await act(async () => result.current.cancelarRemocao());
+
+    expect(result.current.confirmandoRemocao).toBe(false);
+    expect(removerApi).not.toHaveBeenCalled();
   });
 });
