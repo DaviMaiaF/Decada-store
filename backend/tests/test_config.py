@@ -1,8 +1,9 @@
-"""A URL do banco: variável única (Neon, Render) ou montada pelas POSTGRES_*."""
+"""Configuração: a URL do banco e a exigência de SECRET_KEY própria fora de dev."""
 
 import pytest
+from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import DEV_SECRET_KEY, Settings
 
 
 @pytest.fixture(autouse=True)
@@ -55,3 +56,23 @@ def test_preserva_parametros_de_ssl(monkeypatch):
     assert Settings(_env_file=None).database_url == (
         "postgresql+psycopg://u:p@ep.neon.tech/d?sslmode=require&channel_binding=require"
     )
+
+
+def test_dev_aceita_a_chave_padrao():
+    assert Settings(_env_file=None, app_env="dev").secret_key == DEV_SECRET_KEY
+
+
+@pytest.mark.parametrize("ambiente", ["demo", "prod"])
+@pytest.mark.parametrize("chave", [DEV_SECRET_KEY, ""])
+def test_fora_de_dev_recusa_chave_padrao_ou_vazia(ambiente, chave):
+    # Com a chave versionada no repositório, qualquer um assinaria um token válido.
+    with pytest.raises(ValidationError) as erro:
+        Settings(_env_file=None, app_env=ambiente, secret_key=chave)
+
+    assert "SECRET_KEY" in str(erro.value)
+
+
+def test_fora_de_dev_aceita_chave_propria():
+    settings = Settings(_env_file=None, app_env="demo", secret_key="x" * 48)
+
+    assert settings.secret_key == "x" * 48
