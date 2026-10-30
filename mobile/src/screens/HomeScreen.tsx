@@ -14,6 +14,7 @@ import type { ComponentType } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, SectionTitle } from '../components';
+import { Logo } from '../components/Logo';
 import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
 import type { EtapaDaTrilha } from '../components/Trilha';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
@@ -49,6 +50,7 @@ export default function HomeScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
+      <Logo tamanho={32} />
       <Text style={styles.titulo}>Olá!</Text>
       <Body muted>A DÉCADA transforma o plano da sua nutricionista em compra de mercado.</Body>
 

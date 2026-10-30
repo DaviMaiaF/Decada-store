@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Body, Button, Checkbox, ErrorNotice, Field } from '../components';
+import { Logo } from '../components/Logo';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { UserRole } from '../types/api';
 import { SENHA_MINIMA, useLoginViewModel } from '../viewmodels/useLoginViewModel';
@@ -37,7 +38,7 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
         <View style={styles.cabecalho}>
-          <Text style={styles.marca}>DÉCADA</Text>
+          <Logo tamanho={40} />
           <Text style={styles.titulo}>
             {cadastrando ? 'Criar sua conta' : 'Bem-vinda de volta'}
           </Text>
@@ -150,7 +151,6 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
   },
   cabecalho: { gap: spacing.xs },
-  marca: { ...typography.labelSm, color: colors.secondary, letterSpacing: 2 },
   titulo: { ...typography.headlineLg, color: colors.primary },
   papeis: {
     flexDirection: 'row',
