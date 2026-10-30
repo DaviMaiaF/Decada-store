@@ -15,6 +15,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { Entrada, atrasoDaCascata } from '../components/Entrada';
 import { describeConfidence, formatMoney } from '../services/format';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import { type ResumoDaEconomia, useEconomyViewModel } from '../viewmodels/useEconomyViewModel';
@@ -52,52 +53,58 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
 
   return (
     <>
-      <Card style={styles.destaque}>
-        <Text style={styles.destaqueRotulo}>A DESPENSA POUPOU</Text>
-        <Text style={styles.destaqueValor}>{formatMoney(economia.toFixed(2))}</Text>
-        <Text style={styles.destaqueNota}>
-          {economia === 0
-            ? 'Nada em casa entrou nesta lista — ou o que havia não chegou a tirar uma embalagem do carrinho.'
-            : 'É o que a lista custaria sem o que você já tinha em casa, menos o que ela custa agora.'}
-        </Text>
-      </Card>
-
-      <Card>
-        <SectionTitle>Esta compra</SectionTitle>
-        <Linha rotulo="Total estimado" valor={formatMoney(resumo.estimatedTotal)} />
-        <Linha rotulo="Já no carrinho" valor={formatMoney(resumo.jaNoCarrinho.toFixed(2))} />
-        <Linha rotulo="Ainda falta" valor={formatMoney(resumo.falta.toFixed(2))} />
-        <View style={styles.progresso}>
-          <ProgressBar percent={resumo.percentual} />
-          <Text style={styles.progressoTexto}>
-            {resumo.comprados} de {resumo.aComprar} itens comprados
+      <Entrada>
+        <Card style={styles.destaque}>
+          <Text style={styles.destaqueRotulo}>A DESPENSA POUPOU</Text>
+          <Text style={styles.destaqueValor}>{formatMoney(economia.toFixed(2))}</Text>
+          <Text style={styles.destaqueNota}>
+            {economia === 0
+              ? 'Nada em casa entrou nesta lista — ou o que havia não chegou a tirar uma embalagem do carrinho.'
+              : 'É o que a lista custaria sem o que você já tinha em casa, menos o que ela custa agora.'}
           </Text>
-        </View>
-        <Text style={styles.regiao}>
-          Preços de {resumo.city} · {resumo.stateCode}
-        </Text>
-      </Card>
+        </Card>
+      </Entrada>
 
-      <Card>
-        <SectionTitle>De onde vêm estes números</SectionTitle>
-        <Linha rotulo="Itens com preço" valor={String(resumo.comPreco)} />
-        <Linha rotulo="Sem preço na região" valor={String(semPreco)} />
-        {maisFraco ? (
-          <Text style={styles.procedencia}>
-            O preço mais fraco da lista foi {describeConfidence(
-              maisFraco.price_confidence,
-              maisFraco.price_reference_date,
-            )}
-            .
+      <Entrada atraso={atrasoDaCascata(1)}>
+        <Card>
+          <SectionTitle>Esta compra</SectionTitle>
+          <Linha rotulo="Total estimado" valor={formatMoney(resumo.estimatedTotal)} />
+          <Linha rotulo="Já no carrinho" valor={formatMoney(resumo.jaNoCarrinho.toFixed(2))} />
+          <Linha rotulo="Ainda falta" valor={formatMoney(resumo.falta.toFixed(2))} />
+          <View style={styles.progresso}>
+            <ProgressBar percent={resumo.percentual} />
+            <Text style={styles.progressoTexto}>
+              {resumo.comprados} de {resumo.aComprar} itens comprados
+            </Text>
+          </View>
+          <Text style={styles.regiao}>
+            Preços de {resumo.city} · {resumo.stateCode}
           </Text>
-        ) : null}
-        {semPreco > 0 ? (
-          <Body muted>
-            Item sem preço na sua região fica fora do total. Zero seria mentira.
-          </Body>
-        ) : null}
-        {resumo.ficticio ? <Chip label="dado fictício de desenvolvimento" tone="warning" /> : null}
-      </Card>
+        </Card>
+      </Entrada>
+
+      <Entrada atraso={atrasoDaCascata(2)}>
+        <Card>
+          <SectionTitle>De onde vêm estes números</SectionTitle>
+          <Linha rotulo="Itens com preço" valor={String(resumo.comPreco)} />
+          <Linha rotulo="Sem preço na região" valor={String(semPreco)} />
+          {maisFraco ? (
+            <Text style={styles.procedencia}>
+              O preço mais fraco da lista foi {describeConfidence(
+                maisFraco.price_confidence,
+                maisFraco.price_reference_date,
+              )}
+              .
+            </Text>
+          ) : null}
+          {semPreco > 0 ? (
+            <Body muted>
+              Item sem preço na sua região fica fora do total. Zero seria mentira.
+            </Body>
+          ) : null}
+          {resumo.ficticio ? <Chip label="dado fictício de desenvolvimento" tone="warning" /> : null}
+        </Card>
+      </Entrada>
     </>
   );
 }

@@ -34,6 +34,7 @@ import {
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { ConclusaoDaDespensa } from '../components/ConclusaoDaDespensa';
 import { DespensaDoPlano } from '../components/DespensaDoPlano';
+import { Entrada, useCascata } from '../components/Entrada';
 import { DespensaPorFoto } from '../components/DespensaPorFoto';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { formatQuantity } from '../services/format';
@@ -62,6 +63,9 @@ export default function PantryScreen({
   const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
   const { escolhendo, medindo } = adicao;
   const { editando } = edicao;
+  // Item acrescentado ou receita recarregada entra na hora, sem esperar a vez.
+  const cascataDosItens = useCascata(itens.length > 0);
+  const cascataDasReceitas = useCascata(vm.receitas.length > 0);
 
   return (
     <FlatList
@@ -340,13 +344,14 @@ export default function PantryScreen({
             ) : null}
 
             <View style={styles.chips}>
-              {itens.map((item) => (
-                <ChipDaDespensa
-                  key={item.id}
-                  item={item}
-                  onPress={() => edicao.abrir(item)}
-                  onRemove={() => vm.remover(item.id)}
-                />
+              {itens.map((item, indice) => (
+                <Entrada key={item.id} atraso={cascataDosItens(indice)}>
+                  <ChipDaDespensa
+                    item={item}
+                    onPress={() => edicao.abrir(item)}
+                    onRemove={() => vm.remover(item.id)}
+                  />
+                </Entrada>
               ))}
             </View>
 
@@ -379,8 +384,10 @@ export default function PantryScreen({
           {vm.receitasFalharam ? <ErrorNotice message="não foi possível buscar receitas" /> : null}
         </View>
       }
-      renderItem={({ item }) => (
-        <CartaoDeReceita disponibilidade={item} listId={listId} naLista={vm.naLista} />
+      renderItem={({ item, index }) => (
+        <Entrada atraso={cascataDasReceitas(index)}>
+          <CartaoDeReceita disponibilidade={item} listId={listId} naLista={vm.naLista} />
+        </Entrada>
       )}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
     />

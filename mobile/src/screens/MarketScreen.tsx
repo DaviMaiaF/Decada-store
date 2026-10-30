@@ -17,6 +17,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
+import { Entrada, useCascata } from '../components/Entrada';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import CheckoutScreen from './CheckoutScreen';
@@ -223,6 +224,8 @@ function ListaCarregada({
   onGenerated: (listId: string) => void;
 }) {
   const vm = useShoppingListViewModel(lista);
+  // Corredor que surge de um item acrescentado entra na hora.
+  const cascata = useCascata(vm.porCorredor.length > 0);
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
@@ -310,8 +313,8 @@ function ListaCarregada({
         </Card>
       ) : null}
 
-      {vm.porCorredor.map(([categoria, itens]) => (
-        <View key={categoria} style={styles.corredor}>
+      {vm.porCorredor.map(([categoria, itens], indice) => (
+        <Entrada key={categoria} atraso={cascata(indice)} style={styles.corredor}>
           <SectionTitle>{CORREDORES[categoria] ?? 'Outros'}</SectionTitle>
           {itens.map((item) => (
             <ItemDaLista
@@ -327,7 +330,7 @@ function ListaCarregada({
               onToggle={() => vm.alternarComprado(item)}
             />
           ))}
-        </View>
+        </Entrada>
       ))}
 
       {vm.erroDaRemocao ? <ErrorNotice message={vm.erroDaRemocao} /> : null}

@@ -11,6 +11,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { amountToField } from '../services/units';
+import { Entrada, atrasoDaCascata } from './Entrada';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { PrescriptionItem, PrescriptionMeal } from '../types/api';
 
@@ -43,7 +44,11 @@ export function PlanoPrescrito({
   return (
     <View style={styles.plano}>
       {meals.map((meal, indice) => (
-        <View key={`${meal.time}-${indice}`} style={styles.refeicao}>
+        <Entrada
+          key={`${meal.time}-${indice}`}
+          atraso={atrasoDaCascata(indice)}
+          style={styles.refeicao}
+        >
           <Text style={styles.refeicaoNome}>
             {meal.time.slice(0, 5)} · {meal.name}
           </Text>
@@ -60,7 +65,7 @@ export function PlanoPrescrito({
               ))}
             </View>
           ))}
-        </View>
+        </Entrada>
       ))}
 
       {notes ? (
