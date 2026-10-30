@@ -11,11 +11,12 @@
  */
 
 import type { ComponentType } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, SectionTitle } from '../components';
 import { Entrada } from '../components/Entrada';
 import { Logo } from '../components/Logo';
+import { Tocavel } from '../components/Tocavel';
 import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
 import type { EtapaDaTrilha } from '../components/Trilha';
 import { motion } from '../theme/motion';
@@ -97,18 +98,18 @@ export default function HomeScreen({
             atraso={motion.duration.stagger * (4 + i)}
             style={styles.atalhoCaixa}
           >
-            <Pressable
+            <Tocavel
               accessibilityRole="button"
               accessibilityLabel={`Ir para ${aba}`}
               onPress={() => onIr(aba)}
-              style={({ pressed }) => [styles.atalho, pressed && styles.atalhoPressionado]}
+              style={styles.atalho}
             >
               <View style={styles.atalhoIcone}>
                 <Icone color={colors.onPrimaryFixedVariant} size={24} />
               </View>
               <Text style={styles.atalhoNome}>{aba}</Text>
               <Text style={styles.atalhoTexto}>{texto}</Text>
-            </Pressable>
+            </Tocavel>
           </Entrada>
         ))}
       </View>
@@ -140,7 +141,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  atalhoPressionado: { transform: [{ scale: 0.98 }], opacity: 0.85 },
   atalhoIcone: {
     width: 40,
     height: 40,

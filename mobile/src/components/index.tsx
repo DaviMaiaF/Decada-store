@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 import { MIN_TOUCH_HEIGHT, colors, elevation, radius, spacing, typography } from '../theme/tokens';
+import { Tocavel } from './Tocavel';
 
 export function Card({
   children,
@@ -57,18 +58,17 @@ export function Button({
   const inativo = disabled || loading;
 
   return (
-    <Pressable
+    // Compressão leve ao toque, como no protótipo: quem anima é o Tocavel.
+    <Tocavel
       accessibilityRole="button"
       accessibilityState={{ disabled: inativo }}
       onPress={onPress}
       disabled={inativo}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         variant === 'primary' && styles.buttonPrimary,
         variant === 'secondary' && styles.buttonSecondary,
         variant === 'ghost' && styles.buttonGhost,
-        // Compressão leve ao toque, como no protótipo.
-        pressed && !inativo && styles.buttonPressed,
         inativo && styles.buttonDisabled,
       ]}
     >
@@ -86,7 +86,7 @@ export function Button({
           {label}
         </Text>
       )}
-    </Pressable>
+    </Tocavel>
   );
 }
 
@@ -211,7 +211,6 @@ const styles = StyleSheet.create({
   buttonPrimary: { backgroundColor: colors.primaryContainer },
   buttonSecondary: { backgroundColor: colors.secondaryContainer },
   buttonGhost: { backgroundColor: 'transparent' },
-  buttonPressed: { transform: [{ scale: 0.98 }] },
   buttonDisabled: { opacity: 0.5 },
   buttonLabel: { ...typography.labelLg },
   buttonLabelPrimary: { color: colors.onPrimary },
