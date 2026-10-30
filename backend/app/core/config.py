@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # O .env fica na raiz do repositório: backend/app/core/config.py -> sobe 3 níveis.
@@ -47,13 +48,27 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
 
-    @property
-    def database_url(self) -> str:
-        """URL de conexão do SQLAlchemy (usada a partir da etapa 1)."""
-        return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
+    # URL única de conexão, como Neon e Render entregam. Se existir, vence as
+    # POSTGRES_* acima; se não, é montada a partir delas.
+    database_url: str | None = None
+
+    @model_validator(mode="after")
+    def _resolve_database_url(self) -> "Settings":
+        """Garante uma URL do SQLAlchemy com o driver psycopg (3)."""
+        if self.database_url is None:
+            self.database_url = (
+                f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+                f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            )
+            return self
+
+        # Os provedores entregam postgres:// ou postgresql://, que o SQLAlchemy
+        # leria com o psycopg2 — driver que o projeto não instala.
+        for prefix in ("postgres://", "postgresql://"):
+            if self.database_url.startswith(prefix):
+                self.database_url = "postgresql+psycopg://" + self.database_url[len(prefix):]
+                break
+        return self
 
 
 @lru_cache
