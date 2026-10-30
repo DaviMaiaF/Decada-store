@@ -12,9 +12,10 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Animated, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { motion } from '../theme/motion';
 import { colors } from '../theme/tokens';
 
 const TAMANHO = 96;
@@ -43,8 +44,8 @@ export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
           Animated.parallel([
             Animated.timing(circulo, {
               toValue: 1,
-              duration: 250,
-              easing: Easing.out(Easing.cubic),
+              duration: motion.duration.short,
+              easing: motion.easing.standard,
               useNativeDriver: true,
             }),
             Animated.spring(escala, {
@@ -56,8 +57,8 @@ export function AnimacaoDeSucesso({ tamanho = TAMANHO }: { tamanho?: number }) {
           ]),
           Animated.timing(check, {
             toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.quad),
+            duration: motion.duration.medium,
+            easing: motion.easing.standard,
             useNativeDriver: true,
           }),
         ]).start();
