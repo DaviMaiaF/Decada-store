@@ -7,9 +7,11 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo, Animated } from 'react-native';
 
 import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
+import { motion } from '../../theme/motion';
 import * as session from '../../services/session';
 import type { ShoppingList, ShoppingListItem } from '../../types/api';
 
@@ -521,6 +523,52 @@ it('risca o item na hora, sem esperar a resposta do servidor', async () => {
   // deixa o Jest com um handle aberto e a atualização cai fora do `act`.
   responder(item({ id: 'a', purchased: true }));
   await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+});
+
+it('o item marcado esmaece aos poucos, sem piscar', async () => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
+  const timing = jest.spyOn(Animated, 'timing');
+  marcarItem.mockResolvedValue(item({ id: 'a', purchased: true }));
+  await montar(lista([item({ id: 'a' })]));
+
+  // Ao abrir, o item já nasce no tom certo: nada se mexe sozinho.
+  expect(await screen.findByTestId('item-esmaecido')).toHaveStyle({ opacity: 1 });
+  timing.mockClear();
+
+  await fireEvent.press(screen.getByText('Já comprei'));
+
+  await waitFor(() =>
+    expect(timing.mock.calls.map(([, config]) => config)).toContainEqual(
+      expect.objectContaining({
+        toValue: 0.5,
+        duration: motion.duration.short,
+        easing: motion.easing.standard,
+        useNativeDriver: true,
+      }),
+    ),
+  );
+  await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+  timing.mockRestore();
+  jest.restoreAllMocks();
+});
+
+it('com movimento reduzido, o item marcado troca de tom direto', async () => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+  const timing = jest.spyOn(Animated, 'timing');
+  const setValue = jest.spyOn(Animated.Value.prototype, 'setValue');
+  marcarItem.mockResolvedValue(item({ id: 'a', purchased: true }));
+  await montar(lista([item({ id: 'a' })]));
+  await screen.findByTestId('item-esmaecido');
+  timing.mockClear();
+
+  await fireEvent.press(screen.getByText('Já comprei'));
+
+  // O valor animado atualiza a view nativa sem renderizar de novo, então o
+  // teste confere o pedido: o tom vai direto, sem animação.
+  await waitFor(() => expect(setValue).toHaveBeenCalledWith(0.5));
+  expect(timing.mock.calls.map(([, config]) => config.toValue)).not.toContain(0.5);
+  await waitFor(() => expect(lerLista).toHaveBeenCalledTimes(2));
+  jest.restoreAllMocks();
 });
 
 it('desfaz a marcação quando o servidor recusa', async () => {

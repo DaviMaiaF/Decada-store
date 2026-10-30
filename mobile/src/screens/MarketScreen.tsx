@@ -14,7 +14,17 @@
  * Item que veio do plano fica: para vê-lo fora da conta existe a simulação.
  */
 
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { type ReactNode, useEffect, useRef } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Body, Button, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { Entrada, useCascata } from '../components/Entrada';
@@ -22,6 +32,7 @@ import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import CheckoutScreen from './CheckoutScreen';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
+import { motion } from '../theme/motion';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { ProductSuggestion, ShoppingList, ShoppingListItem, SimulatedItem } from '../types/api';
 import {
@@ -340,6 +351,53 @@ function ListaCarregada({
   );
 }
 
+const OPACIDADE_COMPRADO = 0.5;
+const OPACIDADE_FORA_DA_SIMULACAO = 0.55;
+
+/**
+ * Esmaece o item até a opacidade pedida, na curva padrão, em vez de pular de
+ * uma vez. Marcar como comprado no corredor do mercado é o toque mais repetido
+ * do app: a mudança suave confirma o toque sem chamar a atenção. Na primeira
+ * renderização o item já nasce no tom certo, e com movimento reduzido a troca
+ * é direta.
+ */
+function Esmaecido({ opacidade, children }: { opacidade: number; children: ReactNode }) {
+  const valor = useRef(new Animated.Value(opacidade)).current;
+  const primeira = useRef(true);
+
+  useEffect(() => {
+    if (primeira.current) {
+      primeira.current = false;
+      return;
+    }
+    let ativo = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .catch(() => false)
+      .then((reduzir) => {
+        if (!ativo) return;
+        if (reduzir) {
+          valor.setValue(opacidade);
+          return;
+        }
+        Animated.timing(valor, {
+          toValue: opacidade,
+          duration: motion.duration.short,
+          easing: motion.easing.standard,
+          useNativeDriver: true,
+        }).start();
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [opacidade, valor]);
+
+  return (
+    <Animated.View testID="item-esmaecido" style={{ opacity: valor }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 /** Acrescentar à compra um produto que o plano não pediu. */
 function AcrescentarItem({ listId }: { listId: string }) {
   const vm = useAddExtraItemViewModel(listId);
@@ -457,128 +515,131 @@ function ItemDaLista({
   const campo = useSimulatedQuantityField();
   const { numero } = campo;
 
+  // Fora da simulação vence comprado: é o que a pessoa está mexendo agora.
+  const opacidade = foraDaSimulacao
+    ? OPACIDADE_FORA_DA_SIMULACAO
+    : comprado
+      ? OPACIDADE_COMPRADO
+      : 1;
+
   return (
-    <Card
-      style={[
-        styles.item,
-        comprado && styles.itemComprado,
-        foraDaSimulacao && styles.itemForaDaSimulacao,
-      ]}
-    >
-      <View style={styles.itemTopo}>
-        <View style={styles.itemTexto}>
-          <Text style={[styles.itemNome, comprado && styles.riscado]}>{item.product.name}</Text>
-          <Text style={styles.itemQuantidade}>
-            {dispensado
-              ? `${formatQuantity(item.quantity_from_pantry, item.unit)} já em casa`
-              : formatQuantity(item.quantity, item.unit)}
-            {item.packages_needed ? ` · ${item.packages_needed} embalagem(ns)` : ''}
-          </Text>
-        </View>
-        <View>
-          <Text style={[styles.itemPreco, simulado !== null && styles.precoSubstituido]}>
-            {formatMoney(item.estimated_cost)}
-          </Text>
-          {simulado !== null ? (
-            <Text style={styles.itemPrecoSimulado}>
-              {formatMoney(simulado.estimated_cost)}
+    <Esmaecido opacidade={opacidade}>
+      <Card style={styles.item}>
+        <View style={styles.itemTopo}>
+          <View style={styles.itemTexto}>
+            <Text style={[styles.itemNome, comprado && styles.riscado]}>{item.product.name}</Text>
+            <Text style={styles.itemQuantidade}>
+              {dispensado
+                ? `${formatQuantity(item.quantity_from_pantry, item.unit)} já em casa`
+                : formatQuantity(item.quantity, item.unit)}
+              {item.packages_needed ? ` · ${item.packages_needed} embalagem(ns)` : ''}
             </Text>
-          ) : null}
+          </View>
+          <View>
+            <Text style={[styles.itemPreco, simulado !== null && styles.precoSubstituido]}>
+              {formatMoney(item.estimated_cost)}
+            </Text>
+            {simulado !== null ? (
+              <Text style={styles.itemPrecoSimulado}>
+                {formatMoney(simulado.estimated_cost)}
+              </Text>
+            ) : null}
+          </View>
         </View>
-      </View>
 
-      {simulado !== null ? (
-        <Chip
-          label={
-            simulado.packages_needed
-              ? `simulando ${simulado.quantity} ${item.unit} · ${simulado.packages_needed} embalagem(ns)`
-              : `simulando ${simulado.quantity} ${item.unit}`
-          }
-          tone="neutral"
-        />
-      ) : null}
-
-      {/* Preço nunca anda sozinho: data, origem e tamanho da amostra junto. */}
-      <Text style={styles.procedencia}>
-        {describeConfidence(item.price_confidence, item.price_reference_date)}
-        {item.price_origin ? ` · ${describeOrigin(item.price_origin)}` : ''}
-        {item.price_sample_size ? ` · ${item.price_sample_size} coleta(s)` : ''}
-      </Text>
-
-      {/* Quem olha a lista no mercado precisa saber o que a nutricionista
-          pediu e o que foi a própria pessoa que acrescentou. */}
-      {item.is_extra ? <Chip label="fora da prescrição" tone="neutral" /> : null}
-
-      {item.product.is_fictitious ? (
-        <Chip label="dado fictício de desenvolvimento" tone="warning" />
-      ) : null}
-
-      {Number(item.quantity_from_pantry) > 0 && !dispensado ? (
-        <Chip
-          label={`${formatQuantity(item.quantity_from_pantry, item.unit)} vieram da despensa`}
-          tone="success"
-        />
-      ) : null}
-
-      {dispensado ? (
-        <Chip label="não precisa comprar" tone="success" />
-      ) : (
-        <>
-          <Button
-            label={comprado ? 'Desmarcar' : 'Já comprei'}
-            variant="ghost"
-            onPress={onToggle}
+        {simulado !== null ? (
+          <Chip
+            label={
+              simulado.packages_needed
+                ? `simulando ${simulado.quantity} ${item.unit} · ${simulado.packages_needed} embalagem(ns)`
+                : `simulando ${simulado.quantity} ${item.unit}`
+            }
+            tone="neutral"
           />
-          {/* Tirar da simulação não é o mesmo que marcar como comprado: aquilo
-              o servidor guarda, isto não sai desta tela. */}
-          <Button
-            label={foraDaSimulacao ? 'Devolver à simulação' : 'Simular sem este item'}
-            variant="ghost"
-            onPress={onSimular}
-          />
+        ) : null}
 
-          {campo.aberto ? (
-            <View style={styles.campoSimulacao}>
-              <TextInput
-                accessibilityLabel={`Quantidade simulada de ${item.product.name}`}
-                placeholder={`Quantidade em ${item.unit}`}
-                placeholderTextColor={colors.outline}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                style={styles.campoTexto}
-                value={campo.quantidade}
-                onChangeText={campo.setQuantidade}
-                onSubmitEditing={() => numero !== null && onSimularQuantidade(numero)}
-              />
+        {/* Preço nunca anda sozinho: data, origem e tamanho da amostra junto. */}
+        <Text style={styles.procedencia}>
+          {describeConfidence(item.price_confidence, item.price_reference_date)}
+          {item.price_origin ? ` · ${describeOrigin(item.price_origin)}` : ''}
+          {item.price_sample_size ? ` · ${item.price_sample_size} coleta(s)` : ''}
+        </Text>
+
+        {/* Quem olha a lista no mercado precisa saber o que a nutricionista
+            pediu e o que foi a própria pessoa que acrescentou. */}
+        {item.is_extra ? <Chip label="fora da prescrição" tone="neutral" /> : null}
+
+        {item.product.is_fictitious ? (
+          <Chip label="dado fictício de desenvolvimento" tone="warning" />
+        ) : null}
+
+        {Number(item.quantity_from_pantry) > 0 && !dispensado ? (
+          <Chip
+            label={`${formatQuantity(item.quantity_from_pantry, item.unit)} vieram da despensa`}
+            tone="success"
+          />
+        ) : null}
+
+        {dispensado ? (
+          <Chip label="não precisa comprar" tone="success" />
+        ) : (
+          <>
+            <Button
+              label={comprado ? 'Desmarcar' : 'Já comprei'}
+              variant="ghost"
+              onPress={onToggle}
+            />
+            {/* Tirar da simulação não é o mesmo que marcar como comprado: aquilo
+                o servidor guarda, isto não sai desta tela. */}
+            <Button
+              label={foraDaSimulacao ? 'Devolver à simulação' : 'Simular sem este item'}
+              variant="ghost"
+              onPress={onSimular}
+            />
+
+            {campo.aberto ? (
+              <View style={styles.campoSimulacao}>
+                <TextInput
+                  accessibilityLabel={`Quantidade simulada de ${item.product.name}`}
+                  placeholder={`Quantidade em ${item.unit}`}
+                  placeholderTextColor={colors.outline}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  style={styles.campoTexto}
+                  value={campo.quantidade}
+                  onChangeText={campo.setQuantidade}
+                  onSubmitEditing={() => numero !== null && onSimularQuantidade(numero)}
+                />
+                <Button
+                  label={calculando ? 'Calculando…' : 'Ver quanto fica'}
+                  variant="ghost"
+                  disabled={numero === null || calculando}
+                  onPress={() => numero !== null && onSimularQuantidade(numero)}
+                />
+              </View>
+            ) : (
               <Button
-                label={calculando ? 'Calculando…' : 'Ver quanto fica'}
+                label="Simular outra quantidade"
                 variant="ghost"
-                disabled={numero === null || calculando}
-                onPress={() => numero !== null && onSimularQuantidade(numero)}
+                onPress={campo.abrir}
               />
-            </View>
-          ) : (
-            <Button
-              label="Simular outra quantidade"
-              variant="ghost"
-              onPress={campo.abrir}
-            />
-          )}
+            )}
 
-          {/* Por último, e só no avulso: tirar daqui um alimento prescrito
-              seria o app decidindo a dieta — para vê-lo fora da conta existe
-              a simulação, logo acima. */}
-          {item.is_extra ? (
-            <Button
-              label="Tirar da lista"
-              variant="ghost"
-              loading={removendo}
-              onPress={onRemover}
-            />
-          ) : null}
-        </>
-      )}
-    </Card>
+            {/* Por último, e só no avulso: tirar daqui um alimento prescrito
+                seria o app decidindo a dieta — para vê-lo fora da conta existe
+                a simulação, logo acima. */}
+            {item.is_extra ? (
+              <Button
+                label="Tirar da lista"
+                variant="ghost"
+                loading={removendo}
+                onPress={onRemover}
+              />
+            ) : null}
+          </>
+        )}
+      </Card>
+    </Esmaecido>
   );
 }
 
@@ -625,8 +686,6 @@ const styles = StyleSheet.create({
   item: { gap: spacing.xs2 },
   // Quem está fora da simulação continua na lista, só desbotado: sumir daria a
   // impressão de que o item saiu da compra de verdade.
-  itemForaDaSimulacao: { opacity: 0.55 },
-  itemComprado: { opacity: 0.5 },
   itemTopo: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   itemTexto: { flex: 1 },
   itemNome: { ...typography.labelLg, color: colors.onSurface },
