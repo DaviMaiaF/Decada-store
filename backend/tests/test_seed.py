@@ -13,9 +13,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import func, select
 
-from app.models import Market, PriceRecord, Product, Recipe
+from app.models import Market, PriceRecord, Product, Recipe, User
 from app.models.enums import PriceOrigin
-from app.seeds.runner import COLLECTION_DAYS_AGO, run
+from app.seeds.runner import COLLECTION_DAYS_AGO, DEV_USER_EMAIL, run
 
 pytestmark = pytest.mark.db
 
@@ -151,3 +151,16 @@ def test_produto_a_granel_tem_preco_igual_ao_da_unidade_base(banco_vazio):
     ).one()
 
     assert registro.unit_price == registro.price_per_base_unit.quantize(Decimal("0.01"))
+
+
+def test_sem_conta_de_desenvolvimento_carrega_so_o_catalogo(banco_vazio):
+    run(banco_vazio, with_dev_user=False)
+
+    assert banco_vazio.scalar(select(User).where(User.email == DEV_USER_EMAIL)) is None
+    assert _contagens(banco_vazio)["products"] > 0
+
+
+def test_por_padrao_cria_a_conta_de_desenvolvimento(banco_vazio):
+    run(banco_vazio)
+
+    assert banco_vazio.scalar(select(User).where(User.email == DEV_USER_EMAIL)) is not None

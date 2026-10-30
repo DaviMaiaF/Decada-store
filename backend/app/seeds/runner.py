@@ -65,15 +65,21 @@ class SeedSummary:
     recipes: int
 
 
-def ensure_development_environment() -> None:
-    """Impede a carga fora de desenvolvimento.
+# Ambientes em que o catálogo fictício pode entrar. `demo` é o servidor público
+# de demonstração: sem dado real, só contas de teste. `prod` fica de fora.
+SEED_ALLOWED_ENVS: tuple[str, ...] = ("dev", "demo")
+
+
+def ensure_seed_allowed() -> None:
+    """Impede a carga fora de dev e demo.
 
     Regra do projeto: dado de preço fictício não pode existir em produção.
     """
     app_env = get_settings().app_env
-    if app_env != "dev":
+    if app_env not in SEED_ALLOWED_ENVS:
+        allowed = ", ".join(SEED_ALLOWED_ENVS)
         raise SeedNotAllowedError(
-            f"o seed só roda com APP_ENV=dev; o ambiente atual é '{app_env}'"
+            f"o seed só roda com APP_ENV em ({allowed}); o ambiente atual é '{app_env}'"
         )
 
 
@@ -246,11 +252,28 @@ def _count(session: Session, model: type) -> int:
     return session.scalar(select(func.count()).select_from(model)) or 0
 
 
-def run(session: Session, *, random_seed: int = DEFAULT_RANDOM_SEED) -> SeedSummary:
+def dev_user_allowed() -> bool:
+    """A conta de desenvolvimento só nasce em dev.
+
+    A senha dela está versionada: no servidor público (`demo`) qualquer um com
+    acesso ao repositório entraria nela, e plano alimentar é dado de saúde
+    (decisão 5). Lá, quem testa cria a própria conta.
+    """
+    return get_settings().app_env == "dev"
+
+
+def run(
+    session: Session,
+    *,
+    random_seed: int = DEFAULT_RANDOM_SEED,
+    with_dev_user: bool = True,
+) -> SeedSummary:
     """Carrega mercados, produtos, preços e receitas fictícios. Pode rodar quantas vezes quiser.
 
     O gerador é semeado com um valor fixo: os mesmos preços saem em toda
     execução, o que torna o resultado reproduzível numa apresentação.
+    `with_dev_user` decide se a conta de desenvolvimento entra junto (ver
+    `dev_user_allowed`).
     """
     generator = random.Random(random_seed)
 
@@ -259,7 +282,8 @@ def run(session: Session, *, random_seed: int = DEFAULT_RANDOM_SEED) -> SeedSumm
     session.flush()  # produtos e mercados precisam existir antes das chaves estrangeiras
     _load_price_records(session, generator)
     _load_recipes(session)
-    _load_dev_user(session)
+    if with_dev_user:
+        _load_dev_user(session)
     session.commit()
 
     return SeedSummary(
