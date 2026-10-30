@@ -1,8 +1,16 @@
 # Plano: API publicada + app no Expo Go acessível de qualquer rede
 
-> Plano proposto, **ainda não aprovado nem implementado**. Responde à pendência 1 de
-> [`pendencias.md`](pendencias.md) (API publicada). Pelo `CLAUDE.md`, nenhum código é escrito
-> antes da aprovação, e cada etapa vira um commit pequeno em português (Conventional Commits).
+> **Executado** (PRs #32 e #33, outubro de 2026). Atendeu à pendência 1 de
+> [`pendencias.md`](pendencias.md) (API publicada). Como o ambiente funciona e como mantê-lo
+> está em [`publicacao.md`](publicacao.md); este arquivo fica como registro do plano.
+>
+> **Desvios do que estava escrito abaixo:**
+> - **Parte C:** desde maio de 2026 o Expo Go só abre updates do EAS para o dono do projeto
+>   ou membros da organização. A entrega virou **APK Android** (EAS Build, distribuição
+>   interna) **+ Expo Go** para quem está na organização, os dois no canal `demo` da EAS
+>   Update.
+> - **Etapa 4:** no `demo`, o seed não cria a conta de desenvolvimento, cuja senha está
+>   versionada (decisão 13 do `CLAUDE.md`).
 
 ## Como retomar em outro chat
 

@@ -124,6 +124,11 @@ decada/
     consentimento**, e o que ele recebe é uma **cópia**: sobrevive à nutricionista
     excluir a conta, e o plano aceito não muda mais. Só a opção principal de cada
     refeição vai para a compra; substituições e orientação são para ler.
+13. O servidor publicado roda com **`APP_ENV=demo`**: é demonstração, não produção. Aceita
+    o catálogo e os preços fictícios do seed, nunca a conta de desenvolvimento (a senha
+    dela está no repositório), e só contas de teste — dado real de saúde não entra ali
+    (decisão 5). `prod` continua proibindo o seed, e fora de `dev` a API não sobe com a
+    `SECRET_KEY` padrão. Ver [`docs/publicacao.md`](docs/publicacao.md).
 
 ## Design
 
@@ -153,6 +158,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
   a instância do axios, os interceptors, as rotas e o que cada status faz na tela.
 - [`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md) — as camadas do app (Model,
   View, ViewModel), a convenção entre elas e o que fica de fora.
+- [`docs/publicacao.md`](docs/publicacao.md) — o ambiente publicado: API no Render,
+  banco no Neon, app por APK e EAS Update; variáveis, deploy, rollback, seed e cold start.
 
 ## Como rodar
 
@@ -184,6 +191,12 @@ cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 > container compara o volume com o `package-lock.json` e roda `npm ci` só se o lock mudou
 > (`mobile/sync-node-modules.sh`) — sem isso, dependência nova não chegava ao volume e o
 > app abria em página branca.
+
+> **Ambiente publicado** (demonstração): API em `https://decada-api.onrender.com`
+> (Render, com o banco no Neon) e app por APK Android ou Expo Go, recebendo código pela
+> EAS Update no canal `demo`. Não depende do notebook, do `HOST_IP` nem da mesma rede.
+> Merge na `main` publica a API; `eas update --channel demo --environment preview`
+> publica o app. Ver [`docs/publicacao.md`](docs/publicacao.md).
 
 > O `test:smoke` fala com o backend de verdade e cria a própria conta, que apaga
 > no fim. Ele não entra no `npm test` porque sem servidor de pé falharia — ver

@@ -8,7 +8,7 @@ decide volta por outra. Este documento diz por onde essa conversa passa.
 |---|---|---|
 | Cliente | React Native + Expo, TypeScript | axios sobre HTTP, corpo em JSON |
 | Servidor | FastAPI + Pydantic v2, Python | 23 rotas de domínio, autenticadas por JWT, mais `/health` |
-| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` | Se não definido: na web, o host da própria página; no aparelho, o IP do host do Expo; `10.0.2.2` no emulador Android (ver `config.ts`). No compose o `mobile/.env` é ignorado (`EXPO_NO_DOTENV`) |
+| Endereço | `EXPO_PUBLIC_API_URL`, em `mobile/.env` (no app publicado, no ambiente `preview` do EAS: ver [`publicacao.md`](publicacao.md#variáveis)) | Se não definido: na web, o host da própria página; no aparelho, o IP do host do Expo; `10.0.2.2` no emulador Android (ver `config.ts`). No compose o `mobile/.env` é ignorado (`EXPO_NO_DOTENV`) |
 
 O endereço não é fixo em `localhost` de propósito: no emulador Android e no
 celular físico ele aponta para o próprio aparelho, não para a máquina que roda o
@@ -261,6 +261,13 @@ cd mobile && npm run test:smoke
 Sem Docker para a API, suba só o banco (`docker compose up -d db`) e rode o seed e
 o uvicorn à mão, como no README. Para apontar para outro servidor, defina
 `EXPO_PUBLIC_API_URL` antes do comando.
+
+Contra o servidor publicado (ver [`publicacao.md`](publicacao.md#testar-o-ambiente-publicado)):
+
+```bash
+curl https://decada-api.onrender.com/health        # acorda a API, que dorme sem uso
+cd mobile && EXPO_PUBLIC_API_URL=https://decada-api.onrender.com npm run test:smoke
+```
 
 Ele percorre o caminho inteiro e cria uma conta própria, que apaga no último
 passo: cadastro → `/auth/me` → PDF do plano por multipart → confirmação item a

@@ -175,8 +175,12 @@ Estas respostas da API são deliberadamente iguais entre si:
 
 Este é um projeto acadêmico e o MVP não cobre:
 
-- HTTPS obrigatório e política de segredo para `SECRET_KEY` — hoje há um valor
-  padrão que só serve para desenvolvimento;
+- política de rotação da `SECRET_KEY` — fora de desenvolvimento a API já se recusa a
+  subir com a chave padrão, e o servidor publicado só responde por HTTPS (Render), mas
+  trocar a chave derruba todas as sessões e não há procedimento para isso;
+- um ambiente de produção de verdade: o servidor publicado ([`publicacao.md`](publicacao.md))
+  é de **demonstração**, com catálogo fictício e apenas contas de teste — ninguém deve
+  colocar ali o próprio plano alimentar;
 - portabilidade (art. 18, V): exportar os dados num formato legível por máquina;
 - registro de operações de tratamento e prazo de retenção definido;
 - revogação de token antes de expirar, que exigiria sessões no banco;
