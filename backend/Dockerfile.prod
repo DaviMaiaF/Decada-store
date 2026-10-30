@@ -1,0 +1,27 @@
+# Imagem de PRODUÇÃO da API (Render). O desenvolvimento segue no Dockerfile.
+FROM python:3.10-slim
+
+# PORT vem do provedor (o Render define a dele); 8000 serve para testar local.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PORT=8000
+
+WORKDIR /app
+
+# Dependências antes do código, como no Dockerfile de desenvolvimento, mas sem
+# as de teste ([dev]) e sem install editável: o código fica dentro da imagem.
+COPY pyproject.toml ./
+RUN mkdir app && touch app/__init__.py && pip install --no-cache-dir .
+
+COPY . .
+
+# Sem root: um furo na API não vira controle do container.
+RUN useradd --create-home --uid 1000 decada && chown -R decada /app
+USER decada
+
+EXPOSE 8000
+# Migração antes de subir; `exec` deixa o uvicorn receber o sinal de parada.
+# O Render entrega a requisição por um proxy HTTPS: --proxy-headers faz a API
+# enxergar o esquema e o IP de origem certos.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]

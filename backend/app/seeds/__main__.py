@@ -4,16 +4,18 @@ from app.core.database import SessionLocal
 from app.seeds.runner import (
     DEV_USER_EMAIL,
     DEV_USER_PASSWORD,
-    ensure_development_environment,
+    dev_user_allowed,
+    ensure_seed_allowed,
     run,
 )
 
 
 def main() -> None:
-    ensure_development_environment()
+    ensure_seed_allowed()
+    with_dev_user = dev_user_allowed()
 
     with SessionLocal() as session:
-        summary = run(session)
+        summary = run(session, with_dev_user=with_dev_user)
 
     print("Seed concluído.")
     print(f"  mercados ....... {summary.markets}")
@@ -21,9 +23,12 @@ def main() -> None:
     print(f"  preços ......... {summary.price_records}")
     print(f"  receitas ....... {summary.recipes}")
     print()
-    print("Conta de desenvolvimento para entrar no app:")
-    print(f"  e-mail ......... {DEV_USER_EMAIL}")
-    print(f"  senha .......... {DEV_USER_PASSWORD}")
+    if with_dev_user:
+        print("Conta de desenvolvimento para entrar no app:")
+        print(f"  e-mail ......... {DEV_USER_EMAIL}")
+        print(f"  senha .......... {DEV_USER_PASSWORD}")
+    else:
+        print("Sem conta de desenvolvimento neste ambiente: crie uma conta pelo app.")
     print()
     print("ATENÇÃO: todos os dados carregados são FICTÍCIOS.")
     print("Mercados, produtos e receitas estão marcados com is_fictitious = true e")
