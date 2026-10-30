@@ -11,7 +11,7 @@ componentes e fluxo de telas — é derivado desta pasta.
 | [`telas.md`](telas.md) | Por tela: o que o backend precisa entregar, o que já existe, o que falta e o que ficou fora do MVP. |
 | [`prototipos/`](prototipos/) | Os quatro protótipos navegáveis, em HTML. |
 | [`prototipos/capturas/`](prototipos/capturas/) | Captura de cada protótipo em PNG, para consulta rápida sem abrir o navegador. |
-| [`marca/`](marca/) | Logo em SVG e o avatar de exemplo usado nas telas. |
+| [`marca/`](marca/) | Logo em SVG, o avatar de exemplo usado nas telas e, em [`marca/icones/`](marca/icones/), as fontes dos ícones do app. |
 
 ## As quatro telas
 

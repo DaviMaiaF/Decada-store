@@ -136,6 +136,17 @@ spacing:
   space-4xl: 3rem
   margin-mobile: 1.25rem
   gutter-mobile: 0.75rem
+motion:
+  easing-standard: cubic-bezier(0.2, 0.8, 0.2, 1)
+  easing-ambient: ease-in-out
+  duration-press: 150ms
+  duration-short: 250ms
+  duration-medium: 350ms
+  duration-enter: 500ms
+  duration-ambient: 4000ms
+  duration-stagger: 60ms
+  distance-enter: 12px
+  pressed-scale: 0.98
 ---
 
 ## Brand & Style
@@ -199,6 +210,21 @@ A curvatura visual prioriza a simpatia tátil e a sensação de acabamento artes
 - **Chips, Tags e Pílulas de Status:** `rounded-full` (`9999px`) garantindo aspecto leve e destacando-se visualmente da estrutura retangular dos cartões.
 - **Campos de Entrada & Modais Inferiores:** `rounded-xl` (`12px`) nas entradas de dados e `rounded-t-3xl` (`28px` no topo) nas folhas retráteis de receitas e listas.
 - **Botões de Ação Principal:** `rounded-xl` (`14px`) oferecendo área de clique confortável e moderna.
+
+## Motion
+
+O movimento é **macio e amigável**: sai rápido, assenta devagar e nunca chama mais atenção que o conteúdo. A referência foi o site do Wazabi (getwazabi.com), que usa uma curva só em quase tudo — é dela que vem a sensação de fluidez, não da quantidade de animação.
+
+### Regras de Aplicação
+- **Uma curva para o que reage:** `easing-standard` (`cubic-bezier(0.2, 0.8, 0.2, 1)`) em entradas, toques e trocas de estado. Nada de `linear` nem de curvas diferentes por tela.
+- **Duração pelo tamanho:** `150ms` para o toque, `250–350ms` para o que muda dentro de um cartão, `500ms` para algo que entra na tela.
+- **Entrada:** o elemento aparece subindo `12px`, com opacidade de 0 a 1. Em lista, um item atrás do outro, `60ms` depois do anterior.
+- **Toque:** compressão para `scale: 0.98` enquanto o dedo está no elemento, e volta na mesma curva.
+- **Movimento de fundo:** só em um elemento por tela, devagar (`4s` por meio ciclo, `easing-ambient`) e pequeno. É o que dá vida sem distrair.
+- **Só `transform` e `opacity`:** rodam no driver nativo e não engasgam quando a tela está carregando dados.
+- **Reduzir movimento:** quem ativou a opção no sistema vê o estado final direto, sem animação.
+
+Os valores estão em `mobile/src/theme/motion.ts`.
 
 ## Components
 

@@ -145,7 +145,8 @@ View não importa `services/api`, `@tanstack/react-query` nem `services/auth` �
 
 A interface tem quatro abas: **Dieta · Mercado · Despensa · Economia**, e uma tela de
 início fora delas, onde o app abre e para onde a compra concluída leva. O app vive em
-`mobile/`; os tokens do sistema de design estão em `mobile/src/theme/tokens.ts` e
+`mobile/`; os tokens do sistema de design estão em `mobile/src/theme/tokens.ts` (e os
+de movimento em `mobile/src/theme/motion.ts`) e
 vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
 
 ## Documentação

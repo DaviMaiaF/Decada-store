@@ -11,11 +11,15 @@
  */
 
 import type { ComponentType } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Body, Button, Card, Chip, SectionTitle } from '../components';
+import { Entrada } from '../components/Entrada';
+import { Logo } from '../components/Logo';
+import { Tocavel } from '../components/Tocavel';
 import { IconeDespensa, IconeDieta, IconeEconomia, IconeMercado } from '../components/TabIcons';
 import type { EtapaDaTrilha } from '../components/Trilha';
+import { motion } from '../theme/motion';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import { type AbaDeDestino, useHomeViewModel } from '../viewmodels/useHomeViewModel';
 
@@ -49,49 +53,65 @@ export default function HomeScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
-      <Text style={styles.titulo}>Olá!</Text>
-      <Body muted>A DÉCADA transforma o plano da sua nutricionista em compra de mercado.</Body>
+      {/* Tudo entra em cascata, de cima para baixo, na ordem de leitura. */}
+      <Entrada style={styles.boasVindas}>
+        {/* O único movimento de fundo da tela: o ponto da logo respirando. */}
+        <Logo tamanho={32} vivo />
+        <Text style={styles.titulo}>Olá!</Text>
+        <Body muted>A DÉCADA transforma o plano da sua nutricionista em compra de mercado.</Body>
+      </Entrada>
 
       {/* O plano em si fica na aba Dieta, onde a pessoa lê, aceita ou recusa. */}
       {planoRecebido ? (
-        <Card style={[styles.passo, styles.recebido]}>
-          <Chip label="ENVIADO PELA SUA NUTRICIONISTA" tone="success" />
-          <SectionTitle>{planoRecebido.titulo}</SectionTitle>
-          <Body muted>{planoRecebido.texto}</Body>
-          <View style={styles.acao}>
-            <Button label="Conferir o plano" onPress={() => onIr('Dieta')} />
-          </View>
-        </Card>
+        <Entrada atraso={motion.duration.stagger}>
+          <Card style={[styles.passo, styles.recebido]}>
+            <Chip label="ENVIADO PELA SUA NUTRICIONISTA" tone="success" />
+            <SectionTitle>{planoRecebido.titulo}</SectionTitle>
+            <Body muted>{planoRecebido.texto}</Body>
+            <View style={styles.acao}>
+              <Button label="Conferir o plano" onPress={() => onIr('Dieta')} />
+            </View>
+          </Card>
+        </Entrada>
       ) : null}
 
-      <Card style={styles.passo}>
-        <Text style={styles.rotulo}>
-          {jornadaConcluida ? 'JORNADA CONCLUÍDA' : 'PRÓXIMA ETAPA'}
-        </Text>
-        <SectionTitle>{passo.titulo}</SectionTitle>
-        <Body muted>{passo.texto}</Body>
-        {passo.detalhe ? <Text style={styles.detalhe}>{passo.detalhe} concluídos</Text> : null}
-        <View style={styles.acao}>
-          <Button label={passo.botao} onPress={() => onIr(passo.aba)} />
-        </View>
-      </Card>
+      <Entrada atraso={motion.duration.stagger * 2}>
+        <Card style={styles.passo}>
+          <Text style={styles.rotulo}>
+            {jornadaConcluida ? 'JORNADA CONCLUÍDA' : 'PRÓXIMA ETAPA'}
+          </Text>
+          <SectionTitle>{passo.titulo}</SectionTitle>
+          <Body muted>{passo.texto}</Body>
+          {passo.detalhe ? <Text style={styles.detalhe}>{passo.detalhe} concluídos</Text> : null}
+          <View style={styles.acao}>
+            <Button label={passo.botao} onPress={() => onIr(passo.aba)} />
+          </View>
+        </Card>
+      </Entrada>
 
-      <SectionTitle>Ir para</SectionTitle>
+      <Entrada atraso={motion.duration.stagger * 3}>
+        <SectionTitle>Ir para</SectionTitle>
+      </Entrada>
       <View style={styles.grade}>
-        {ATALHOS.map(({ aba, texto, Icone }) => (
-          <Pressable
+        {ATALHOS.map(({ aba, texto, Icone }, i) => (
+          <Entrada
             key={aba}
-            accessibilityRole="button"
-            accessibilityLabel={`Ir para ${aba}`}
-            onPress={() => onIr(aba)}
-            style={({ pressed }) => [styles.atalho, pressed && styles.atalhoPressionado]}
+            atraso={motion.duration.stagger * (4 + i)}
+            style={styles.atalhoCaixa}
           >
-            <View style={styles.atalhoIcone}>
-              <Icone color={colors.onPrimaryFixedVariant} size={24} />
-            </View>
-            <Text style={styles.atalhoNome}>{aba}</Text>
-            <Text style={styles.atalhoTexto}>{texto}</Text>
-          </Pressable>
+            <Tocavel
+              accessibilityRole="button"
+              accessibilityLabel={`Ir para ${aba}`}
+              onPress={() => onIr(aba)}
+              style={styles.atalho}
+            >
+              <View style={styles.atalhoIcone}>
+                <Icone color={colors.onPrimaryFixedVariant} size={24} />
+              </View>
+              <Text style={styles.atalhoNome}>{aba}</Text>
+              <Text style={styles.atalhoTexto}>{texto}</Text>
+            </Tocavel>
+          </Entrada>
         ))}
       </View>
     </ScrollView>
@@ -100,6 +120,7 @@ export default function HomeScreen({
 
 const styles = StyleSheet.create({
   conteudo: { padding: spacing.margin, gap: spacing.md, paddingBottom: spacing.xl3 },
+  boasVindas: { gap: spacing.md },
   titulo: { ...typography.headlineLg, color: colors.primary },
   passo: { gap: spacing.xs2 },
   recebido: { borderWidth: 1, borderColor: colors.primary },
@@ -109,8 +130,9 @@ const styles = StyleSheet.create({
 
   // Duas colunas: quatro cards cabem numa tela de celular sem rolar.
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  // A caixa da entrada ocupa a célula da grade; o atalho a preenche.
+  atalhoCaixa: { flexBasis: '47%', flexGrow: 1 },
   atalho: {
-    flexBasis: '47%',
     flexGrow: 1,
     minHeight: MIN_TOUCH_HEIGHT * 2,
     padding: spacing.md,
@@ -120,7 +142,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  atalhoPressionado: { transform: [{ scale: 0.98 }], opacity: 0.85 },
   atalhoIcone: {
     width: 40,
     height: 40,
