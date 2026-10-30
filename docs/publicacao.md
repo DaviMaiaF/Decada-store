@@ -117,6 +117,7 @@ mês na EAS Update, sem cobrança de excedente (confirme em expo.dev/pricing).
 Desde maio de 2026 o Expo Go só abre updates do EAS para quem é dono do projeto ou
 membro da organização ([changelog da Expo](https://expo.dev/changelog/expo-go-loading-changes-may-2026)).
 Para convidar alguém: expo.dev → organização `davi-maias-team` → *Members* → *Invite*.
+O passo a passo para quem vai abrir o app está em [`abrir-no-celular.md`](abrir-no-celular.md).
 
 ## Testar o ambiente publicado
 
