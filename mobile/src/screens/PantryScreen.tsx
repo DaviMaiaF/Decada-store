@@ -34,7 +34,9 @@ import {
 import { Body, Card, Chip, ErrorNotice, ProgressBar, SectionTitle } from '../components';
 import { ConclusaoDaDespensa } from '../components/ConclusaoDaDespensa';
 import { DespensaDoPlano } from '../components/DespensaDoPlano';
+import { Entrada, useCascata } from '../components/Entrada';
 import { DespensaPorFoto } from '../components/DespensaPorFoto';
+import { Tocavel } from '../components/Tocavel';
 import { SeletorDeUnidade } from '../components/SeletorDeUnidade';
 import { formatQuantity } from '../services/format';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
@@ -62,6 +64,9 @@ export default function PantryScreen({
   const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
   const { escolhendo, medindo } = adicao;
   const { editando } = edicao;
+  // Item acrescentado ou receita recarregada entra na hora, sem esperar a vez.
+  const cascataDosItens = useCascata(itens.length > 0);
+  const cascataDasReceitas = useCascata(vm.receitas.length > 0);
 
   return (
     <FlatList
@@ -70,14 +75,14 @@ export default function PantryScreen({
       contentContainerStyle={styles.conteudo}
       ListHeaderComponent={
         <View style={styles.topo}>
-          <Pressable
+          <Tocavel
             accessibilityRole="button"
             accessibilityLabel="Voltar"
             onPress={onVoltar}
-            style={({ pressed }) => [styles.voltar, pressed && styles.voltarPressionado]}
+            style={styles.voltar}
           >
             <Text style={styles.voltarTexto}>‹ Voltar</Text>
-          </Pressable>
+          </Tocavel>
 
           <View style={styles.cabecalho}>
             <Chip label="APROVEITAMENTO INTELIGENTE" tone="success" />
@@ -107,23 +112,19 @@ export default function PantryScreen({
                 onSubmitEditing={adicao.comecarEscolha}
                 returnKeyType="done"
               />
-              <Pressable
+              <Tocavel
                 accessibilityRole="button"
                 accessibilityLabel="Adicionar à despensa"
                 disabled={!adicao.podeComecar}
                 onPress={adicao.comecarEscolha}
-                style={({ pressed }) => [
-                  styles.botaoAdicionar,
-                  !adicao.podeComecar && styles.botaoInativo,
-                  pressed && styles.botaoPressionado,
-                ]}
+                style={[styles.botaoAdicionar, !adicao.podeComecar && styles.botaoInativo]}
               >
                 {adicao.salvando ? (
                   <ActivityIndicator color={colors.onPrimary} />
                 ) : (
                   <Text style={styles.botaoAdicionarTexto}>+</Text>
                 )}
-              </Pressable>
+              </Tocavel>
             </View>
 
             <DespensaPorFoto onAdicionado={vm.guardadoPelaFoto} />
@@ -340,13 +341,14 @@ export default function PantryScreen({
             ) : null}
 
             <View style={styles.chips}>
-              {itens.map((item) => (
-                <ChipDaDespensa
-                  key={item.id}
-                  item={item}
-                  onPress={() => edicao.abrir(item)}
-                  onRemove={() => vm.remover(item.id)}
-                />
+              {itens.map((item, indice) => (
+                <Entrada key={item.id} atraso={cascataDosItens(indice)}>
+                  <ChipDaDespensa
+                    item={item}
+                    onPress={() => edicao.abrir(item)}
+                    onRemove={() => vm.remover(item.id)}
+                  />
+                </Entrada>
               ))}
             </View>
 
@@ -379,8 +381,10 @@ export default function PantryScreen({
           {vm.receitasFalharam ? <ErrorNotice message="não foi possível buscar receitas" /> : null}
         </View>
       }
-      renderItem={({ item }) => (
-        <CartaoDeReceita disponibilidade={item} listId={listId} naLista={vm.naLista} />
+      renderItem={({ item, index }) => (
+        <Entrada atraso={cascataDasReceitas(index)}>
+          <CartaoDeReceita disponibilidade={item} listId={listId} naLista={vm.naLista} />
+        </Entrada>
       )}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
     />
@@ -481,20 +485,16 @@ function CartaoDeReceita({
             <>
               <View style={styles.faltantes}>
                 {vm.acrescentaveis.map((ingrediente) => (
-                    <Pressable
+                    <Tocavel
                       key={ingrediente.product.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Acrescentar ${ingrediente.product.name} à lista de compras`}
                       disabled={vm.acrescentando}
                       onPress={() => vm.acrescentar(ingrediente)}
-                      style={({ pressed }) => [
-                        styles.botaoFaltante,
-                        vm.acrescentando && styles.botaoInativo,
-                        pressed && styles.botaoPressionado,
-                      ]}
+                      style={[styles.botaoFaltante, vm.acrescentando && styles.botaoInativo]}
                     >
                       <Text style={styles.botaoFaltanteTexto}>+ {ingrediente.product.name}</Text>
-                    </Pressable>
+                    </Tocavel>
                   ))}
               </View>
 
@@ -548,7 +548,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingRight: spacing.sm,
   },
-  voltarPressionado: { opacity: 0.6 },
   voltarTexto: { ...typography.labelLg, color: colors.primary },
   titulo: { ...typography.headlineLg, color: colors.primary },
 
@@ -579,7 +578,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   botaoInativo: { opacity: 0.4 },
-  botaoPressionado: { transform: [{ scale: 0.98 }] },
   botaoAdicionarTexto: { ...typography.headlineSm, color: colors.onPrimary },
 
   escolha: {

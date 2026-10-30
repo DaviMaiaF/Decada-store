@@ -6,10 +6,10 @@
  * algum crescer, sai daqui.
  */
 
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
+  Animated,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { motion } from '../theme/motion';
 import { MIN_TOUCH_HEIGHT, colors, elevation, radius, spacing, typography } from '../theme/tokens';
 import { Tocavel } from './Tocavel';
 
@@ -101,7 +102,10 @@ export function Chip({ label, tone = 'neutral' }: { label: string; tone?: ChipTo
 }
 
 /** Caixa de seleção. O rótulo é obrigatório: sem ele o leitor de tela anuncia
- * só "caixa de seleção", e numa lista de itens ninguém sabe qual é qual. */
+ * só "caixa de seleção", e numa lista de itens ninguém sabe qual é qual.
+ *
+ * Responde ao dedo como o `Button`, e o ✓ cresce ao marcar. Caixa que já abre
+ * marcada mostra o ✓ parado: a animação é resposta ao toque, não à carga. */
 export function Checkbox({
   label,
   checked,
@@ -113,8 +117,13 @@ export function Checkbox({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const montada = useRef(false);
+  useEffect(() => {
+    montada.current = true;
+  }, []);
+
   return (
-    <Pressable
+    <Tocavel
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked, disabled }}
@@ -123,8 +132,26 @@ export function Checkbox({
       hitSlop={spacing.xs}
       style={[styles.checkbox, checked && styles.checkboxChecked, disabled && styles.buttonDisabled]}
     >
-      {checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
-    </Pressable>
+      {checked ? <MarcaDaCaixa animar={montada.current} /> : null}
+    </Tocavel>
+  );
+}
+
+function MarcaDaCaixa({ animar }: { animar: boolean }) {
+  const escala = useRef(new Animated.Value(animar ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (!animar) return;
+    Animated.timing(escala, {
+      toValue: 1,
+      duration: motion.duration.short,
+      easing: motion.easing.standard,
+      useNativeDriver: true,
+    }).start();
+  }, [animar, escala]);
+
+  return (
+    <Animated.Text style={[styles.checkboxMark, { transform: [{ scale: escala }] }]}>✓</Animated.Text>
   );
 }
 
