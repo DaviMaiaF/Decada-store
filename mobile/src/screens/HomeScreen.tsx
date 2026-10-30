@@ -55,7 +55,8 @@ export default function HomeScreen({
     <ScrollView contentContainerStyle={styles.conteudo}>
       {/* Tudo entra em cascata, de cima para baixo, na ordem de leitura. */}
       <Entrada style={styles.boasVindas}>
-        <Logo tamanho={32} />
+        {/* O único movimento de fundo da tela: o ponto da logo respirando. */}
+        <Logo tamanho={32} vivo />
         <Text style={styles.titulo}>Olá!</Text>
         <Body muted>A DÉCADA transforma o plano da sua nutricionista em compra de mercado.</Body>
       </Entrada>
