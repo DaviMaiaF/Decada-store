@@ -27,13 +27,16 @@ class PdfWithoutTextError(ValueError):
     """O PDF não tem camada de texto — provavelmente é digitalizado."""
 
 
-def extract_text(data: bytes) -> str:
-    """Todo o texto do PDF, com as páginas separadas por quebra de linha.
+def extract_pages(data: bytes) -> list[list[str]]:
+    """As linhas de cada página como o modo `layout` as monta, com o recuo.
 
     Usa o modo `layout`, que monta as linhas pela posição na página. O modo
     padrão do pypdf segue a ordem interna dos trechos de texto, e PDF gerado por
     sistema (o Dietbox, por exemplo) quebra ali o item no meio: "Ovo de galinha"
     numa linha e "- 2 Unidades" na seguinte, que viravam dois itens.
+
+    Os espaços ficam como vieram: é por eles que o import sabe em que coluna
+    está cada trecho, na tabela de opção principal e substituição do Dietbox.
     """
     try:
         reader = PdfReader(io.BytesIO(data))
@@ -41,23 +44,30 @@ def extract_text(data: bytes) -> str:
     except PdfReadError as erro:
         raise InvalidPdfError(f"não foi possível ler o PDF: {erro}") from erro
 
-    text = "\n".join(pages)
-
-    if len(text.strip()) < MINIMUM_CHARACTERS:
+    if len("".join(pages).strip()) < MINIMUM_CHARACTERS:
         raise PdfWithoutTextError(
             "o PDF não tem texto selecionável. Fotos e documentos digitalizados "
             "precisariam de OCR, que não faz parte desta versão — peça o plano "
             "em PDF ou digite os itens."
         )
 
-    return text
+    return [[line.rstrip() for line in page.splitlines() if line.strip()] for page in pages]
 
 
-def extract_lines(data: bytes) -> list[str]:
-    """As linhas do PDF, sem as vazias e sem espaço sobrando.
+def extract_text(data: bytes) -> str:
+    """Todo o texto do PDF, com as páginas separadas por quebra de linha."""
+    return "\n".join("\n".join(page) for page in extract_pages(data))
+
+
+def collapse_spaces(line: str) -> str:
+    """A linha sem espaço sobrando.
 
     O modo layout alinha colunas com espaços, então os espaços repetidos no meio
     da linha também viram um só.
     """
-    lines = (_SPACES.sub(" ", line).strip() for line in extract_text(data).splitlines())
-    return [line for line in lines if line]
+    return _SPACES.sub(" ", line).strip()
+
+
+def extract_lines(data: bytes) -> list[str]:
+    """As linhas do PDF, sem as vazias e sem espaço sobrando."""
+    return [collapse_spaces(line) for page in extract_pages(data) for line in page]

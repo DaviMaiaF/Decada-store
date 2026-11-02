@@ -27,7 +27,16 @@ o documento inteiro:
   - parágrafo de orientação que o PDF quebrou em várias linhas;
   - o bloco "Orientação:" vai até a próxima substituição ou refeição. É como o
     plano montado no app escreve a observação da refeição, e a continuação
-    curta de uma orientação quebrada na margem viraria item.
+    curta de uma orientação quebrada na margem viraria item. O "Observações:"
+    do Dietbox é o mesmo bloco: dicas, sugestões de preparo e receitas;
+
+E algumas só se reconhecem pela posição na página, e é `_read_pages` quem olha:
+  - a tabela "Opção principal / Opção de substituição" do Dietbox põe as duas
+    opções lado a lado. Lida como texto corrido, a linha juntava o prato
+    principal e a substituição num item só, e a substituição que vinha sozinha
+    na coluna da direita entrava na compra (decisões 8 e 12);
+  - o nome da nutricionista e o "Acesse o app" que o PDF repete no topo e no pé
+    de toda página não são comida.
 """
 
 import re
@@ -44,7 +53,7 @@ from app.models import MealPlan, PlanItem, Product, User
 from app.models.enums import MeasurementUnit, PlanItemStatus
 from app.services.matching import MINIMUM_SCORE, find_candidates
 from app.services.parsing import parse_item_line
-from app.services.pdf import extract_lines
+from app.services.pdf import collapse_spaces, extract_pages
 from app.services.text import normalize_text, strip_accents
 
 # Acima disto a linha é parágrafo de orientação, não item de compra.
@@ -72,7 +81,8 @@ _MEAL_HEADERS = frozenset(
     }
 )
 
-_PAGE_NUMBER = re.compile(r"^(p[áa]gina\s*)?\d+\s*(de|/)\s*\d+$", re.IGNORECASE)
+# "Página 1 de 2", e também o rodapé do Dietbox: "Página 1/6 | Paciente ...".
+_PAGE_NUMBER = re.compile(r"^(p[áa]gina\s*)?\d+\s*(de|/)\s*\d+(\s*\|.*)?$", re.IGNORECASE)
 _DATE = re.compile(r"^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$")
 _ONLY_SYMBOLS = re.compile(r"^[\d\s.,:;/_\-–—=*|]+$")
 _CONTACT = re.compile(r"@|www\.|https?://|\bcrn\b|\bcpf\b|\(\d{2}\)\s*\d", re.IGNORECASE)
@@ -87,10 +97,29 @@ _TIME_PREFIX = re.compile(r"^\d{1,2}\s*[:h]\s*\d{0,2}\s*[-–—]?\s*", re.IGNOR
 _TIMED_HEADER = re.compile(r"^\d{1,2}\s*[:h]\s*\d{2}\s*[-–—]\s*[^\W\d_].{0,40}$", re.IGNORECASE)
 _SUBSTITUTION_HEADER = re.compile(r"^substitui[çc][ãa]o(\s+\d+)?\s*:?$", re.IGNORECASE)
 # Começo de um bloco de orientação: "Orientação: evite fritura". É como o plano
-# montado no app escreve as observações da refeição no PDF.
-_ORIENTATION_START = re.compile(r"^orienta[çc][ãa]o\s*:", re.IGNORECASE)
+# montado no app escreve as observações da refeição no PDF; o Dietbox escreve
+# "Observações:".
+_ORIENTATION_START = re.compile(
+    r"^(orienta[çc][ãa]o|observa[çc](?:[ãa]o|[õo]es))\s*:", re.IGNORECASE
+)
+# Cabeçalho da tabela do Dietbox. O grupo marca onde começa a coluna da direita.
+_COLUMNS_HEADER = re.compile(
+    r"op[çc][ãa]o\s+principal\s+(op[çc][ãa]o\s+de\s+substitui[çc][ãa]o)", re.IGNORECASE
+)
+# Três espaços ou mais separam uma coluna da outra no modo layout.
+_COLUMN_GAP = re.compile(r"\s{3,}")
+# Quantidade solta entre parênteses: a célula quebrou e "(165g)" desceu sozinho.
+_AMOUNT_ONLY = re.compile(r"^\(\s*\d+(?:[.,]\d+)?\s*(?:g|kg|mg|ml|l)\s*\)$", re.IGNORECASE)
+
+# Quantas linhas do topo e do pé de cada página podem ser cabeçalho ou rodapé.
+PAGE_TOP_LINES = 4
+PAGE_BOTTOM_LINES = 2
 
 _MEAL_HEADER_REASON = "cabeçalho de refeição"
+_SECTION_HEADER_REASON = "cabeçalho de seção"
+_SUBSTITUTION_REASON = "opção de substituição"
+_PAGE_EDGE_REASON = "cabeçalho ou rodapé de página"
+_COLUMNS_HEADER_REASON = "cabeçalho da tabela de opções"
 
 
 @dataclass(frozen=True)
@@ -146,17 +175,143 @@ def _discard_reason(line: str) -> str | None:
         return _MEAL_HEADER_REASON
 
     if line.rstrip().endswith(":"):
-        return "cabeçalho de seção"
+        return _SECTION_HEADER_REASON
 
     return None
 
 
-def _discard_reasons(lines: list[str]) -> list[str | None]:
+def _edge_zone(lines: list[str]) -> set[int]:
+    """Posições da página onde cabe cabeçalho ou rodapé.
+
+    O topo são as primeiras `PAGE_TOP_LINES` linhas, mas para na primeira
+    refeição: o que vem depois dela já é o plano. O pé são as últimas
+    `PAGE_BOTTOM_LINES`.
+    """
+    zone: set[int] = set()
+    for index, line in enumerate(lines[:PAGE_TOP_LINES]):
+        if _discard_reason(line) == _MEAL_HEADER_REASON:
+            break
+        zone.add(index)
+    zone.update(range(max(0, len(lines) - PAGE_BOTTOM_LINES), len(lines)))
+    return zone
+
+
+def _page_edges(pages: list[list[str]]) -> set[str]:
+    """Linhas que o PDF repete no topo ou no pé das páginas.
+
+    Vale só o que aparece na zona de borda (`_edge_zone`) de todas as páginas,
+    ou de todas menos uma a partir de quatro — a capa costuma ser diferente.
+    Com duas ou três páginas, "menos uma" seria metade delas. O nome da
+    nutricionista e o "Acesse o app" estão em todas; alimento repetido igual,
+    com a mesma medida, na borda de quase toda página não acontece.
+    """
+    if len(pages) < 2:
+        return set()
+
+    pages_with: dict[str, int] = {}
+    for page in pages:
+        lines = [collapse_spaces(line) for line in page]
+        for line in {lines[index] for index in _edge_zone(lines)}:
+            pages_with[line] = pages_with.get(line, 0) + 1
+
+    minimum = len(pages) if len(pages) <= 3 else len(pages) - 1
+    return {line for line, count in pages_with.items() if count >= minimum}
+
+
+def _columns(raw: str, split_at: int) -> tuple[str, str]:
+    """O texto da coluna da esquerda e o da direita de uma linha da tabela."""
+    left: list[str] = []
+    right: list[str] = []
+    start = 0
+    for gap in [*_COLUMN_GAP.finditer(raw), None]:
+        end = gap.start() if gap else len(raw)
+        segment = raw[start:end]
+        if segment.strip():
+            # O começo do trecho, e não o fim, diz a coluna: o texto da esquerda
+            # pode passar do meio da página.
+            offset = start + len(segment) - len(segment.lstrip())
+            (right if offset >= split_at else left).append(segment.strip())
+        if gap:
+            start = gap.end()
+    return collapse_spaces(" ".join(left)), collapse_spaces(" ".join(right))
+
+
+def _read_pages(pages: list[list[str]]) -> tuple[list[str], list[str | None]]:
+    """As linhas do documento e o motivo que a posição na página já dá a elas.
+
+    Devolve duas listas do mesmo tamanho: o texto, sem espaço sobrando, e o
+    motivo de descarte que só a posição revela (None quando ela não diz nada).
+    A linha da tabela de opções vira duas: a opção principal, que segue para o
+    filtro, e a substituição, já descartada — e as duas ficam no relatório.
+    """
+    edges = _page_edges(pages)
+    lines: list[str] = []
+    presets: list[str | None] = []
+
+    # Onde começa a coluna da direita, enquanto se está dentro da tabela.
+    split_at: int | None = None
+    # Última linha de cada coluna, para juntar a quantidade que desceu sozinha.
+    last: dict[str | None, int] = {}
+
+    def add(text: str, preset: str | None) -> None:
+        if _AMOUNT_ONLY.match(text) and preset in last:
+            lines[last[preset]] += f" {text}"
+            return
+        last[preset] = len(lines)
+        lines.append(text)
+        presets.append(preset)
+
+    for page in pages:
+        zone = _edge_zone([collapse_spaces(raw) for raw in page])
+        for index, raw in enumerate(page):
+            text = collapse_spaces(raw)
+            if index in zone and text in edges:
+                lines.append(text)
+                presets.append(_PAGE_EDGE_REASON)
+                continue
+
+            header = _COLUMNS_HEADER.search(raw)
+            if header:
+                # O meio do caminho entre os dois títulos: a célula da direita
+                # começa uns caracteres antes do título dela.
+                split_at = (header.start() + header.start(1)) // 2
+                last = {}
+                lines.append(text)
+                presets.append(_COLUMNS_HEADER_REASON)
+                continue
+
+            if split_at is not None and _discard_reason(text) in (
+                _MEAL_HEADER_REASON,
+                _SECTION_HEADER_REASON,
+            ):
+                # "Observações:" ou a próxima refeição: a tabela acabou.
+                split_at = None
+
+            if split_at is None:
+                lines.append(text)
+                presets.append(None)
+                continue
+
+            left, right = _columns(raw, split_at)
+            if left:
+                add(left, None)
+            if right:
+                add(right, _SUBSTITUTION_REASON)
+
+    return lines, presets
+
+
+def _discard_reasons(
+    lines: list[str], presets: Sequence[str | None] | None = None
+) -> list[str | None]:
     """O motivo de descarte de cada linha, olhando também as vizinhas.
 
-    Devolve uma lista do mesmo tamanho de `lines`; None é item. O motivo da
-    linha isolada (`_discard_reason`) vale primeiro, por ser o mais específico.
+    Devolve uma lista do mesmo tamanho de `lines`; None é item. O motivo que a
+    posição na página deu (`presets`, de `_read_pages`) vale primeiro; depois o
+    da linha isolada (`_discard_reason`), por ser o mais específico.
     """
+    if presets is None:
+        presets = [None] * len(lines)
     own = [_discard_reason(line) for line in lines]
     has_meals = _MEAL_HEADER_REASON in own
 
@@ -166,7 +321,13 @@ def _discard_reasons(lines: list[str]) -> list[str | None]:
     in_orientation = False
     previous_wrapped = False
 
-    for line, reason in zip(lines, own, strict=True):
+    for line, reason, preset in zip(lines, own, presets, strict=True):
+        if preset is not None:
+            # Rodapé e substituição da tabela não mexem no contexto: o rodapé
+            # cai no meio do bloco, e a substituição é da mesma refeição.
+            reasons.append(preset)
+            continue
+
         if reason == _MEAL_HEADER_REASON:
             before_first_meal = False
             in_substitution = False
@@ -185,11 +346,11 @@ def _discard_reasons(lines: list[str]) -> list[str | None]:
             elif _SUBSTITUTION_HEADER.match(line):
                 in_substitution = True
                 in_orientation = False
-                reason = "opção de substituição"
+                reason = _SUBSTITUTION_REASON
             elif in_orientation:
                 reason = "texto de orientação"
             elif in_substitution:
-                reason = "opção de substituição"
+                reason = _SUBSTITUTION_REASON
             elif len(line) >= WRAPPED_LINE_LENGTH or wrapped:
                 reason = "texto de orientação"
 
@@ -251,7 +412,7 @@ def import_plan_from_pdf(
     Levanta `PdfWithoutTextError` se o arquivo for digitalizado e `InvalidPdfError`
     se não for um PDF legível.
     """
-    lines = extract_lines(pdf_bytes)
+    lines, presets = _read_pages(extract_pages(pdf_bytes))
 
     plan = MealPlan(
         user=user,
@@ -272,7 +433,7 @@ def import_plan_from_pdf(
     matched = 0
     unidentified = 0
 
-    for line, reason in zip(lines, _discard_reasons(lines), strict=True):
+    for line, reason in zip(lines, _discard_reasons(lines, presets), strict=True):
         if reason is not None:
             discarded.append(DiscardedLine(text=line, reason=reason))
             continue
