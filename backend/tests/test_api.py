@@ -231,6 +231,44 @@ def test_lista_candidatos_para_um_item(client, marina):
     assert Decimal(candidatos[0]["score"]) > Decimal("0.6")
 
 
+def test_candidatos_de_todos_os_itens_numa_resposta_so(client, marina, db_session):
+    plano = importar_plano(
+        client, marina, ["1,2 kg de peito de frango sem pele", "2 ovos de galinha", "Fruta"]
+    )
+    plano_id = plano["meal_plan"]["id"]
+    frango, ovos, fruta = plano["meal_plan"]["items"]
+    produto = db_session.scalars(
+        select(Product).where(Product.name == "Peito de frango sem pele")
+    ).one()
+    client.post(
+        f"/meal-plans/{plano_id}/items/{frango['id']}/confirmation",
+        headers=_headers(marina),
+        json={"product_id": str(produto.id)},
+    )
+
+    resposta = client.get(f"/meal-plans/{plano_id}/candidates", headers=_headers(marina))
+
+    assert resposta.status_code == 200
+    por_item = {linha["item_id"]: linha["candidates"] for linha in resposta.json()}
+    # O item já confirmado fica de fora; o resto vem na ordem do plano.
+    assert list(por_item) == [ovos["id"], fruta["id"]]
+    # O mesmo que a rota de um item devolveria.
+    um_por_um = client.get(
+        f"/meal-plans/{plano_id}/items/{ovos['id']}/candidates", headers=_headers(marina)
+    ).json()
+    assert por_item[ovos["id"]] == um_por_um
+
+
+def test_candidatos_do_plano_de_outra_pessoa_respondem_404(client, marina, outra_pessoa):
+    plano = importar_plano(client, marina)
+
+    resposta = client.get(
+        f"/meal-plans/{plano['meal_plan']['id']}/candidates", headers=_headers(outra_pessoa)
+    )
+
+    assert resposta.status_code == 404
+
+
 def test_confirmar_grava_o_produto_escolhido(client, marina, db_session):
     plano = importar_plano(client, marina, ["1,2 kg de peito de frango sem pele"])
     item = plano["meal_plan"]["items"][0]

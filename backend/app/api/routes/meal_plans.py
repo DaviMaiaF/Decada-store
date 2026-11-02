@@ -16,6 +16,7 @@ from app.schemas.meal_plan import (
     CandidateOut,
     ConfirmationIn,
     ImportResultOut,
+    ItemCandidatesOut,
     MealPlanOut,
     MealPlanSummaryOut,
     PlanItemOut,
@@ -133,6 +134,36 @@ def read_meal_plans(session: DbSession, user: CurrentPatient) -> list[MealPlanSu
 def read_meal_plan(session: DbSession, user: CurrentPatient, plan_id: uuid.UUID) -> MealPlan:
     """O plano alimentar com seus itens, na ordem em que vieram do PDF."""
     return _get_plan(session, user, plan_id)
+
+
+@router.get("/{plan_id}/candidates", response_model=list[ItemCandidatesOut])
+def read_plan_candidates(
+    session: DbSession, user: CurrentPatient, plan_id: uuid.UUID
+) -> list[ItemCandidatesOut]:
+    """Os candidatos de todos os itens ainda não confirmados, numa resposta só.
+
+    A tela de confirmação pedia os candidatos item a item, todos ao mesmo tempo.
+    Num plano de cem linhas eram cem requisições, cada uma lendo o catálogo
+    inteiro: o banco ficava sem conexão livre, parte delas voltava 500 e o
+    "Selecionar sugeridos" contava as que tinham chegado até ali. Aqui o
+    catálogo é lido uma vez. Só sugere, como a rota de um item.
+    """
+    plan = _get_plan(session, user, plan_id)
+    catalog = session.scalars(select(Product)).all()
+
+    return [
+        ItemCandidatesOut(
+            item_id=item.id,
+            candidates=find_candidates(
+                parse_item_line(item.raw_description).description,
+                item.quantity,
+                item.unit,
+                catalog,
+            ),
+        )
+        for item in plan.items
+        if item.status is not PlanItemStatus.CONFIRMADO
+    ]
 
 
 @router.get("/{plan_id}/items/{item_id}/candidates", response_model=list[CandidateOut])

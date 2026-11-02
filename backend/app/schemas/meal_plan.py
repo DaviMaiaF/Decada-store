@@ -95,6 +95,13 @@ class CandidateOut(ApiModel):
     packages_needed: int | None = None
 
 
+class ItemCandidatesOut(BaseModel):
+    """Os candidatos de um item, na resposta que traz os de todos de uma vez."""
+
+    item_id: uuid.UUID
+    candidates: list[CandidateOut]
+
+
 class ConfirmationIn(BaseModel):
     """Escolha do usuário para um item do plano."""
 
