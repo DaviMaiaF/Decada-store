@@ -117,7 +117,9 @@ def parse_item_line(line: str) -> ParsedItem:
     Palavra desconhecida logo após o número (como "pote") não é unidade e
     continua fazendo parte da descrição.
     """
-    text = line.strip()
+    # O Dietbox deixa o travessão no fim quando o item não tem medida:
+    # "Suco saúde intestinal -".
+    text = line.strip().rstrip("-–—").rstrip()
     if not text:
         raise ValueError("linha vazia do plano alimentar")
 

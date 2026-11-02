@@ -149,3 +149,13 @@ def test_linha_que_comeca_com_numero_segue_o_formato_antigo():
     assert item.quantity == Decimal("150")
     assert item.unit is G
     assert item.description == "frango - grelhado"
+
+
+def test_travessao_sem_medida_no_fim_sai_da_descricao():
+    # O Dietbox escreve assim o item que não tem medida.
+    item = parse_item_line("Suco saúde intestinal -")
+
+    assert item.quantity == Decimal("1")
+    assert item.unit is UN
+    assert item.description == "Suco saúde intestinal"
+    assert item.raw == "Suco saúde intestinal -"
