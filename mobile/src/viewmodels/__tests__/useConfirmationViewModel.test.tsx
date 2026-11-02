@@ -23,6 +23,7 @@ jest.mock('../../services/api', () => ({
   readReceivedPrescriptions: jest.fn(),
   readMealPlan: jest.fn(),
   readCandidates: jest.fn(),
+  readPlanCandidates: jest.fn(),
   confirmItem: jest.fn(),
   removePlanItem: jest.fn(),
 }));
@@ -30,6 +31,12 @@ jest.mock('../../services/api', () => ({
 const lerRecebidos = api.readReceivedPrescriptions as jest.Mock;
 const lerPlano = api.readMealPlan as jest.Mock;
 const lerCandidatos = api.readCandidates as jest.Mock;
+const lerCandidatosDoPlano = api.readPlanCandidates as jest.Mock;
+
+/** A resposta de `GET /meal-plans/{id}/candidates`: os mesmos candidatos para cada item. */
+function doPlano(ids: string[], candidatos: Candidate[]) {
+  return ids.map((id) => ({ item_id: id, candidates: candidatos }));
+}
 const confirmarApi = api.confirmItem as jest.Mock;
 const removerApi = api.removePlanItem as jest.Mock;
 
@@ -130,7 +137,7 @@ describe('useConfirmationViewModel', () => {
         item({ id: 'c', status: 'confirmado' }),
       ]),
     );
-    lerCandidatos.mockResolvedValue([candidato('Aveia')]);
+    lerCandidatosDoPlano.mockResolvedValue(doPlano(['a', 'b'], [candidato('Aveia')]));
     const { result } = await montar();
 
     await waitFor(() => expect(result.current.tamanhoDoLote).toBe(1));
@@ -142,7 +149,7 @@ describe('useConfirmationViewModel', () => {
 
   it('selecionar todos marca o lote inteiro, e de novo desmarca', async () => {
     lerPlano.mockResolvedValue(plano([item({ id: 'a' }), item({ id: 'b' })]));
-    lerCandidatos.mockResolvedValue([candidato('Aveia')]);
+    lerCandidatosDoPlano.mockResolvedValue(doPlano(['a', 'b'], [candidato('Aveia')]));
     const { result } = await montar();
     await waitFor(() => expect(result.current.tamanhoDoLote).toBe(2));
 
@@ -156,7 +163,7 @@ describe('useConfirmationViewModel', () => {
 
   it('no lote, a falha de um item fica marcada e as outras confirmações valem', async () => {
     lerPlano.mockResolvedValue(plano([item({ id: 'a' }), item({ id: 'b' })]));
-    lerCandidatos.mockResolvedValue([candidato('Aveia')]);
+    lerCandidatosDoPlano.mockResolvedValue(doPlano(['a', 'b'], [candidato('Aveia')]));
     confirmarApi.mockImplementation((_plano: string, id: string) =>
       id === 'b' ? Promise.reject(new Error('fora do ar')) : Promise.resolve({}),
     );
@@ -172,6 +179,51 @@ describe('useConfirmationViewModel', () => {
     // Só o que falhou continua marcado, para tentar de novo.
     expect(result.current.marcado('b')).toBe(true);
     expect(result.current.marcado('a')).toBe(false);
+  });
+
+  it('o lote aparece inteiro, de uma vez, e não pede item a item', async () => {
+    const ids = ['a', 'b', 'c', 'd'];
+    lerPlano.mockResolvedValue(plano(ids.map((id) => item({ id }))));
+    let responder: (linhas: unknown) => void = () => {};
+    lerCandidatosDoPlano.mockReturnValue(new Promise((resolve) => (responder = resolve)));
+    // A tela e os itens, no mesmo cliente, como na FlatList.
+    const { result } = await renderHook(
+      () => ({
+        tela: useConfirmationViewModel('plano-1'),
+        itens: ids.map((id) => usePlanItemViewModel('plano-1', item({ id }))),
+      }),
+      { wrapper: Provedor },
+    );
+
+    await waitFor(() => expect(result.current.tela.pendentes).toBe(4));
+    // Enquanto busca, não há lote para contar: era aqui que o "x de N" pulava.
+    expect(result.current.tela.buscandoSugestoes).toBe(true);
+    expect(result.current.tela.tamanhoDoLote).toBe(0);
+    expect(result.current.itens.every((i) => i.buscando)).toBe(true);
+
+    await act(async () => responder(doPlano(ids, [candidato('Aveia')])));
+
+    await waitFor(() => expect(result.current.tela.tamanhoDoLote).toBe(4));
+    expect(result.current.itens.every((i) => i.sugestao?.product.name === 'Aveia')).toBe(true);
+    expect(lerCandidatosDoPlano).toHaveBeenCalledTimes(1);
+    expect(lerCandidatos).not.toHaveBeenCalled();
+  });
+
+  it('se a busca das sugestões falha, avisa e tenta de novo', async () => {
+    lerPlano.mockResolvedValue(plano([item({ id: 'a' })]));
+    lerCandidatosDoPlano.mockRejectedValueOnce(new api.ApiError(500, 'erro inesperado'));
+    const { result } = await montar();
+
+    await waitFor(() => expect(result.current.sugestoesFalharam).toBe(true));
+    expect(result.current.tamanhoDoLote).toBe(0);
+
+    lerCandidatosDoPlano.mockResolvedValue(doPlano(['a'], [candidato('Aveia')]));
+    await act(async () => {
+      await result.current.buscarSugestoesDeNovo();
+    });
+
+    await waitFor(() => expect(result.current.tamanhoDoLote).toBe(1));
+    expect(result.current.sugestoesFalharam).toBe(false);
   });
 
   it('avisa quando a nutricionista mandou um plano novo', async () => {
@@ -192,7 +244,7 @@ describe('useConfirmationViewModel', () => {
 
 describe('usePlanItemViewModel', () => {
   it('item pendente já traz a sugestão e confirma a escolhida', async () => {
-    lerCandidatos.mockResolvedValue([candidato('Aveia'), candidato('Farelo')]);
+    lerCandidatosDoPlano.mockResolvedValue(doPlano(['a'], [candidato('Aveia'), candidato('Farelo')]));
     confirmarApi.mockResolvedValue({});
     const invalidar = jest.spyOn(cliente, 'invalidateQueries');
     const { result } = await renderHook(
@@ -206,10 +258,14 @@ describe('usePlanItemViewModel', () => {
     await waitFor(() =>
       expect(confirmarApi).toHaveBeenCalledWith('plano-1', 'a', 'produto-Farelo', '0.90'),
     );
+    // Os candidatos vieram com os do plano: o item não pediu os seus.
+    expect(lerCandidatos).not.toHaveBeenCalled();
     await waitFor(() => expect(invalidar).toHaveBeenCalledWith({ queryKey: ['shopping-list'] }));
   });
 
   it('item confirmado só busca candidatos quando a pessoa abre a edição', async () => {
+    // Confirmado não vem na resposta do plano.
+    lerCandidatosDoPlano.mockResolvedValue([]);
     lerCandidatos.mockResolvedValue([candidato('Aveia')]);
     const { result } = await renderHook(
       () => usePlanItemViewModel('plano-1', item({ id: 'a', status: 'confirmado' })),
@@ -223,7 +279,7 @@ describe('usePlanItemViewModel', () => {
   });
 
   it('remover pede confirmação, apaga o item e invalida plano e lista', async () => {
-    lerCandidatos.mockResolvedValue([]);
+    lerCandidatosDoPlano.mockResolvedValue([]);
     removerApi.mockResolvedValue(undefined);
     const invalidar = jest.spyOn(cliente, 'invalidateQueries');
     const { result } = await renderHook(
@@ -243,7 +299,7 @@ describe('usePlanItemViewModel', () => {
   });
 
   it('cancelar a remoção não chama a API', async () => {
-    lerCandidatos.mockResolvedValue([]);
+    lerCandidatosDoPlano.mockResolvedValue([]);
     const { result } = await renderHook(
       () => usePlanItemViewModel('plano-1', item({ id: 'a' })),
       { wrapper: Provedor },

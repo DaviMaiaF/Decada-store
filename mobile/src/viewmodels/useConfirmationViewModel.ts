@@ -7,17 +7,18 @@
  */
 
 import { useState } from 'react';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   ApiError,
   confirmItem,
   readCandidates,
   readMealPlan,
+  readPlanCandidates,
   readReceivedPrescriptions,
   removePlanItem,
 } from '../services/api';
-import type { Candidate, PlanItem } from '../types/api';
+import type { Candidate, ItemCandidates, PlanItem } from '../types/api';
 import { RECEIVED_KEY } from './useReceivedPrescriptionsViewModel';
 
 /**
@@ -29,6 +30,32 @@ import { RECEIVED_KEY } from './useReceivedPrescriptionsViewModel';
  */
 export function entraNoLote(item: PlanItem, sugestao: Candidate | null): sugestao is Candidate {
   return item.status === 'pendente' && sugestao !== null && sugestao.unit_compatible;
+}
+
+function porItem(linhas: ItemCandidates[]): ReadonlyMap<string, Candidate[]> {
+  return new Map(linhas.map((linha) => [linha.item_id, linha.candidates]));
+}
+
+/**
+ * Os candidatos de todos os itens pendentes, numa requisição só.
+ *
+ * Eram uma por item, todas ao mesmo tempo: num plano de cem linhas o servidor
+ * ficava sem conexão com o banco, parte voltava com erro, e o "x de N" do lote
+ * contava as que tinham chegado até ali — subia, parava, pulava. A tela e cada
+ * item leem esta mesma consulta, e o React Query faz uma busca só.
+ *
+ * Confirmar não a invalida: o item confirmado sai dos pendentes pelo plano, e
+ * buscar o catálogo inteiro de novo a cada toque seria o mesmo custo de antes.
+ */
+function useCandidatosDoPlano(planId: string) {
+  return useQuery({
+    queryKey: ['plan-candidates', planId],
+    queryFn: () => readPlanCandidates(planId),
+    select: porItem,
+    // A FlatList monta item conforme a rolagem, e cada item que monta depois de
+    // uma falha buscaria tudo de novo. Quem tenta de novo é a pessoa, no botão.
+    retryOnMount: false,
+  });
 }
 
 /** Depois de confirmar, o plano é lido de novo e a lista já gerada fica para trás. */
@@ -52,20 +79,15 @@ export function useConfirmationViewModel(planId: string) {
   const itens = plano.data?.items ?? [];
   const pendentes = itens.filter((item) => item.status !== 'confirmado');
 
-  // Mesma chave que cada item usa: o React Query faz uma busca só, e a tela
-  // fica sabendo da sugestão de todos para montar o lote.
-  const buscas = useQueries({
-    queries: pendentes.map((item) => ({
-      queryKey: ['candidates', planId, item.id],
-      queryFn: () => readCandidates(planId, item.id),
-    })),
-  });
+  // O lote só existe com a resposta inteira: montado aos pedaços, o "x de N"
+  // mudava sozinho enquanto a pessoa lia.
+  const doPlano = useCandidatosDoPlano(planId);
 
   const sugestoes = new Map<string, Candidate>();
-  pendentes.forEach((item, indice) => {
-    const sugestao = buscas[indice]?.data?.[0] ?? null;
+  for (const item of pendentes) {
+    const sugestao = doPlano.data?.get(item.id)?.[0] ?? null;
     if (entraNoLote(item, sugestao)) sugestoes.set(item.id, sugestao);
-  });
+  }
 
   const [marcados, setMarcados] = useState<ReadonlySet<string>>(new Set());
   const [falhasDoLote, setFalhasDoLote] = useState<ReadonlySet<string>>(new Set());
@@ -123,6 +145,9 @@ export function useConfirmationViewModel(planId: string) {
     planoAberto,
     alternarPlano: () => setPlanoAberto((a) => !a),
 
+    buscandoSugestoes: doPlano.isPending,
+    sugestoesFalharam: doPlano.isError,
+    buscarSugestoesDeNovo: () => doPlano.refetch(),
     tamanhoDoLote: sugestoes.size,
     noLote: (id: string) => sugestoes.has(id),
     marcado: (id: string) => marcados.has(id),
@@ -146,16 +171,20 @@ export function usePlanItemViewModel(planId: string, item: PlanItem) {
 
   const confirmado = item.status === 'confirmado';
 
-  // Busca assim que o item aparece, e não só quando a pessoa abre. São 120
-  // produtos comparados por item, o que parecia caro — medido, dá 15 ms por
-  // item, e o custo real era outro: confirmar um plano de 15 itens pedia três
-  // toques em cada um. Item já confirmado só busca quando a pessoa pede para
-  // editar.
-  const candidatos = useQuery({
+  // A sugestão chega com a do plano inteiro, assim que a tela abre: confirmar
+  // um plano de 15 itens não pode pedir três toques em cada um. O item só busca
+  // os próprios candidatos quando a pessoa abre a edição de um item já
+  // confirmado, que não vem na resposta do plano.
+  const doPlano = useCandidatosDoPlano(planId);
+  const doLote = doPlano.data?.get(item.id);
+  const proprios = useQuery({
     queryKey: ['candidates', planId, item.id],
     queryFn: () => readCandidates(planId, item.id),
-    enabled: !confirmado || aberto,
+    enabled: aberto && doLote === undefined,
   });
+  const candidatos = doLote ?? proprios.data ?? null;
+  // Fechado, quem busca é o plano; aberto sem o item no plano, é o item.
+  const busca = aberto && doLote === undefined ? proprios : confirmado ? null : doPlano;
 
   const confirmacao = useMutation({
     mutationFn: ({ productId, score }: { productId: string; score: string | null }) =>
@@ -182,10 +211,10 @@ export function usePlanItemViewModel(planId: string, item: PlanItem) {
     pedirRemocao: () => setConfirmandoRemocao(true),
     cancelarRemocao: () => setConfirmandoRemocao(false),
     remover: () => remocao.mutate(),
-    sugestao: candidatos.data?.[0] ?? null,
-    candidatos: candidatos.data ?? null,
-    buscando: candidatos.isPending,
-    buscaFalhou: candidatos.isError,
+    sugestao: candidatos?.[0] ?? null,
+    candidatos,
+    buscando: candidatos === null && Boolean(busca?.isPending),
+    buscaFalhou: candidatos === null && Boolean(busca?.isError),
     confirmando: confirmacao.isPending,
     confirmacaoFalhou: confirmacao.isError,
     alternarAberto: () => setAberto((estava) => !estava),

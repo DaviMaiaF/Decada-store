@@ -18,12 +18,17 @@ jest.mock('../../services/api', () => ({
   readReceivedPrescriptions: jest.fn(() => Promise.resolve([])),
   readMealPlan: jest.fn(),
   readCandidates: jest.fn(),
+  readPlanCandidates: jest.fn(),
   confirmItem: jest.fn(),
   removePlanItem: jest.fn(),
 }));
 
 const lerPlano = api.readMealPlan as jest.Mock;
 const lerCandidatos = api.readCandidates as jest.Mock;
+const lerCandidatosDoPlano = api.readPlanCandidates as jest.Mock;
+// O que o servidor sugere para cada item. As duas rotas respondem com ele: a do
+// plano, para os pendentes, e a de um item, ao abrir a edição.
+const catalogo = jest.fn();
 const confirmar = api.confirmItem as jest.Mock;
 const remover = api.removePlanItem as jest.Mock;
 
@@ -91,8 +96,17 @@ beforeEach(() => {
   cliente = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } },
   });
+  lerCandidatos.mockImplementation((_plano: string, itemId: string) => catalogo(itemId));
+  lerCandidatosDoPlano.mockImplementation(async (planoId: string) => {
+    const { items } = await lerPlano(planoId);
+    return Promise.all(
+      items
+        .filter((i: PlanItem) => i.status !== 'confirmado')
+        .map(async (i: PlanItem) => ({ item_id: i.id, candidates: await catalogo(i.id) })),
+    );
+  });
   lerPlano.mockResolvedValue(plano([item({ id: 'item-1' })]));
-  lerCandidatos.mockResolvedValue([
+  catalogo.mockResolvedValue([
     candidato('Aveia em flocos', '0.940'),
     candidato('Granola tradicional', '0.610'),
   ]);
@@ -166,13 +180,31 @@ it('item já confirmado não procura candidato', async () => {
 });
 
 it('avisa quando o catálogo não tem nada parecido', async () => {
-  lerCandidatos.mockResolvedValue([]);
+  catalogo.mockResolvedValue([]);
 
   await montar();
 
   expect(
     await screen.findByText('Nenhum produto do catálogo se parece com este item.'),
   ).toBeTruthy();
+});
+
+it('se as sugestões não chegam, avisa uma vez e deixa tentar de novo', async () => {
+  const servidor = lerCandidatosDoPlano.getMockImplementation()!;
+  lerCandidatosDoPlano.mockRejectedValue(new api.ApiError(500, 'erro inesperado no servidor'));
+
+  await montar();
+
+  expect(
+    await screen.findByText('não foi possível buscar as sugestões do catálogo'),
+  ).toBeTruthy();
+  // Sem a resposta, não dá para dizer que o catálogo não tem nada parecido.
+  expect(screen.queryByText('Nenhum produto do catálogo se parece com este item.')).toBeNull();
+
+  lerCandidatosDoPlano.mockImplementation(servidor);
+  await fireEvent.press(screen.getByText('Tentar de novo'));
+
+  expect(await screen.findByText('Aveia em flocos')).toBeTruthy();
 });
 
 it('o rodapé leva ao mercado, e não promete gerar a lista', async () => {
@@ -196,7 +228,7 @@ describe('confirmação em lote', () => {
         item({ id: 'item-3', raw_description: '1 banana' }),
       ]),
     );
-    lerCandidatos.mockImplementation(async (_plano: string, itemId: string) => {
+    catalogo.mockImplementation(async (itemId: string) => {
       if (itemId === 'item-1') return [candidato('Aveia em flocos', '0.940')];
       if (itemId === 'item-2') return [candidato('Leite integral', '0.880')];
       // Unidade diferente: fica fora do lote.
@@ -228,7 +260,7 @@ describe('confirmação em lote', () => {
         item({ id: 'item-2', raw_description: 'Tapioca', status: 'nao_identificado' }),
       ]),
     );
-    lerCandidatos.mockImplementation(async (_plano: string, itemId: string) =>
+    catalogo.mockImplementation(async (itemId: string) =>
       itemId === 'item-1'
         ? [candidato('Aveia em flocos', '0.940')]
         : [candidato('Filé de tilápia', '0.460')],

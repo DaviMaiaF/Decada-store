@@ -82,6 +82,19 @@ export default function ConfirmationScreen({
               ) : null}
             </Card>
           ) : null}
+          {vm.buscandoSugestoes && vm.pendentes > 0 ? (
+            <Body muted>Procurando os produtos no catálogo…</Body>
+          ) : null}
+          {vm.sugestoesFalharam ? (
+            <View style={styles.lote}>
+              <ErrorNotice message="não foi possível buscar as sugestões do catálogo" />
+              <Button
+                label="Tentar de novo"
+                variant="secondary"
+                onPress={vm.buscarSugestoesDeNovo}
+              />
+            </View>
+          ) : null}
           {vm.tamanhoDoLote > 0 ? (
             <View style={styles.lote}>
               <Pressable
@@ -250,11 +263,8 @@ function ItemDoPlano({
         </View>
       ) : null}
 
-      {!confirmado && buscando ? (
-        <Body muted>Procurando o produto no catálogo…</Body>
-      ) : null}
-
-      {!confirmado && !buscando && sugestao === null && !aberto ? (
+      {/* Enquanto o plano busca, o aviso fica no topo da tela, uma vez só. */}
+      {!confirmado && !buscando && !buscaFalhou && sugestao === null && !aberto ? (
         <Body muted>Nenhum produto do catálogo se parece com este item.</Body>
       ) : null}
 

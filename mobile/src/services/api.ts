@@ -11,6 +11,7 @@ import { http } from './http';
 import type {
   Account,
   Candidate,
+  ItemCandidates,
   CardInput,
   GeneratedList,
   ImportResult,
@@ -138,6 +139,10 @@ export async function importMealPlan(
 export const readMealPlans = () => request<MealPlanSummary[]>('/meal-plans');
 
 export const readMealPlan = (planId: string) => request<MealPlan>(`/meal-plans/${planId}`);
+
+/** Os candidatos de todos os itens ainda não confirmados, numa requisição só. */
+export const readPlanCandidates = (planId: string) =>
+  request<ItemCandidates[]>(`/meal-plans/${planId}/candidates`);
 
 export const readCandidates = (planId: string, itemId: string) =>
   request<Candidate[]>(`/meal-plans/${planId}/items/${itemId}/candidates`);
