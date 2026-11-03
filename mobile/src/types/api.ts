@@ -94,6 +94,12 @@ export interface Candidate {
   packages_needed: number | null;
 }
 
+/** Os candidatos de um item, na resposta que traz os de todos os itens do plano. */
+export interface ItemCandidates {
+  item_id: string;
+  candidates: Candidate[];
+}
+
 export interface ShoppingListItem {
   id: string;
   product: Product;

@@ -11,6 +11,7 @@ import { http } from './http';
 import type {
   Account,
   Candidate,
+  ItemCandidates,
   CardInput,
   GeneratedList,
   ImportResult,
@@ -139,6 +140,10 @@ export const readMealPlans = () => request<MealPlanSummary[]>('/meal-plans');
 
 export const readMealPlan = (planId: string) => request<MealPlan>(`/meal-plans/${planId}`);
 
+/** Os candidatos de todos os itens ainda não confirmados, numa requisição só. */
+export const readPlanCandidates = (planId: string) =>
+  request<ItemCandidates[]>(`/meal-plans/${planId}/candidates`);
+
 export const readCandidates = (planId: string, itemId: string) =>
   request<Candidate[]>(`/meal-plans/${planId}/items/${itemId}/candidates`);
 
@@ -152,6 +157,10 @@ export const confirmItem = (
     method: 'POST',
     body: { product_id: productId, match_score: matchScore },
   });
+
+/** Tira do plano um item lido errado. Definitivo. */
+export const removePlanItem = (planId: string, itemId: string) =>
+  request<void>(`/meal-plans/${planId}/items/${itemId}`, { method: 'DELETE' });
 
 /** A pessoa terminou de dizer o que tem em casa para este plano. Repetir não muda nada. */
 export const reviewPantry = (planId: string) =>

@@ -16,12 +16,72 @@ from app.services.security import create_access_token
 
 __all__ = [
     "build_pdf",
+    "build_columns_pdf",
     "auth_headers",
     "importar_plano",
     "plano_confirmado",
     "plano_da_nutricionista",
     "PLANO_REALISTA",
 ]
+
+
+def build_columns_pdf(pages: list[list[str | tuple[str, str]]]) -> bytes:
+    """Um PDF de várias páginas em que a linha pode ter duas colunas.
+
+    A linha `str` sai na margem esquerda; a tupla `(esquerda, direita)` põe o
+    segundo texto na metade da página, como a tabela "Opção principal / Opção de
+    substituição" do Dietbox. Cada texto é posicionado sozinho, que é o que faz o
+    modo layout do pypdf alinhar as colunas com espaços.
+    """
+
+    def escape(text: str) -> str:
+        return text.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+
+    streams = []
+    for linhas in pages:
+        partes = ["/F1 11 Tf"]
+        y = 790
+        for linha in linhas:
+            esquerda, direita = (linha, "") if isinstance(linha, str) else linha
+            for x, texto in ((50, esquerda), (320, direita)):
+                if texto:
+                    partes.append(f"BT 1 0 0 1 {x} {y} Tm ({escape(texto)}) Tj ET")
+            y -= 18
+        streams.append("\n".join(partes).encode("cp1252"))
+
+    total = len(pages)
+    # 1: catálogo, 2: páginas, 3: fonte; depois página e conteúdo, aos pares.
+    kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(total))
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {total} >>".encode(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ]
+    for i, stream in enumerate(streams):
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            f"/Resources << /Font << /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>".encode()
+        )
+        objects.append(
+            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream
+            + b"\nendstream"
+        )
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for numero, obj in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{numero} 0 obj\n".encode() + obj + b"\nendobj\n"
+
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n"
+    ).encode()
+    return bytes(out)
 
 
 def auth_headers(user: User) -> dict[str, str]:

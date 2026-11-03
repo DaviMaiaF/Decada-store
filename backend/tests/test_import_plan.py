@@ -11,9 +11,15 @@ from sqlalchemy import select
 
 from app.models import MealPlan, PlanItem
 from app.models.enums import PlanItemStatus
-from app.services.import_plan import _discard_reason, _discard_reasons, import_plan_from_pdf
-from app.services.pdf import PdfWithoutTextError
-from tests.helpers import PLANO_REALISTA, build_pdf
+from app.services.import_plan import (
+    _discard_reason,
+    _discard_reasons,
+    _page_edges,
+    _read_pages,
+    import_plan_from_pdf,
+)
+from app.services.pdf import PdfWithoutTextError, extract_pages
+from tests.helpers import PLANO_REALISTA, build_columns_pdf, build_pdf
 
 AGORA = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
@@ -159,6 +165,133 @@ def test_sem_refeicoes_nada_e_tratado_como_cabecalho():
     linhas = ["Peito de frango - 1,2 kg", "Arroz integral - 1 kg"]
 
     assert _itens(linhas) == linhas
+
+
+# --------------------------------------------------------------------------
+# PDF do Dietbox em duas colunas, de várias páginas
+# --------------------------------------------------------------------------
+
+# O Dietbox atual põe a opção principal e a substituição lado a lado, repete o
+# nome da nutricionista no topo de cada página e um rodapé no pé. Depois da
+# tabela vem "Observações:", com dicas, sugestões e receita. Dados fictícios.
+_TOPO = ["Fernanda Lima", "Nutricionista - CRN 9/99999"]
+PLANO_EM_COLUNAS = [
+    [
+        *_TOPO,
+        "Paciente Fictício",
+        "Planejamento alimentar",
+        "09:30 - Café-da-manhã",
+        ("Opção principal", "Opção de substituição"),
+        "Ovo de galinha - 2 Unidade(s) grande(s) (110g)",
+        ("", "Melão - 2 Fatia(s) grande(s) (230g)"),
+        ("Mamão formosa - 1 Fatia(s) média(s) (170g)", "Abacaxi - 2 Fatia(s) pequena(s) (150g)"),
+        ("", "Iogurte natural proteico - 1 Copo(s) americano(s) pequeno(s)"),
+        ("", "(165g)"),
+        "Observações:",
+        "Sugestões!",
+        "Opção 1",
+        "Uma opção de fruta +",
+        "Ovos mexidos com queijo.",
+        "Acesse o app e veja o conteúdo completo da sua consulta.",
+        "Página 1/2 | Paciente Fictício | Prescrito em: 05/01/2026.",
+    ],
+    [
+        *_TOPO,
+        "12:00 - Almoço",
+        ("Opção principal", "Opção de substituição"),
+        "Salada + vegetais da sua preferência -",
+        ("Filé de tilápia cozido - 2 Filé(s) médio(s) (120g)", "Filé de frango - 2 Bife(s) (100g)"),
+        ("Sobrecoxa de frango sem pele assada - 2 Unidade(s) pequena(s)", ""),
+        ("(100g)", ""),
+        "Observações:",
+        "DICAS DA NUTRI!",
+        "Receita culinária",
+        "Ingredientes:",
+        "Couve - 1 Folha média (20g)",
+        "Acesse o app e veja o conteúdo completo da sua consulta.",
+        "Página 2/2 | Paciente Fictício | Prescrito em: 05/01/2026.",
+    ],
+]
+
+
+def _motivos_em_colunas() -> dict[str, str | None]:
+    linhas, posicao = _read_pages(extract_pages(build_columns_pdf(PLANO_EM_COLUNAS)))
+    return dict(zip(linhas, _discard_reasons(linhas, posicao), strict=True))
+
+
+def test_colunas_so_a_opcao_principal_vira_item():
+    motivos = _motivos_em_colunas()
+
+    assert [linha for linha, motivo in motivos.items() if motivo is None] == [
+        "Ovo de galinha - 2 Unidade(s) grande(s) (110g)",
+        "Mamão formosa - 1 Fatia(s) média(s) (170g)",
+        "Salada + vegetais da sua preferência -",
+        "Filé de tilápia cozido - 2 Filé(s) médio(s) (120g)",
+        "Sobrecoxa de frango sem pele assada - 2 Unidade(s) pequena(s) (100g)",
+    ]
+
+
+def test_colunas_a_substituicao_da_direita_e_descartada_e_aparece():
+    motivos = _motivos_em_colunas()
+
+    # Vinha sozinha na coluna da direita e entrava na compra.
+    assert motivos["Melão - 2 Fatia(s) grande(s) (230g)"] == "opção de substituição"
+    # Vinha grudada no mamão, na mesma linha.
+    assert motivos["Abacaxi - 2 Fatia(s) pequena(s) (150g)"] == "opção de substituição"
+    assert motivos["Filé de frango - 2 Bife(s) (100g)"] == "opção de substituição"
+    assert motivos["Opção principal Opção de substituição"] == "cabeçalho da tabela de opções"
+
+
+def test_colunas_a_quantidade_que_desceu_volta_para_a_celula():
+    motivos = _motivos_em_colunas()
+
+    # "(165g)" e "(100g)" quebraram para a linha de baixo, cada um na sua coluna.
+    assert motivos[
+        "Iogurte natural proteico - 1 Copo(s) americano(s) pequeno(s) (165g)"
+    ] == "opção de substituição"
+    assert "(165g)" not in motivos
+    assert "(100g)" not in motivos
+
+
+def test_observacoes_vao_ate_a_proxima_refeicao():
+    motivos = _motivos_em_colunas()
+
+    assert motivos["Observações:"] == "cabeçalho de seção"
+    assert motivos["Opção 1"] == "texto de orientação"
+    assert motivos["Ovos mexidos com queijo."] == "texto de orientação"
+    # A receita da última página também é para ler, não para comprar.
+    assert motivos["Couve - 1 Folha média (20g)"] == "texto de orientação"
+
+
+def test_cabecalho_e_rodape_repetidos_nas_paginas_sao_descartados():
+    motivos = _motivos_em_colunas()
+
+    assert motivos["Fernanda Lima"] == "cabeçalho ou rodapé de página"
+    assert motivos["Acesse o app e veja o conteúdo completo da sua consulta."] == (
+        "cabeçalho ou rodapé de página"
+    )
+    assert motivos["Página 2/2 | Paciente Fictício | Prescrito em: 05/01/2026."] == (
+        "número de página"
+    )
+
+
+def test_refeicao_no_topo_de_toda_pagina_nao_vira_rodape():
+    # O topo para na refeição: o arroz logo abaixo dela já é o plano.
+    paginas = [
+        ["Fernanda Lima", "Almoço", "Arroz - 100g", "Feijão - 50g", "Salada", "Página 1/2"],
+        ["Fernanda Lima", "Almoço", "Arroz - 100g", "Carne - 100g", "Suco", "Página 2/2"],
+    ]
+
+    assert _page_edges(paginas) == {"Fernanda Lima"}
+
+
+def test_alimento_repetido_em_poucas_paginas_nao_vira_rodape():
+    paginas = [["Arroz - 100g", "Feijão - 50g"], ["Leite - 200ml"], ["Arroz - 100g"]]
+
+    # Duas de três páginas não bastam: até três páginas, precisa ser todas.
+    assert _page_edges(paginas) == set()
+    # De quatro em diante, todas menos uma (a capa costuma ser diferente).
+    assert _page_edges([*paginas, ["Arroz - 100g"]]) == {"Arroz - 100g"}
 
 
 # --------------------------------------------------------------------------
@@ -352,3 +485,20 @@ def test_pdf_digitalizado_nao_grava_plano_nenhum(db_session, usuario):
 
     db_session.rollback()
     assert db_session.scalars(select(MealPlan)).all() == []
+
+
+@pytest.mark.db
+def test_import_do_pdf_em_colunas_so_traz_a_opcao_principal(db_session, usuario):
+    resultado = import_plan_from_pdf(
+        db_session, usuario, build_columns_pdf(PLANO_EM_COLUNAS), consent_at=AGORA
+    )
+
+    assert [item.raw_description for item in resultado.meal_plan.items] == [
+        "Ovo de galinha - 2 Unidade(s) grande(s) (110g)",
+        "Mamão formosa - 1 Fatia(s) média(s) (170g)",
+        "Salada + vegetais da sua preferência -",
+        "Filé de tilápia cozido - 2 Filé(s) médio(s) (120g)",
+        "Sobrecoxa de frango sem pele assada - 2 Unidade(s) pequena(s) (100g)",
+    ]
+    substituicoes = [d.text for d in resultado.discarded if d.reason == "opção de substituição"]
+    assert "Abacaxi - 2 Fatia(s) pequena(s) (150g)" in substituicoes
