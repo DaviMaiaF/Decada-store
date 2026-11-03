@@ -93,6 +93,8 @@ export default function PantryScreen({
             </Body>
           </View>
 
+          <DespensaPorFoto onAdicionado={vm.guardadoPelaFoto} />
+
           <DespensaDoPlano planId={planId} />
 
           <Card style={styles.cartaoDespensa}>
@@ -126,8 +128,6 @@ export default function PantryScreen({
                 )}
               </Tocavel>
             </View>
-
-            <DespensaPorFoto onAdicionado={vm.guardadoPelaFoto} />
 
             {escolhendo !== null ? (
               <View style={styles.escolha}>
