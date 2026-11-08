@@ -1,4 +1,4 @@
-"""Testes das rotas de pagamento simulado.
+"""Testes das rotas de pagamento de teste.
 
 As regras do gateway estão em `test_payment_gateway.py`; aqui fica o que é da
 rota: o código HTTP de cada caso, o 404 para recurso alheio e o que a resposta
@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Payment
-from tests.helpers import auth_headers, plano_confirmado
+from tests.helpers import PixFalso, auth_headers, plano_confirmado
 
 pytestmark = pytest.mark.db
 
@@ -22,6 +22,17 @@ CARTAO = {
     "expiration_year": 2030,
     "security_code": "123",
 }
+
+
+@pytest.fixture(autouse=True)
+def pix(client) -> PixFalso:
+    """Troca o Abacate Pay por um falso em todas as rotas de pagamento."""
+    from app.api.routes.payments import get_pix_provider
+    from app.main import app
+
+    falso = PixFalso()
+    app.dependency_overrides[get_pix_provider] = lambda: falso
+    return falso
 
 
 @pytest.fixture
@@ -53,8 +64,26 @@ def test_pix_volta_pendente_com_copia_e_cola(client, marina, lista_id):
     corpo = resposta.json()
     assert corpo["status"] == "pendente"
     assert corpo["pix_code"].startswith("000201")
+    assert "external_id" not in corpo
     assert corpo["simulated"] is True
     assert Decimal(corpo["amount"]) == _total(client, marina, lista_id)
+
+
+def test_pix_com_provedor_fora_do_ar_e_503_e_nao_grava(client, marina, lista_id, db_session, pix):
+    pix.fora_do_ar = True
+
+    assert _pagar(client, marina, lista_id, method="pix").status_code == 503
+    assert db_session.scalars(select(Payment)).first() is None
+
+
+def test_pix_sem_chave_e_503_mas_o_cartao_continua(client, marina, lista_id):
+    from app.api.routes.payments import get_pix_provider
+    from app.main import app
+
+    app.dependency_overrides[get_pix_provider] = lambda: None
+
+    assert _pagar(client, marina, lista_id, method="pix").status_code == 503
+    assert _pagar(client, marina, lista_id, method="cartao_credito", card=CARTAO).status_code == 201
 
 
 def test_confirmar_o_pix_aprova(client, marina, lista_id):

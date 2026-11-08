@@ -6,12 +6,15 @@ por causa de uma mudança no vizinho.
 """
 
 import copy
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from app.models import User
 
 # O mesmo gerador que produz o PDF de demonstração, para o teste exercitar
 # exatamente o que a apresentação usa.
 from app.seeds.demo_plan import build_pdf
+from app.services.abacatepay import PaymentProviderError, PixCharge
 from app.services.security import create_access_token
 
 __all__ = [
@@ -22,7 +25,46 @@ __all__ = [
     "plano_confirmado",
     "plano_da_nutricionista",
     "PLANO_REALISTA",
+    "PixFalso",
 ]
+
+
+class PixFalso:
+    """Abacate Pay de mentira: nenhum teste sai para a rede.
+
+    `status` é o que a consulta responde; `fora_do_ar` faz toda chamada falhar.
+    """
+
+    def __init__(self) -> None:
+        self.status = "PENDING"
+        self.fora_do_ar = False
+        self.criadas: list[tuple[Decimal, int]] = []
+        self.simuladas: list[str] = []
+
+    def _checar(self) -> None:
+        if self.fora_do_ar:
+            raise PaymentProviderError("o Abacate Pay não respondeu; tente de novo")
+
+    def create_pix(self, amount: Decimal, expires_in_seconds: int) -> PixCharge:
+        self._checar()
+        self.criadas.append((amount, expires_in_seconds))
+        numero = len(self.criadas)
+        return PixCharge(
+            external_id=f"pix_char_{id(self)}_{numero}",
+            br_code=f"00020101-codigo-de-teste-{numero}",
+            status="PENDING",
+            expires_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        )
+
+    def check_pix(self, external_id: str) -> str:
+        self._checar()
+        return self.status
+
+    def simulate_pix(self, external_id: str) -> str:
+        self._checar()
+        self.simuladas.append(external_id)
+        self.status = "PAID"
+        return self.status
 
 
 def build_columns_pdf(pages: list[list[str | tuple[str, str]]]) -> bytes:
@@ -63,8 +105,7 @@ def build_columns_pdf(pages: list[list[str | tuple[str, str]]]) -> bytes:
             f"/Resources << /Font << /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>".encode()
         )
         objects.append(
-            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream
-            + b"\nendstream"
+            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream"
         )
 
     out = bytearray(b"%PDF-1.4\n")
@@ -166,8 +207,12 @@ PLANO_DA_NUTRICIONISTA = {
             ],
             "substitutions": [
                 [
-                    {"food": "Tapioca", "household_measure": "2 colheres de sopa",
-                     "quantity": "35", "unit": "g"},
+                    {
+                        "food": "Tapioca",
+                        "household_measure": "2 colheres de sopa",
+                        "quantity": "35",
+                        "unit": "g",
+                    },
                     {"food": "Banana prata", "quantity": "1", "unit": "unidade"},
                 ]
             ],
@@ -176,10 +221,18 @@ PLANO_DA_NUTRICIONISTA = {
             "name": "Almoço",
             "time": "12:30",
             "items": [
-                {"food": "Arroz branco cozido", "household_measure": "6 colheres de sopa",
-                 "quantity": "150", "unit": "g"},
-                {"food": "Feijão cozido", "household_measure": "1 concha pequena",
-                 "quantity": "50", "unit": "g"},
+                {
+                    "food": "Arroz branco cozido",
+                    "household_measure": "6 colheres de sopa",
+                    "quantity": "150",
+                    "unit": "g",
+                },
+                {
+                    "food": "Feijão cozido",
+                    "household_measure": "1 concha pequena",
+                    "quantity": "50",
+                    "unit": "g",
+                },
             ],
         },
     ],

@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
+from app.services.abacatepay import PaymentProviderError
 from app.services.pantry_photo import (
     ImageTooLargeError,
     InvalidImageError,
@@ -56,6 +57,9 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (NothingToPayError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (ListAlreadyPaidError, status.HTTP_409_CONFLICT),
     (PaymentNotPendingError, status.HTTP_409_CONFLICT),
+    # O Abacate Pay fora do ar ou sem chave: como a foto da despensa, 503 diz à
+    # tela que vale tentar de novo.
+    (PaymentProviderError, status.HTTP_503_SERVICE_UNAVAILABLE),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )

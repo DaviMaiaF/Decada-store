@@ -1,6 +1,6 @@
-"""Testes do gateway de pagamento simulado.
+"""Testes do gateway de pagamento de teste.
 
-As funções puras (Luhn, bandeira, BR Code) não tocam no banco. Criar e
+As funções puras (Luhn, bandeira) não tocam no banco. Criar e
 confirmar pagamento usa o banco, porque a regra que importa — a lista não é
 paga duas vezes — é consultada lá.
 """
@@ -11,21 +11,21 @@ from decimal import Decimal
 import pytest
 
 from app.models import MealPlan, PaymentMethod, PaymentStatus, ShoppingList
+from app.services.abacatepay import PaymentProviderError
 from app.services.payment_gateway import (
-    PIX_KEY,
+    PIX_EXPIRES_IN_SECONDS,
     CardData,
     InvalidCardError,
     ListAlreadyPaidError,
     NothingToPayError,
     PaymentNotPendingError,
-    build_pix_code,
-    crc16_ccitt,
     create_payment,
     detect_brand,
     luhn_valid,
     settle_payment,
 )
 from tests.conftest import novo_usuario
+from tests.helpers import PixFalso
 
 AGORA = datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc)
 
@@ -76,23 +76,12 @@ def test_bandeira_pelo_prefixo(numero, bandeira):
     assert detect_brand(numero) == bandeira
 
 
-def test_crc16_bate_com_o_valor_de_referencia():
-    # Valor de verificação do CRC-16/CCITT-FALSE para "123456789".
-    assert crc16_ccitt("123456789") == "29B1"
-
-
-def test_codigo_pix_tem_formato_de_br_code_e_aponta_para_chave_inexistente():
-    codigo = build_pix_code(Decimal("87.40"), "SIMULADO123")
-
-    assert codigo.startswith("000201")
-    assert PIX_KEY in codigo
-    assert "540587.40" in codigo  # campo 54, valor com 5 caracteres
-    assert "DECADA SIMULADO" in codigo
-    # O CRC do fim confere com o resto do código.
-    assert codigo[-4:] == crc16_ccitt(codigo[:-4])
-
-
 # --- Criar e confirmar pagamento --------------------------------------------
+
+
+@pytest.fixture
+def pix() -> PixFalso:
+    return PixFalso()
 
 
 @pytest.fixture
@@ -108,19 +97,22 @@ def lista(db_session) -> ShoppingList:
 
 
 @pytest.mark.db
-def test_pix_nasce_pendente_com_codigo_e_valor_da_lista(db_session, lista):
-    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+def test_pix_nasce_pendente_com_codigo_e_valor_da_lista(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
 
     assert pagamento.status == PaymentStatus.PENDENTE
     assert pagamento.amount == Decimal("87.40")
-    assert PIX_KEY in pagamento.pix_code
+    assert pagamento.pix_code == "00020101-codigo-de-teste-1"
+    assert pagamento.external_id.startswith("pix_char_")
+    assert pagamento.expires_at is not None
+    assert pix.criadas == [(Decimal("87.40"), PIX_EXPIRES_IN_SECONDS)]
     assert pagamento.paid_at is None
     assert pagamento.card_brand is None
 
 
 @pytest.mark.db
-def test_valor_e_copiado_e_nao_acompanha_a_lista(db_session, lista):
-    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+def test_valor_e_copiado_e_nao_acompanha_a_lista(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
     lista.estimated_total = Decimal("120.00")
     db_session.flush()
 
@@ -128,8 +120,8 @@ def test_valor_e_copiado_e_nao_acompanha_a_lista(db_session, lista):
 
 
 @pytest.mark.db
-def test_confirmar_pix_aprova_e_registra_a_hora(db_session, lista):
-    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+def test_confirmar_pix_aprova_e_registra_a_hora(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
 
     settle_payment(db_session, pagamento, now=AGORA)
 
@@ -205,11 +197,46 @@ def test_cartao_sem_dados_e_recusado(db_session, lista):
 
 
 @pytest.mark.db
-def test_lista_sem_total_nao_tem_o_que_pagar(db_session, lista):
+def test_lista_sem_total_nao_tem_o_que_pagar(db_session, lista, pix):
     lista.estimated_total = None
 
     with pytest.raises(NothingToPayError):
+        create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+
+
+@pytest.mark.db
+def test_pix_abaixo_do_minimo_do_provedor_nao_cria_cobranca(db_session, lista, pix):
+    lista.estimated_total = Decimal("0.99")
+
+    with pytest.raises(NothingToPayError, match="R\\$ 1,00"):
+        create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    assert pix.criadas == []
+
+
+@pytest.mark.db
+def test_pix_sem_provedor_configurado_nao_grava(db_session, lista):
+    with pytest.raises(PaymentProviderError, match="não está configurado"):
         create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+    assert lista.payments == []
+
+
+@pytest.mark.db
+def test_provedor_fora_do_ar_nao_grava(db_session, lista, pix):
+    pix.fora_do_ar = True
+
+    with pytest.raises(PaymentProviderError):
+        create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    assert lista.payments == []
+
+
+@pytest.mark.db
+def test_cartao_nao_depende_do_provedor(db_session, lista):
+    pagamento = create_payment(
+        db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao(), now=AGORA
+    )
+
+    assert pagamento.status == PaymentStatus.APROVADO
+    assert pagamento.external_id is None
 
 
 @pytest.mark.db
@@ -224,16 +251,16 @@ def test_tentativa_recusada_nao_impede_a_seguinte(db_session, lista):
 
 
 @pytest.mark.db
-def test_lista_paga_nao_aceita_outro_pagamento(db_session, lista):
+def test_lista_paga_nao_aceita_outro_pagamento(db_session, lista, pix):
     create_payment(db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao(), now=AGORA)
 
     with pytest.raises(ListAlreadyPaidError):
-        create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+        create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
 
 
 @pytest.mark.db
-def test_pix_pendente_nao_e_confirmado_se_a_lista_foi_paga_no_cartao(db_session, lista):
-    pix = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA)
+def test_pix_pendente_nao_e_confirmado_se_a_lista_foi_paga_no_cartao(db_session, lista, pix):
+    pix = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
     create_payment(db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao(), now=AGORA)
 
     with pytest.raises(ListAlreadyPaidError):
