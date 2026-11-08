@@ -284,3 +284,49 @@ def apply_pix_status(
         payment.status_detail = _PIX_FINAL_REFUSALS[provider_status]
         session.flush()
     return payment
+
+
+def sync_pix_payment(
+    session: Session,
+    payment: Payment,
+    pix_provider: PixProvider | None,
+    now: datetime | None = None,
+) -> Payment:
+    """Atualiza o Pix pendente com o status do provedor, se houver resposta.
+
+    Cobre o aviso que não chega: na máquina de desenvolvimento, que o Abacate Pay
+    não alcança, e no servidor publicado enquanto ele acorda. Sem resposta, vale o
+    que está gravado — quem pergunta é a tela, que pergunta de novo em seguida.
+    """
+    if payment.status != PaymentStatus.PENDENTE or not payment.external_id or not pix_provider:
+        return payment
+    try:
+        provider_status = pix_provider.check_pix(payment.external_id)
+    except PaymentProviderError:
+        return payment
+    return apply_pix_status(session, payment, provider_status, now)
+
+
+def simulate_pix_payment(
+    session: Session,
+    payment: Payment,
+    pix_provider: PixProvider | None,
+    now: datetime | None = None,
+) -> Payment:
+    """Pede ao Abacate Pay, em modo de teste, que dê o Pix por pago.
+
+    Antes confere o que o provedor recusaria: Pix expirado não é mais pago, e a
+    lista paga no cartão não recebe uma segunda confirmação.
+    """
+    if payment.status != PaymentStatus.PENDENTE:
+        raise PaymentNotPendingError("este pagamento não está mais pendente")
+    _ensure_not_paid(session, payment.shopping_list, ignoring=payment)
+    if pix_provider is None:
+        raise PaymentProviderError("o pagamento por Pix não está configurado")
+
+    now = now or datetime.now(timezone.utc)
+    if payment.expires_at is not None and payment.expires_at <= now:
+        return apply_pix_status(session, payment, "EXPIRED", now)
+
+    provider_status = pix_provider.simulate_pix(payment.external_id)
+    return apply_pix_status(session, payment, provider_status, now)

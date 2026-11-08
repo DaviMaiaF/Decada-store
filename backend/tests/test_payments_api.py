@@ -99,6 +99,66 @@ def test_confirmar_o_pix_aprova(client, marina, lista_id):
     assert resposta.json()["paid_at"] is not None
 
 
+def test_confirmar_o_pix_passa_pelo_simulador_do_provedor(client, marina, lista_id, pix):
+    pagamento = _pagar(client, marina, lista_id, method="pix").json()
+
+    client.post(
+        f"/shopping-lists/{lista_id}/payments/{pagamento['id']}/confirmation",
+        headers=auth_headers(marina),
+    )
+
+    assert len(pix.simuladas) == 1
+
+
+def test_confirmar_o_pix_com_provedor_fora_do_ar_e_503(client, marina, lista_id, pix):
+    pagamento = _pagar(client, marina, lista_id, method="pix").json()
+    pix.fora_do_ar = True
+
+    resposta = client.post(
+        f"/shopping-lists/{lista_id}/payments/{pagamento['id']}/confirmation",
+        headers=auth_headers(marina),
+    )
+
+    assert resposta.status_code == 503
+
+
+def test_consultar_o_pix_pago_no_provedor_aprova(client, marina, lista_id, pix):
+    pagamento = _pagar(client, marina, lista_id, method="pix").json()
+    pix.status = "PAID"
+
+    resposta = client.get(
+        f"/shopping-lists/{lista_id}/payments/{pagamento['id']}", headers=auth_headers(marina)
+    )
+
+    assert resposta.json()["status"] == "aprovado"
+
+
+def test_consultar_com_provedor_fora_do_ar_devolve_o_gravado(client, marina, lista_id, pix):
+    pagamento = _pagar(client, marina, lista_id, method="pix").json()
+    pix.fora_do_ar = True
+
+    resposta = client.get(
+        f"/shopping-lists/{lista_id}/payments/{pagamento['id']}", headers=auth_headers(marina)
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] == "pendente"
+
+
+def test_cartao_em_analise_confirma_sem_o_provedor(client, marina, lista_id, pix):
+    analise = _pagar(
+        client, marina, lista_id, method="cartao_credito", card={**CARTAO, "holder_name": "CONT"}
+    ).json()
+
+    resposta = client.post(
+        f"/shopping-lists/{lista_id}/payments/{analise['id']}/confirmation",
+        headers=auth_headers(marina),
+    )
+
+    assert resposta.json()["status"] == "aprovado"
+    assert pix.simuladas == []
+
+
 def test_consultar_o_pagamento_mostra_o_status_atual(client, marina, lista_id):
     pix = _pagar(client, marina, lista_id, method="pix").json()
     url = f"/shopping-lists/{lista_id}/payments/{pix['id']}"

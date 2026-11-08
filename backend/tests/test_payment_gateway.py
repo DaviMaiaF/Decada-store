@@ -5,12 +5,12 @@ confirmar pagamento usa o banco, porque a regra que importa — a lista não é
 paga duas vezes — é consultada lá.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
-from app.models import MealPlan, PaymentMethod, PaymentStatus, ShoppingList
+from app.models import MealPlan, Payment, PaymentMethod, PaymentStatus, ShoppingList
 from app.services.abacatepay import PaymentProviderError
 from app.services.payment_gateway import (
     PIX_EXPIRES_IN_SECONDS,
@@ -23,6 +23,8 @@ from app.services.payment_gateway import (
     detect_brand,
     luhn_valid,
     settle_payment,
+    simulate_pix_payment,
+    sync_pix_payment,
 )
 from tests.conftest import novo_usuario
 from tests.helpers import PixFalso
@@ -283,6 +285,118 @@ def test_aprovado_e_recusado_sao_finais(db_session, lista, titular):
 def test_cartao_em_analise_pode_ser_confirmado(db_session, lista):
     pagamento = create_payment(
         db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao("CONT"), now=AGORA
+    )
+
+    settle_payment(db_session, pagamento, now=AGORA)
+
+    assert pagamento.status == PaymentStatus.APROVADO
+
+
+# --- Status vindo do Abacate Pay ---------------------------------------------
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(
+    ("status_do_provedor", "esperado"),
+    [
+        ("PENDING", PaymentStatus.PENDENTE),
+        ("PAID", PaymentStatus.APROVADO),
+        ("EXPIRED", PaymentStatus.RECUSADO),
+        ("CANCELLED", PaymentStatus.RECUSADO),
+        ("FAILED", PaymentStatus.RECUSADO),
+        # Status que a DÉCADA não trata não decide nada.
+        ("UNDER_DISPUTE", PaymentStatus.PENDENTE),
+    ],
+)
+def test_consulta_leva_o_status_ao_pagamento(db_session, lista, pix, status_do_provedor, esperado):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    pix.status = status_do_provedor
+
+    sync_pix_payment(db_session, pagamento, pix, now=AGORA)
+
+    assert pagamento.status == esperado
+    assert (pagamento.paid_at is not None) == (esperado == PaymentStatus.APROVADO)
+
+
+@pytest.mark.db
+def test_expirado_diz_o_motivo(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    pix.status = "EXPIRED"
+
+    sync_pix_payment(db_session, pagamento, pix, now=AGORA)
+
+    assert pagamento.status_detail == "o Pix expirou sem pagamento"
+
+
+@pytest.mark.db
+def test_consulta_sem_resposta_mantem_o_que_esta_gravado(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    pix.fora_do_ar = True
+
+    assert sync_pix_payment(db_session, pagamento, pix).status == PaymentStatus.PENDENTE
+    assert sync_pix_payment(db_session, pagamento, None).status == PaymentStatus.PENDENTE
+
+
+@pytest.mark.db
+def test_consulta_nao_aprova_pix_de_lista_ja_paga(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    create_payment(db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao(), now=AGORA)
+    pix.status = "PAID"
+
+    assert sync_pix_payment(db_session, pagamento, pix).status == PaymentStatus.PENDENTE
+
+
+@pytest.mark.db
+def test_simular_passa_pelo_provedor_e_aprova(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+
+    simulate_pix_payment(db_session, pagamento, pix, now=AGORA)
+
+    assert pix.simuladas == [pagamento.external_id]
+    assert pagamento.status == PaymentStatus.APROVADO
+
+
+@pytest.mark.db
+def test_simular_pix_expirado_recusa_sem_chamar_o_provedor(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+
+    simulate_pix_payment(
+        db_session, pagamento, pix, now=pagamento.expires_at + timedelta(seconds=1)
+    )
+
+    assert pix.simuladas == []
+    assert pagamento.status == PaymentStatus.RECUSADO
+
+
+@pytest.mark.db
+def test_simular_com_a_lista_ja_paga_nao_chama_o_provedor(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    create_payment(db_session, lista, PaymentMethod.CARTAO_CREDITO, _cartao(), now=AGORA)
+
+    with pytest.raises(ListAlreadyPaidError):
+        simulate_pix_payment(db_session, pagamento, pix, now=AGORA)
+    assert pix.simuladas == []
+
+
+@pytest.mark.db
+def test_simular_sem_provedor_e_erro_do_provedor(db_session, lista, pix):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+
+    with pytest.raises(PaymentProviderError, match="não está configurado"):
+        simulate_pix_payment(db_session, pagamento, None, now=AGORA)
+
+
+@pytest.mark.db
+def test_confirmar_o_que_o_webhook_acabou_de_aprovar_nao_conta_como_segundo_pagamento(
+    db_session, lista, pix
+):
+    pagamento = create_payment(db_session, lista, PaymentMethod.PIX, now=AGORA, pix_provider=pix)
+    # O aviso chegou por outra conexão: esta sessão ainda vê o pagamento pendente.
+    db_session.flush()
+    db_session.execute(
+        Payment.__table__.update()
+        .where(Payment.id == pagamento.id)
+        .values(status=PaymentStatus.APROVADO)
     )
 
     settle_payment(db_session, pagamento, now=AGORA)

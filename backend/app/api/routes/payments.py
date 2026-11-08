@@ -16,7 +16,13 @@ from app.core.config import get_settings
 from app.models import MealPlan, Payment, ShoppingList
 from app.schemas.payment import PaymentIn, PaymentOut
 from app.services.abacatepay import PixProvider, build_pix_provider
-from app.services.payment_gateway import CardData, create_payment, settle_payment
+from app.services.payment_gateway import (
+    CardData,
+    create_payment,
+    settle_payment,
+    simulate_pix_payment,
+    sync_pix_payment,
+)
 
 router = APIRouter(tags=["pagamentos"])
 
@@ -116,10 +122,23 @@ def read_payments(session: DbSession, user: CurrentPatient, list_id: uuid.UUID) 
 
 @router.get("/shopping-lists/{list_id}/payments/{payment_id}", response_model=PaymentOut)
 def read_payment(
-    session: DbSession, user: CurrentPatient, list_id: uuid.UUID, payment_id: uuid.UUID
+    session: DbSession,
+    user: CurrentPatient,
+    list_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    pix_provider: PixProviderDep,
 ) -> Payment:
-    """Um pagamento. A tela do Pix consulta esta rota até ele sair de pendente."""
-    return _get_payment(session, user, list_id, payment_id)
+    """Um pagamento. A tela do Pix consulta esta rota até ele sair de pendente.
+
+    Pix pendente é conferido no Abacate Pay antes de responder, para o caso de o
+    aviso não ter chegado. Se ele não responder, vale o que está gravado.
+    """
+    payment = _get_payment(session, user, list_id, payment_id)
+
+    sync_pix_payment(session, payment, pix_provider)
+    session.commit()
+    session.refresh(payment)
+    return payment
 
 
 @router.post(
@@ -127,16 +146,24 @@ def read_payment(
     response_model=PaymentOut,
 )
 def confirm_payment(
-    session: DbSession, user: CurrentPatient, list_id: uuid.UUID, payment_id: uuid.UUID
+    session: DbSession,
+    user: CurrentPatient,
+    list_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    pix_provider: PixProviderDep,
 ) -> Payment:
     """Simula o recebimento: o Pix pago, o cartão que saiu da análise.
 
-    Faz o papel do webhook que um PSP chamaria. Pagamento que não está
-    pendente, ou de lista que outra tentativa já pagou, é 409.
+    O Pix passa pelo simulador do Abacate Pay, que só existe em modo de teste; se
+    já tiver expirado, volta recusado. O cartão é simulado aqui mesmo. Pagamento
+    que não está pendente, ou de lista que outra tentativa já pagou, é 409.
     """
     payment = _get_payment(session, user, list_id, payment_id)
 
-    settle_payment(session, payment)
+    if payment.external_id:
+        simulate_pix_payment(session, payment, pix_provider)
+    else:
+        settle_payment(session, payment)
     session.commit()
     session.refresh(payment)
     return payment
