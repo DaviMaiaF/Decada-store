@@ -864,7 +864,7 @@ describe('checkout simulado', () => {
     await fireEvent.press(screen.getByText('Ir para o pagamento'));
     await fireEvent.press(await screen.findByText('Gerar Pix'));
 
-    expect(await screen.findByLabelText('QR code do Pix simulado')).toBeTruthy();
+    expect(await screen.findByLabelText('QR code do Pix de teste')).toBeTruthy();
     expect(screen.getByText('000201SIMULADO')).toBeTruthy();
     expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined);
     expect(marcarItem).not.toHaveBeenCalled();

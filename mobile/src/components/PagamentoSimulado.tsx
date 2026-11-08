@@ -1,12 +1,11 @@
 /**
- * Etapa de pagamento do checkout — **simulada**, no molde do Mercado Pago.
+ * Etapa de pagamento do checkout — **de teste**: nada é cobrado.
  *
  * Só desenha e repassa toques: o estado e as chamadas moram no
  * `usePaymentViewModel`, que chega pronto por `vm`.
  *
- * O QR é desenhado a partir do copia-e-cola fictício. Ele aponta para uma
- * chave que não existe (`simulado@decada.invalid`), então nem um app de banco
- * de verdade consegue pagá-lo.
+ * O Pix vem do Abacate Pay em modo de teste, e o QR é desenhado a partir do
+ * copia-e-cola dele. O cartão é simulado, no molde do Mercado Pago.
  */
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -74,7 +73,8 @@ function Pix({ vm }: { vm: PagamentoVM }) {
     return (
       <View style={styles.bloco}>
         <Body muted>
-          O código Pix é gerado na hora e vale só para esta compra. Nenhum valor sai da sua conta.
+          O código Pix é de teste, gerado na hora pelo Abacate Pay, e vale só para esta compra.
+          Nenhum valor sai da sua conta.
         </Body>
         <Button
           label="Gerar Pix"
@@ -93,7 +93,7 @@ function Pix({ vm }: { vm: PagamentoVM }) {
         style={styles.qr}
         accessible
         accessibilityRole="image"
-        accessibilityLabel="QR code do Pix simulado"
+        accessibilityLabel="QR code do Pix de teste"
       >
         <QRCode value={pix.pix_code} size={200} color={colors.primary} />
       </View>
@@ -106,7 +106,7 @@ function Pix({ vm }: { vm: PagamentoVM }) {
         onPress={vm.copiarPix}
       />
       <Body muted>
-        Em uma compra de verdade, o banco avisaria o pagamento. Aqui, simule o recebimento.
+        Este código é de teste: não tente pagá-lo no app do banco. Simule o recebimento aqui.
       </Body>
       <Button
         label="Simular pagamento recebido"

@@ -236,6 +236,10 @@ export const payShoppingList = (listId: string, method: PaymentMethod, card?: Ca
 export const readPayments = (listId: string) =>
   request<Payment[]>(`/shopping-lists/${listId}/payments`);
 
+/** Um pagamento. O servidor confere o Pix pendente no Abacate Pay antes de responder. */
+export const readPayment = (listId: string, paymentId: string) =>
+  request<Payment>(`/shopping-lists/${listId}/payments/${paymentId}`);
+
 /** Simula o recebimento: o Pix pago, o cartão que saiu da análise. */
 export const confirmPayment = (listId: string, paymentId: string) =>
   request<Payment>(`/shopping-lists/${listId}/payments/${paymentId}/confirmation`, {
