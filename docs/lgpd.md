@@ -17,7 +17,7 @@ documento reúne, cada uma com o teste que a sustenta.
 | Plano montado pela nutricionista | `prescriptions` e filhas | É o trabalho dela. Guarda o nome e o e-mail do paciente para o cabeçalho do PDF e para o envio |
 | O que a pessoa tem em casa | `pantry_items` | Descontar da compra |
 | Listas de compras | `shopping_lists` | Histórico de custo |
-| Pagamentos simulados da lista | `payments` | Saber se a lista foi paga e mostrar as tentativas. Do cartão, só bandeira e os quatro últimos dígitos |
+| Pagamentos de teste da lista | `payments` | Saber se a lista foi paga e mostrar as tentativas. Do cartão, só bandeira e os quatro últimos dígitos; do Pix, o código e o identificador da cobrança no Abacate Pay |
 | Preços que a pessoa contribuiu | `price_records.user_id` | Creditar a coleta — e é o único campo que sobrevive à exclusão, anonimizado |
 
 O plano que a nutricionista monta é dado de saúde do paciente **tratado pela
@@ -99,6 +99,15 @@ recusa o pedido em vez de descartar em silêncio o que não devia ter chegado.
 > Testes: `test_models.py::test_pagamento_nao_guarda_dado_sensivel_do_cartao`,
 > `test_payments_api.py::test_cartao_aprovado_devolve_so_bandeira_e_final`,
 > `::test_pix_nao_aceita_dados_de_cartao`.
+
+**O Abacate Pay não recebe dado da pessoa.** O campo `customer` é opcional no Pix e não é
+enviado: o provedor recebe só o valor e a validade, em modo de teste. O aviso do webhook
+pode trazer nome e CPF de quem pagou, e deles nada é lido nem gravado. O cartão não passa
+pelo provedor. O `webhookSecret` chega na URL e é tirado do log de acesso da API.
+
+> Testes: `test_abacatepay.py::test_criar_pix_envia_centavos_e_nenhum_dado_da_pessoa`,
+> `test_webhooks.py::test_dados_de_quem_pagou_nao_sao_guardados`,
+> `::test_log_de_acesso_nao_mostra_o_segredo`.
 
 Mesmo simulado, o cuidado é o mesmo de um pagamento real: quem digita um cartão de
 verdade no formulário de demonstração não deve deixá-lo gravado em lugar nenhum.

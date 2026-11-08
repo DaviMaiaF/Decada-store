@@ -49,7 +49,7 @@ Legenda:
 | `GET /meal-plans` · `GET /meal-plans/{id}/shopping-lists` | o que o usuário já tem, sem os itens: é como o app reabre onde parou |
 | `services/prescriptions.py` | plano da nutricionista: edição, envio, aceite com cópia para o paciente, texto do documento |
 | `services/pdf_writer.py` | PDF com texto, de várias páginas, no formato que o import lê |
-| `services/payment_gateway.py` · `/shopping-lists/{id}/payments` | pagamento **simulado** da lista, no molde do Mercado Pago: Pix com BR Code fictício e cartão que responde pelo titular de teste. Nada é cobrado |
+| `services/payment_gateway.py` · `services/abacatepay.py` · `/shopping-lists/{id}/payments` · `/webhooks/abacatepay` | pagamento **de teste** da lista: Pix pelo Abacate Pay em modo de teste e cartão simulado, que responde pelo titular de teste. Nada é cobrado |
 | `services/pantry_photo.py` · `POST /pantry/photo` | foto do que se tem em casa → alimentos reconhecidos, cada um com os produtos do catálogo que podem ser ele. Só propõe, não grava |
 
 ---
@@ -146,7 +146,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
 | Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento; aprovado o pagamento, marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
-| Pagamento simulado | ✅ | Pix (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
+| Pagamento de teste | ✅ | Pix pelo Abacate Pay em modo de teste (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito simulado, com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
 | Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado, confirmado depois da geração ou despensa que hoje abateria outra quantidade (`despensa_alterada`). Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; o título diz se mudou o plano, a despensa ou os dois. A lista salva nunca se corrige sozinha |
 | Exportar para WhatsApp | ⛔ | |
 
@@ -245,18 +245,21 @@ nulo, e o total em R$ 0,00 — dizer "sem preço" item a item não explica a cau
 *nenhum* item tem preço, a tela nomeia a região e oferece as duas saídas honestas: gerar
 em outra cidade, ou escanear a NFC-e para começar a formar o preço dali.
 
-**O pagamento é simulado, e diz isso em toda tela.** Não há gateway, adquirente nem PSP:
-o [`payment_gateway`](../../backend/app/services/payment_gateway.py) imita o Mercado Pago
-para fechar o fluxo da demonstração, e a resposta da API carrega `simulated: true` para
-a tela não ter como esquecer o aviso. O valor cobrado é o total estimado da lista,
+**O pagamento é de teste, e diz isso em toda tela.** Nada é cobrado: o
+[`payment_gateway`](../../backend/app/services/payment_gateway.py) fecha o fluxo da
+demonstração, com o Pix no Abacate Pay em modo de teste e o cartão simulado ali mesmo, e
+a resposta da API carrega `simulated: true` para a tela não ter como esquecer o aviso. O valor cobrado é o total estimado da lista,
 **copiado** no pagamento — se a lista mudar depois, o que foi pago não muda.
 
-- **Pix** nasce pendente, com um copia-e-cola no formato do BR Code (EMV, com CRC16) e o
-  QR desenhado a partir dele. A chave é `simulado@decada.invalid`: o domínio `.invalid` é
-  reservado e nunca existe, então nem o app de um banco de verdade consegue pagar o
-  código. O recebimento é o botão "Simular pagamento recebido", que faz o papel do aviso
-  que o PSP mandaria (`POST …/payments/{id}/confirmation`).
-- **Cartão** responde na hora, pelo nome do titular, como os cartões de teste do Mercado
+- **Pix** é criado no [Abacate Pay](../../backend/app/services/abacatepay.py) em modo de
+  teste e nasce pendente, com o copia-e-cola dele e o QR desenhado a partir do código. Vale
+  uma hora e aceita a partir de R$ 1,00. O botão "Simular pagamento recebido" chama o
+  simulador do provedor (`POST …/payments/{id}/confirmation`). Enquanto o Pix está pendente,
+  a tela consulta o servidor a cada 5 segundos; ele confere o status no provedor, e o aviso
+  do webhook (`POST /webhooks/abacatepay`) também aprova. Pix expirado vira `recusado`, com
+  o motivo, e a pessoa gera outro. Sem chave configurada ou com o provedor fora do ar, o
+  Pix responde 503 e o cartão continua funcionando.
+- **Cartão** é simulado e responde na hora, pelo nome do titular, como os cartões de teste do Mercado
   Pago: `APRO` aprova, `OTHE`, `FUND`, `SECU`, `EXPI` e `CALL` recusam com motivos
   diferentes, `CONT` fica em análise até a mesma confirmação simulada. Qualquer outro
   nome aprova, como um cartão comum. O número passa pelo Luhn e precisa de bandeira

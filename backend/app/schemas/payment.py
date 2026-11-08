@@ -1,4 +1,4 @@
-"""Schemas do pagamento simulado."""
+"""Schemas do pagamento de teste e do aviso do Abacate Pay."""
 
 import uuid
 from datetime import datetime
