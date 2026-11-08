@@ -41,6 +41,25 @@ class PaymentIn(BaseModel):
         return self
 
 
+class AbacatePayCharge(BaseModel):
+    """A cobrança dentro do aviso, só com o que a DÉCADA usa."""
+
+    id: str
+    status: str
+
+
+class AbacatePayEventData(BaseModel):
+    transparent: AbacatePayCharge | None = None
+
+
+class AbacatePayEvent(BaseModel):
+    """Aviso do Abacate Pay. Campos fora daqui, como os de quem pagou, são descartados."""
+
+    event: str
+    dev_mode: bool | None = Field(default=None, alias="devMode")
+    data: AbacatePayEventData | None = None
+
+
 class PaymentOut(ApiModel):
     """Um pagamento, com o que dá para mostrar dele."""
 

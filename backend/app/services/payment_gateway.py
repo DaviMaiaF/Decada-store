@@ -36,6 +36,12 @@ from app.services.abacatepay import PaymentProviderError, PixProvider
 PIX_EXPIRES_IN_SECONDS = 60 * 60
 # O Abacate Pay não aceita cobrança menor que esta.
 PIX_MINIMUM_AMOUNT = Decimal("1.00")
+# Status do Abacate Pay que encerram a tentativa, com o motivo que a pessoa vê.
+_PIX_FINAL_REFUSALS = {
+    "EXPIRED": "o Pix expirou sem pagamento",
+    "CANCELLED": "o Pix foi cancelado",
+    "FAILED": "o Pix não foi concluído",
+}
 
 
 class PaymentError(Exception):
@@ -253,4 +259,28 @@ def settle_payment(session: Session, payment: Payment, now: datetime | None = No
     payment.status_detail = "pagamento aprovado"
     payment.paid_at = now or datetime.now(timezone.utc)
     session.flush()
+    return payment
+
+
+def apply_pix_status(
+    session: Session, payment: Payment, provider_status: str, now: datetime | None = None
+) -> Payment:
+    """Leva ao pagamento o status que o Abacate Pay informou.
+
+    Pode ser chamada de novo com o mesmo status: só pagamento pendente muda, o
+    que torna inofensivo o aviso repetido. Se outra tentativa já pagou a lista, o
+    Pix fica como está em vez de virar um segundo pagamento aprovado.
+    """
+    if payment.status != PaymentStatus.PENDENTE:
+        return payment
+
+    if provider_status == "PAID":
+        try:
+            settle_payment(session, payment, now)
+        except ListAlreadyPaidError:
+            return payment
+    elif provider_status in _PIX_FINAL_REFUSALS:
+        payment.status = PaymentStatus.RECUSADO
+        payment.status_detail = _PIX_FINAL_REFUSALS[provider_status]
+        session.flush()
     return payment
