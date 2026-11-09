@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import register_error_handlers
 from app.api.routes import (
     admin,
+    admin_web,
     auth,
     meal_plans,
     nutritionist_prescriptions,
@@ -65,6 +66,8 @@ app.include_router(recipes.router)
 app.include_router(nutritionist_prescriptions.router)
 app.include_router(received_prescriptions.router)
 app.include_router(admin.router)
+app.include_router(admin_web.router)
+app.mount("/admin/static", admin_web.admin_static, name="admin-static")
 
 
 @app.get("/health", tags=["infra"])

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Painel DÉCADA</title>
+  <link rel="icon" href="/admin/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/admin/static/admin.css">
+  <script src="/admin/static/admin.js" defer></script>
+</head>
+<body>
+  <!-- LOGIN -->
+  <main id="login" class="login" hidden>
+    <form id="login-form" class="card login-card">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="2 6 36 36" fill="none" aria-hidden="true"><rect x="2" y="6" width="36" height="36" rx="10" fill="#1B4332"/><path d="M14 14C14 14 26 14 26 24C26 34 14 34 14 34V14Z" stroke="#E76F51" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="24" r="3" fill="#52B788"/></svg>
+        <span class="brand-name">DÉCADA</span>
+      </div>
+      <h1>Painel do super usuário</h1>
+      <label>E-mail
+        <input id="login-email" type="email" autocomplete="username" required>
+      </label>
+      <label>Senha
+        <input id="login-password" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button id="login-submit" class="button button-primary" type="submit">Entrar</button>
+      <p class="hint">A sessão dura até 1 hora e termina ao recarregar a página.</p>
+    </form>
+  </main>
+
+  <!-- APLICAÇÃO -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="2 6 36 36" fill="none" aria-hidden="true"><rect x="2" y="6" width="36" height="36" rx="10" fill="#1B4332"/><path d="M14 14C14 14 26 14 26 24C26 34 14 34 14 34V14Z" stroke="#E76F51" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="24" r="3" fill="#52B788"/></svg>
+        <span class="brand-name">DÉCADA</span>
+        <span id="env-badge" class="badge" hidden></span>
+      </div>
+      <nav class="tabs" aria-label="Seções do painel">
+        <button class="tab" type="button" data-view="dashboard">Dashboard</button>
+        <button class="tab" type="button" data-view="accounts">Contas</button>
+        <button class="tab" type="button" data-view="actions">Histórico</button>
+      </nav>
+      <div class="session">
+        <span id="session-email" class="session-email"></span>
+        <button id="logout" class="button button-quiet" type="button">Sair</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <p id="global-error" class="banner banner-error" role="alert" hidden></p>
+      <p id="global-notice" class="banner banner-notice" role="status" hidden></p>
+
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view" hidden>
+        <div class="view-head">
+          <div>
+            <h1>Dashboard</h1>
+            <p class="hint">Só números agregados. O conteúdo dos planos não passa por este painel.</p>
+          </div>
+          <div class="view-tools">
+            <span id="dashboard-time" class="hint"></span>
+            <button id="dashboard-refresh" class="button button-quiet" type="button">Atualizar</button>
+          </div>
+        </div>
+        <div id="dashboard-body"></div>
+      </section>
+
+      <!-- CONTAS -->
+      <section id="view-accounts" class="view" hidden>
+        <div class="view-head">
+          <div>
+            <h1>Contas</h1>
+            <p id="accounts-total" class="hint"></p>
+          </div>
+        </div>
+        <form id="accounts-filter" class="filters">
+          <label class="grow">Buscar por e-mail ou nome
+            <input id="accounts-search" type="search" maxlength="255" autocomplete="off">
+          </label>
+          <label>Papel
+            <select id="accounts-role">
+              <option value="">Todos</option>
+              <option value="paciente">Paciente</option>
+              <option value="nutricionista">Nutricionista</option>
+              <option value="admin">Super usuário</option>
+            </select>
+          </label>
+        </form>
+        <div class="card table-card">
+          <table class="table table-stack">
+            <thead>
+              <tr>
+                <th scope="col">Conta</th>
+                <th scope="col">Papel</th>
+                <th scope="col" class="num">Planos</th>
+                <th scope="col">Cadastro</th>
+                <th scope="col">Situação</th>
+                <th scope="col"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody id="accounts-rows"></tbody>
+          </table>
+          <p id="accounts-empty" class="empty" hidden>Nenhuma conta encontrada.</p>
+        </div>
+        <div id="accounts-pager" class="pager"></div>
+      </section>
+
+      <!-- HISTÓRICO -->
+      <section id="view-actions" class="view" hidden>
+        <div class="view-head">
+          <div>
+            <h1>Histórico</h1>
+            <p class="hint">Conta excluída perde o vínculo com o histórico: fica só o papel dela.</p>
+          </div>
+        </div>
+        <div class="card table-card">
+          <table class="table table-stack">
+            <thead>
+              <tr>
+                <th scope="col">Quando</th>
+                <th scope="col">Ação</th>
+                <th scope="col">Conta atingida</th>
+                <th scope="col">Feito por</th>
+              </tr>
+            </thead>
+            <tbody id="actions-rows"></tbody>
+          </table>
+          <p id="actions-empty" class="empty" hidden>Nenhuma ação registrada ainda.</p>
+        </div>
+        <div id="actions-pager" class="pager"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- CONFIRMAÇÃO -->
+  <dialog id="confirm" class="dialog">
+    <form id="confirm-form" method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-text"></p>
+      <label id="confirm-typed-label" hidden>
+        <span id="confirm-typed-hint"></span>
+        <input id="confirm-typed" type="text" autocomplete="off" spellcheck="false">
+      </label>
+      <p id="confirm-error" class="form-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button id="confirm-cancel" class="button button-quiet" type="button">Cancelar</button>
+        <button id="confirm-ok" class="button" type="submit"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+</body>
+</html>
