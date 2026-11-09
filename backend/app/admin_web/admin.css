@@ -132,11 +132,15 @@ p { margin: 0; }
 .badge-neutral { background: var(--card-soft); color: var(--ink-soft); }
 
 /* Botão de tema */
-.theme-toggle { display: inline-flex; align-items: center; gap: 6px; }
+/* Só o ícone, em tamanho fixo: trocar de tema não mexe no layout. */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; min-height: 40px; padding: 0; flex: none;
+}
 .theme-toggle svg { width: 18px; height: 18px; flex: none; }
 
 /* Login */
-.login-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login-card { width: 100%; max-width: 400px; padding: 24px; display: grid; gap: 16px; }
 .login-card h1 { font-size: 22px; line-height: 30px; }
@@ -280,8 +284,6 @@ details .table { margin-top: 8px; }
   .session { margin-left: auto; }
   .session-email { display: none; }
   .session { gap: 8px; }
-  .theme-label { display: none; }
-  .theme-toggle { min-width: 40px; justify-content: center; }
   .content { padding: 16px; }
   .bar-row { grid-template-columns: 1fr; gap: 4px; }
 

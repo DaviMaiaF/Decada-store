@@ -51,11 +51,14 @@ def admin_page() -> FileResponse:
 
 
 class AdminStaticFiles(StaticFiles):
-    """Arquivos do painel, com o navegador proibido de adivinhar o tipo deles."""
+    """Arquivos do painel: sem adivinhar o tipo, e sempre conferidos antes de usar."""
 
     async def get_response(self, path: str, scope: Scope) -> Response:
         response = await super().get_response(path, scope)
         response.headers["X-Content-Type-Options"] = "nosniff"
+        # O navegador pode guardar, mas confere a cada abertura (responde 304 se nada
+        # mudou). Sem isto, a página nova chegava com o CSS velho do cache.
+        response.headers["Cache-Control"] = "no-cache"
         return response
 
 

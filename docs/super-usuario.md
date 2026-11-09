@@ -58,7 +58,7 @@ Como a página roda com um token que alcança todas as contas, e nome e e-mail v
 público, dado da API só entra na tela como texto (`textContent`, nunca HTML). A CSP aceita
 só arquivos do próprio servidor e proíbe embutir a página em outra.
 
-O botão no topo troca o tema entre automático (segue o sistema), claro e escuro. A escolha
+O botão de ícone no topo do painel troca o tema entre automático (segue o sistema), claro e escuro. A escolha
 fica guardada no navegador; é a única coisa que o painel guarda ali, e o token não passa
 perto dela (`theme.js` não conhece a sessão).
 

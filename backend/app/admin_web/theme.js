@@ -45,8 +45,6 @@
       for (const icon of button.querySelectorAll("[data-icon]")) {
         icon.hidden = icon.dataset.icon !== mode;
       }
-      const label = button.querySelector(".theme-label");
-      if (label) label.textContent = NAMES[mode][0].toUpperCase() + NAMES[mode].slice(1);
     }
   }
 

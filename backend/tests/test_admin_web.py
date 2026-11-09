@@ -58,6 +58,8 @@ def test_serve_os_arquivos_da_pagina(client, arquivo, tipo):
     assert resposta.status_code == 200
     assert tipo in resposta.headers["content-type"]
     assert resposta.headers["x-content-type-options"] == "nosniff"
+    # Atualizar o painel não pode deixar o navegador com o CSS ou o JS antigo.
+    assert resposta.headers["cache-control"] == "no-cache"
 
 
 @pytest.mark.parametrize(
@@ -101,6 +103,16 @@ def test_o_tema_guarda_so_a_escolha_do_tema():
     assert "localStorage" in js
     for proibido in ("token", "Authorization", "fetch", "sessionStorage", "document.cookie"):
         assert proibido not in js, proibido
+
+
+def test_o_botao_de_tema_fica_so_no_painel_e_sem_texto():
+    # Texto que muda de largura a cada clique fazia o botão mudar de tamanho.
+    html = (WEB_DIR / "index.html").read_text()
+    login = html[html.index('id="login"') : html.index('id="app"')]
+
+    assert "data-theme-toggle" not in login
+    assert html.count("data-theme-toggle") == 1
+    assert "theme-label" not in html
 
 
 def test_o_tema_e_aplicado_antes_do_primeiro_desenho():
