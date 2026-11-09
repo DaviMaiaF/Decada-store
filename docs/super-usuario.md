@@ -58,6 +58,10 @@ Como a página roda com um token que alcança todas as contas, e nome e e-mail v
 público, dado da API só entra na tela como texto (`textContent`, nunca HTML). A CSP aceita
 só arquivos do próprio servidor e proíbe embutir a página em outra.
 
+O botão no topo troca o tema entre automático (segue o sistema), claro e escuro. A escolha
+fica guardada no navegador; é a única coisa que o painel guarda ali, e o token não passa
+perto dela (`theme.js` não conhece a sessão).
+
 > Testes: `test_admin_api.py` (acesso, métricas, ausência de dado de saúde, suspensão,
 > exclusão e histórico), `test_superuser.py` (criação, portas de login, suspensão),
 > `test_admin_web.py` (cabeçalhos, arquivos servidos e o que o JavaScript não pode usar).

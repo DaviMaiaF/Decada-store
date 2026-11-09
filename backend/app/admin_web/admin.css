@@ -40,8 +40,36 @@
   --shadow: 0 4px 12px rgba(27, 67, 50, 0.06);
 }
 
+/* Escuro escolhido no botão. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #121714;
+  --card: #1c2320;
+  --card-soft: #252c28;
+  --ink: #e8ede8;
+  --ink-soft: #c1c8c2;
+  --ink-muted: #9aa39d;
+  --line: #2f3733;
+  --line-strong: #454e49;
+  --primary: #a5d0b9;
+  --on-primary: #002114;
+  --danger: #ffb4ab;
+  --on-danger: #690005;
+  --danger-soft: #5c1512;
+  --on-danger-soft: #ffdad6;
+  --warn-soft: #5a2f00;
+  --on-warn-soft: #ffdcc3;
+  --ok-soft: #274e3d;
+  --on-ok-soft: #c1ecd4;
+  /* Validadas com scripts/validate_palette.js sobre #1c2320. */
+  --series-1: #28a06f;
+  --series-2: #cf7a22;
+  --shadow: none;
+}
+
+/* Automático: segue o sistema, a menos que o botão tenha escolhido claro. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --surface: #121714;
     --card: #1c2320;
@@ -103,7 +131,12 @@ p { margin: 0; }
 .badge-danger { background: var(--danger-soft); color: var(--on-danger-soft); }
 .badge-neutral { background: var(--card-soft); color: var(--ink-soft); }
 
+/* Botão de tema */
+.theme-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.theme-toggle svg { width: 18px; height: 18px; flex: none; }
+
 /* Login */
+.login-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login-card { width: 100%; max-width: 400px; padding: 24px; display: grid; gap: 16px; }
 .login-card h1 { font-size: 22px; line-height: 30px; }
@@ -246,6 +279,9 @@ details .table { margin-top: 8px; }
   .tab { flex: 1; padding: 8px 6px; }
   .session { margin-left: auto; }
   .session-email { display: none; }
+  .session { gap: 8px; }
+  .theme-label { display: none; }
+  .theme-toggle { min-width: 40px; justify-content: center; }
   .content { padding: 16px; }
   .bar-row { grid-template-columns: 1fr; gap: 4px; }
 

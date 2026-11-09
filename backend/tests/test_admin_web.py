@@ -45,6 +45,7 @@ def test_a_pagina_nao_fica_em_cache_nem_vaza_a_origem(client):
     ("arquivo", "tipo"),
     [
         ("admin.js", "javascript"),
+        ("theme.js", "javascript"),
         ("admin.css", "text/css"),
         ("favicon.svg", "image/svg+xml"),
         ("fonts/PlusJakartaSans_400Regular.ttf", "font"),
@@ -91,3 +92,21 @@ def test_o_token_nao_fica_guardado_no_navegador():
 
     for proibido in ("localStorage", "sessionStorage", "document.cookie", "indexedDB"):
         assert proibido not in js, proibido
+
+
+def test_o_tema_guarda_so_a_escolha_do_tema():
+    # O único arquivo que usa o armazenamento do navegador não pode tocar no token.
+    js = (WEB_DIR / "theme.js").read_text()
+
+    assert "localStorage" in js
+    for proibido in ("token", "Authorization", "fetch", "sessionStorage", "document.cookie"):
+        assert proibido not in js, proibido
+
+
+def test_o_tema_e_aplicado_antes_do_primeiro_desenho():
+    # Com defer, ou depois do CSS, a página piscaria no tema errado ao abrir.
+    html = (WEB_DIR / "index.html").read_text()
+    head = html[: html.index("</head>")]
+
+    assert re.search(r'<script src="/admin/static/theme\.js"></script>', head)
+    assert head.index("theme.js") < head.index("admin.css")
