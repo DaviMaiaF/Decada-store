@@ -16,6 +16,7 @@ erDiagram
     users ||--o{ pantry_items : "o que tem em casa"
     users |o--o{ price_records : "contribuiu (anonimizável)"
     users ||--o{ prescriptions : "planos que a nutricionista montou"
+    users |o--o{ admin_actions : "feito por / conta atingida"
 
     prescriptions ||--o{ prescription_meals : "refeições"
     prescription_meals ||--o{ prescription_items : "alimentos e substituições"
@@ -54,6 +55,8 @@ do projeto vira código. `tests/test_models.py` trava cada uma delas.
 | `shopping_lists` → `meal_plans` | `CASCADE` | Lista deriva do plano. |
 | `payments` → `shopping_lists` | `CASCADE` | Pagamento não existe sem a lista, e é dado da pessoa. |
 | `price_records` → `users` | `SET NULL` | Preço é informação sobre o mercado. Anonimizado, deixa de ser dado pessoal e continua servindo a média da região. |
+| `admin_actions` → `users` (`target_id`) | `SET NULL` | O histórico não pode lembrar de quem pediu para ser esquecido (decisão 9). Fica só o papel. |
+| `admin_actions` → `users` (`actor_id`) | `SET NULL` | O super usuário que sai não apaga o registro do que foi feito. |
 | `plan_items` → `products` | `RESTRICT` | Apagar um produto do catálogo deixaria uma confirmação apontando para nada. |
 | `shopping_list_items` → `products` | `RESTRICT` | Mesma razão, e a lista guarda o preço daquele produto. |
 | `recipe_ingredients` → `products` | `RESTRICT` | Receita sem ingrediente não é receita. |
@@ -83,11 +86,14 @@ sistema. O casamento por similaridade nunca preenche esse campo: ele fica nulo
 até alguém escolher. Gerar a lista da semana seguinte não pede confirmação de
 novo porque a escolha mora aqui, e não na lista.
 
-**`users.role` separa paciente de nutricionista**, e cada conta tem um papel só.
+**`users.role` separa paciente, nutricionista e super usuário (`admin`)**, e cada conta tem um papel só.
 Quem é as duas coisas tem duas contas: misturar o plano alimentar da pessoa com o
 trabalho dela deixaria sem resposta clara o que a exclusão de uma das metades leva.
 `users.crn` é obrigatório para a nutricionista, por uma *check constraint*
 (`ck_users_nutricionista_com_crn`), e declarado, não verificado.
+
+**`users.suspended_at` em vez de um booleano.** A data diz desde quando a conta está
+bloqueada, e nulo significa ativa. Suspender não apaga nada; quem apaga é a exclusão.
 
 **O plano aceito é uma cópia, não uma referência.** Quando o paciente aceita o plano
 que a nutricionista enviou, nasce um `meal_plans` dele, com os `plan_items` tirados da

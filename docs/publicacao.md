@@ -99,6 +99,19 @@ cd backend && read -rsp "Cole a string do Neon e tecle Enter: " DATABASE_URL && 
   Brasil até a Virgínia. Sem saída na tela durante a carga é normal.
 - Só depois do primeiro deploy, que é quem cria as tabelas.
 
+## Criar o super usuário
+
+O painel fica em `https://decada-api.onrender.com/admin`. Como o seed, o comando roda do
+notebook, apontado para o Neon, e só depois do deploy que aplica a migração:
+
+```bash
+cd backend && read -rsp "Cole a string do Neon e tecle Enter: " DATABASE_URL && echo && read -rsp "Digite qualquer chave longa e tecle Enter: " SECRET_KEY && echo && APP_ENV=demo DATABASE_URL="$DATABASE_URL" SECRET_KEY="$SECRET_KEY" .venv/bin/python -m app.create_superuser --email voce@exemplo.com
+```
+
+A `SECRET_KEY` aqui também só precisa ser diferente da padrão. A senha é pedida depois, com
+ao menos 12 caracteres, e não fica em lugar nenhum além do hash no banco. Regras do painel em
+[`super-usuario.md`](super-usuario.md).
+
 ## Publicar uma atualização do app
 
 | O que mudou | O que fazer |
