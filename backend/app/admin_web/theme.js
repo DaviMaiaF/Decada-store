@@ -43,7 +43,9 @@
       button.setAttribute("aria-label", `Tema ${NAMES[mode]}. Trocar para ${NAMES[nextOf(mode)]}`);
       button.title = `Tema ${NAMES[mode]}`;
       for (const icon of button.querySelectorAll("[data-icon]")) {
-        icon.hidden = icon.dataset.icon !== mode;
+        // toggleAttribute, e não `icon.hidden`: SVG não tem essa propriedade, e atribuir
+        // a ela não tirava o atributo — o ícone de claro e o de escuro nunca apareciam.
+        icon.toggleAttribute("hidden", icon.dataset.icon !== mode);
       }
     }
   }

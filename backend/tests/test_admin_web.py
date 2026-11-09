@@ -9,7 +9,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.routes.admin_web import WEB_DIR
+from app.api.routes.admin_web import VERSIONED_ASSETS, WEB_DIR, asset_version
 from app.main import app
 
 
@@ -122,3 +122,34 @@ def test_o_tema_e_aplicado_antes_do_primeiro_desenho():
 
     assert re.search(r'<script src="/admin/static/theme\.js"></script>', head)
     assert head.index("theme.js") < head.index("admin.css")
+
+
+@pytest.mark.parametrize("arquivo", VERSIONED_ASSETS)
+def test_a_pagina_cita_cada_arquivo_com_a_versao_do_conteudo(client, arquivo):
+    # Endereço novo a cada mudança: o navegador não reaproveita o arquivo antigo do cache.
+    html = client.get("/admin").text
+    endereco = f"/admin/static/{arquivo}?v={asset_version(arquivo)}"
+
+    assert f'"{endereco}"' in html
+    assert f'"/admin/static/{arquivo}"' not in html
+    assert client.get(endereco).status_code == 200
+
+
+def test_a_versao_muda_quando_o_arquivo_muda(tmp_path, monkeypatch):
+    from app.api.routes import admin_web
+
+    (tmp_path / "admin.css").write_text("body { color: red; }")
+    monkeypatch.setattr(admin_web, "WEB_DIR", tmp_path)
+    antes = admin_web.asset_version("admin.css")
+
+    (tmp_path / "admin.css").write_text("body { color: blue; }")
+
+    assert admin_web.asset_version("admin.css") != antes
+
+
+def test_o_icone_do_tema_e_trocado_pelo_atributo():
+    # Ícone é SVG: `icon.hidden = ...` não mexe no atributo e o botão ficava vazio.
+    js = (WEB_DIR / "theme.js").read_text()
+
+    assert 'toggleAttribute("hidden"' in js
+    assert "icon.hidden =" not in js

@@ -7,10 +7,11 @@ A página em si não é segredo e não traz dado nenhum: tudo vem depois do logi
 rotas de `routes/admin.py`.
 """
 
+import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import Scope
@@ -37,17 +38,38 @@ CONTENT_SECURITY_POLICY = "; ".join(
 router = APIRouter(include_in_schema=False)
 
 
+# Arquivos citados no HTML com a versão no endereço (`admin.css?v=...`). A versão sai do
+# conteúdo: mudou o arquivo, mudou o endereço, e o navegador baixa o novo mesmo que ainda
+# tenha o antigo guardado. Sem isto, uma atualização do painel chegava com o CSS velho.
+VERSIONED_ASSETS = ("admin.css", "admin.js", "theme.js")
+
+PAGE_HEADERS = {
+    "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+}
+
+
+def asset_version(name: str) -> str:
+    """Doze caracteres do SHA-256 do arquivo: curto, e muda a qualquer edição."""
+    return hashlib.sha256((WEB_DIR / name).read_bytes()).hexdigest()[:12]
+
+
+def render_index() -> str:
+    """O index.html com cada arquivo versionado apontando para a versão atual."""
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    for name in VERSIONED_ASSETS:
+        html = html.replace(
+            f'"/admin/static/{name}"', f'"/admin/static/{name}?v={asset_version(name)}"'
+        )
+    return html
+
+
 @router.get("/admin")
-def admin_page() -> FileResponse:
-    return FileResponse(
-        WEB_DIR / "index.html",
-        headers={
-            "Content-Security-Policy": CONTENT_SECURITY_POLICY,
-            "Referrer-Policy": "no-referrer",
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store",
-        },
-    )
+def admin_page() -> HTMLResponse:
+    # A página não é guardada (no-store), então sempre chega com as versões atuais.
+    return HTMLResponse(render_index(), headers=PAGE_HEADERS)
 
 
 class AdminStaticFiles(StaticFiles):
