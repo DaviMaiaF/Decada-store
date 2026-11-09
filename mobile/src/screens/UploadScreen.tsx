@@ -160,8 +160,10 @@ function Resumo({
             Confira: se alguma delas era comida, o plano ficou incompleto e vale
             adicionar o item à mão.
           </Body>
-          {resultado.discarded.map((linha) => (
-            <View key={linha.text} style={styles.descarte}>
+          {/* O texto não serve de key: o cabeçalho do PDF se repete em cada página. A
+              lista chega sem id, é trocada inteira e as linhas não têm estado. */}
+          {resultado.discarded.map((linha, indice) => (
+            <View key={indice} style={styles.descarte}>
               <Text style={styles.descarteTexto} numberOfLines={1}>
                 {linha.text}
               </Text>
