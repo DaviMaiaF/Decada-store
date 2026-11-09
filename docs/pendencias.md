@@ -23,6 +23,8 @@
   (`backend/Dockerfile.prod`) e `SECRET_KEY` própria obrigatória fora de desenvolvimento.
   O app abre de qualquer rede por APK Android e EAS Update. Como funciona e como manter
   em [`publicacao.md`](publicacao.md)
+- **Super usuário**: painel web em `/admin` com dashboard, contas e histórico, sem acesso a
+  dado de saúde. Como funciona em [`super-usuario.md`](super-usuario.md)
 
 ## O que falta
 

@@ -33,6 +33,8 @@ documentado.
 ## Funcionalidades
 
 - **Dois papéis de conta** — paciente e nutricionista, cada um com sua porta de login.
+- **Super usuário** — painel web em `/admin` com dashboard, contas e histórico, sem acesso a
+  dado de saúde.
 - **Nutricionista monta o plano no app** (refeições, horários, medidas caseiras,
   substituições, orientação) e entrega por **e-mail do paciente** ou **PDF**.
 - **Paciente aceita com consentimento** (LGPD) e fica com uma cópia do plano; também
@@ -73,6 +75,7 @@ Dieta, Mercado, Despensa e Economia — e uma tela de início.
 | [`docs/design/telas.md`](docs/design/telas.md) | Contrato tela a tela: o que existe, o que falta |
 | [`docs/demo/roteiro.md`](docs/demo/roteiro.md) | Roteiro de demonstração de cinco minutos |
 | [`docs/abrir-no-celular.md`](docs/abrir-no-celular.md) | Como abrir o app publicado no celular, por APK ou Expo Go, sem o notebook |
+| [`docs/super-usuario.md`](docs/super-usuario.md) | O painel do super usuário: o que faz, como criar a conta e o que ele não vê |
 | [`docs/publicacao.md`](docs/publicacao.md) | O ambiente publicado: Render, Neon, EAS Update; variáveis, deploy, rollback e seed |
 | [`docs/estado-do-projeto.md`](docs/estado-do-projeto.md) | Levantamento do estado das branches |
 
@@ -237,6 +240,7 @@ trocá-la invalida todos os tokens já emitidos.
 | `POST` | `/auth/login` | Troca e-mail e senha por um token |
 | `POST` | `/auth/nutritionist/register` | Cria a conta de nutricionista (nome e CRN obrigatórios) |
 | `POST` | `/auth/nutritionist/login` | Entrada da nutricionista |
+| `POST` | `/auth/admin/login` | Entrada do super usuário ([painel em `/admin`](docs/super-usuario.md)) |
 | `GET` | `/auth/me` | A conta de quem está autenticado |
 | `DELETE` | `/auth/me` | Apaga a conta e todos os dados pessoais (LGPD) |
 | `POST` | `/meal-plans` | Importa o plano do PDF (multipart: `file` + `consent_accepted`) |

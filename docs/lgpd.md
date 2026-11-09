@@ -10,6 +10,7 @@ documento reúne, cada uma com o teste que a sustenta.
 |---|---|---|
 | E-mail e nome | `users` | Identificar a conta |
 | Papel e CRN | `users.role`, `users.crn` | Abrir a navegação certa; o CRN assina o plano que a nutricionista monta. Declarado, não verificado |
+| Suspensão da conta | `users.suspended_at` | O super usuário bloquear o acesso sem apagar nada |
 | Hash da senha | `users.password_hash` | Autenticar. A senha em si nunca é guardada |
 | Plano alimentar e seus itens | `meal_plans`, `plan_items` | É o serviço |
 | Texto integral do PDF | `meal_plans.source_text` | Auditoria: permite conferir depois o que o parser leu errado. No plano aceito pelo e-mail, é o mesmo texto do PDF que a nutricionista geraria |
@@ -19,6 +20,7 @@ documento reúne, cada uma com o teste que a sustenta.
 | Listas de compras | `shopping_lists` | Histórico de custo |
 | Pagamentos de teste da lista | `payments` | Saber se a lista foi paga e mostrar as tentativas. Do cartão, só bandeira e os quatro últimos dígitos; do Pix, o código e o identificador da cobrança no Abacate Pay |
 | Preços que a pessoa contribuiu | `price_records.user_id` | Creditar a coleta — e é o único campo que sobrevive à exclusão, anonimizado |
+| Ações do super usuário | `admin_actions` | Saber quem suspendeu, reativou ou excluiu. Guarda o vínculo com a conta, nunca o e-mail; o vínculo some quando a conta é excluída |
 
 O plano que a nutricionista monta é dado de saúde do paciente **tratado pela
 profissional de saúde**, no exercício da profissão (art. 11, II, *f*). Ele só passa a ser
@@ -109,6 +111,15 @@ pelo provedor. O `webhookSecret` chega na URL e é tirado do log de acesso da AP
 > `test_webhooks.py::test_dados_de_quem_pagou_nao_sao_guardados`,
 > `::test_log_de_acesso_nao_mostra_o_segredo`.
 
+**O super usuário não lê dado de saúde.** Ele controla o sistema, e para isso bastam
+identificação da conta e contagens: o painel mostra quantos planos uma conta tem, nunca o
+conteúdo deles. As rotas de plano, despensa e lista respondem 404 para este papel, e nenhuma
+rota de `/admin/api` devolve esses dados (decisão 15; ver [`super-usuario.md`](super-usuario.md)).
+
+> Testes: `test_admin_api.py::test_nenhuma_resposta_traz_conteudo_do_plano`,
+> `::test_conta_listada_nao_tem_campo_de_saude_nem_senha`,
+> `test_superuser.py::test_super_usuario_nao_enxerga_rotas_de_dado_de_saude`.
+
 Mesmo simulado, o cuidado é o mesmo de um pagamento real: quem digita um cartão de
 verdade no formulário de demonstração não deve deixá-lo gravado em lugar nenhum.
 
@@ -140,6 +151,10 @@ média da região, que é o bem coletivo do aplicativo.
 excluída, ela some. Guardar o e-mail de quem pediu para ser esquecido seria o
 contrário do que a lei pede.
 
+**O super usuário exclui pela mesma regra**, com o mesmo serviço. O histórico dele registra
+que uma conta daquele papel foi excluída, mas não qual: a exclusão também solta o vínculo das
+suspensões anteriores dela.
+
 O token de quem foi excluído para de funcionar na requisição seguinte, porque
 `get_current_user` busca o usuário no banco e não o encontra mais.
 
@@ -152,7 +167,9 @@ O token de quem foi excluído para de funcionar na requisição seguinte, porque
 > `::test_plano_pendente_some_quando_a_nutricionista_sai`,
 > `::test_paciente_sair_nao_apaga_o_documento_da_nutricionista`,
 > `test_models.py::test_excluir_a_lista_apaga_os_pagamentos`,
-> `test_payment_model.py::test_excluir_a_lista_apaga_os_pagamentos`.
+> `test_payment_model.py::test_excluir_a_lista_apaga_os_pagamentos`,
+> `test_admin_api.py::test_excluir_leva_os_dados_e_devolve_o_comprovante`,
+> `::test_o_historico_nao_lembra_de_quem_foi_excluido`.
 
 ## Não confirmar o que não precisa ser confirmado
 
@@ -169,7 +186,9 @@ Estas respostas da API são deliberadamente iguais entre si:
   nutricionistas: o plano de outra é 404.
 - **Conta do outro papel na porta de login errada** devolve o mesmo 401 da senha
   errada. Dizer "essa conta é de paciente" confirmaria que a pessoa tem um plano
-  guardado. A rota do outro papel responde 404, como recurso que não existe.
+  guardado. A rota do outro papel responde 404, como recurso que não existe. Vale também
+  para o super usuário e para as rotas do painel.
+- **Conta suspensa** devolve o mesmo 401 da senha errada, no login e no token já emitido.
 - **Enviar o plano a um e-mail com conta e a um sem conta** dá a mesma resposta. Se
   desse diferente, o envio viraria um jeito de descobrir quem usa o app.
 
@@ -178,7 +197,10 @@ Estas respostas da API são deliberadamente iguais entre si:
 > `test_nutritionist_auth.py::test_paciente_na_porta_da_nutricionista_parece_senha_errada`,
 > `::test_nutricionista_nao_enxerga_rotas_do_paciente`,
 > `test_prescription_delivery.py::test_envio_nao_revela_se_o_email_tem_conta`,
-> `test_prescriptions.py::test_plano_de_outra_nutricionista_responde_404`.
+> `test_prescriptions.py::test_plano_de_outra_nutricionista_responde_404`,
+> `test_superuser.py::test_paciente_na_porta_do_super_usuario_parece_senha_errada`,
+> `::test_conta_suspensa_nao_entra_e_parece_senha_errada`,
+> `test_admin_api.py::test_paciente_e_nutricionista_nao_enxergam_o_painel`.
 
 ## O que falta para valer em produção
 
@@ -192,7 +214,9 @@ Este é um projeto acadêmico e o MVP não cobre:
   colocar ali o próprio plano alimentar;
 - portabilidade (art. 18, V): exportar os dados num formato legível por máquina;
 - registro de operações de tratamento e prazo de retenção definido;
-- revogação de token antes de expirar, que exigiria sessões no banco;
+- revogação de token antes de expirar, que exigiria sessões no banco; a exclusão e a
+  suspensão já derrubam o token, mas sair do painel só o esquece no navegador;
+- limite de tentativas de login, em todas as portas, inclusive a do super usuário;
 - consentimento granular por finalidade — hoje é um aceite único;
 - contrato com o operador da foto da despensa: a Anthropic recebe a imagem como
   operadora, e em produção isso pede acordo de tratamento de dados e a conferência da

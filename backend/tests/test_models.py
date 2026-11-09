@@ -10,6 +10,7 @@ import pytest
 from app.models import Base
 
 TABELAS_ESPERADAS = {
+    "admin_actions",
     "users",
     "meal_plans",
     "plan_items",
@@ -53,6 +54,14 @@ def test_excluir_nutricionista_apaga_os_planos_que_ela_montou():
     assert _regra_de_exclusao("prescription_meals", "prescription_id") == "CASCADE"
     assert _regra_de_exclusao("prescription_items", "meal_id") == "CASCADE"
     assert "prescription_id" not in Base.metadata.tables["meal_plans"].c
+
+
+def test_o_historico_do_super_usuario_nao_guarda_quem_foi_atingido():
+    # Decisão 9: o histórico não pode lembrar de quem pediu para ser esquecido.
+    colunas = set(Base.metadata.tables["admin_actions"].c.keys())
+    assert colunas == {"id", "actor_id", "target_id", "action", "target_role", "created_at"}
+    assert _regra_de_exclusao("admin_actions", "target_id") == "SET NULL"
+    assert _regra_de_exclusao("admin_actions", "actor_id") == "SET NULL"
 
 
 def test_excluir_a_lista_apaga_os_pagamentos():

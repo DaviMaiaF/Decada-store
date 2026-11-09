@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # invalida todos os tokens já emitidos.
     secret_key: str = DEV_SECRET_KEY
     access_token_expire_minutes: int = 60 * 24 * 7
+    # O token do super usuário alcança todas as contas: vale bem menos que o do app.
+    admin_token_expire_minutes: int = 60
 
     # Reconhecimento de alimentos na foto da despensa. Sem chave, a rota da foto
     # responde 503 e o resto do app continua funcionando. O Haiku é o modelo mais

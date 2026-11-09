@@ -1,8 +1,9 @@
 """Usuário do aplicativo."""
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, String
+from sqlalchemy import CheckConstraint, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
@@ -42,6 +43,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # varia por região ("CRN-3 48291") e não há consulta pública ao conselho
     # que o MVP possa usar.
     crn: Mapped[str | None] = mapped_column(String(50))
+    # Preenchido pelo super usuário. Conta suspensa não entra e o token dela para
+    # de valer na requisição seguinte, mas nenhum dado é apagado: é o caminho
+    # reversível, ao contrário da exclusão.
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     meal_plans: Mapped[list["MealPlan"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

@@ -43,6 +43,7 @@ bem documentado**, não escala de produção.
 decada/
 ├── backend/
 │   ├── app/
+│   │   ├── admin_web/     # página do painel do super usuário (HTML, CSS e JS)
 │   │   ├── api/           # rotas FastAPI
 │   │   ├── core/          # config, segurança
 │   │   ├── models/        # SQLAlchemy
@@ -116,7 +117,7 @@ decada/
     identificado, nunca entra sozinho. **A imagem não é guardada** — o app extrai os
     itens e descarta o arquivo (decisão 5, minimização). Isso enche a despensa; não
     forma preço, que continua sendo a decisão 3.
-12. Há dois papéis de conta, **paciente e nutricionista** (`users.role`), cada um
+12. No app há dois papéis de conta, **paciente e nutricionista** (`users.role`), cada um
     com sua porta de login; a rota do outro papel responde 404. A nutricionista
     **monta o plano alimentar** no app e o entrega **pelo e-mail do paciente** ou
     **em PDF** que o import lê de volta. O envio responde igual exista conta ou
@@ -134,6 +135,13 @@ decada/
     pessoa ao provedor. O **cartão continua simulado**, porque o do Abacate Pay exige
     token gerado no navegador e CPF. Cobrar de verdade pede reabrir esta decisão: não
     há pedido nem entrega por trás da compra. Ver [`docs/lgpd.md`](docs/lgpd.md).
+15. Há um terceiro papel, o **super usuário** (`users.role = admin`), com **painel web** em
+    `/admin`, servido pela própria API: dashboard, contas e histórico. **Não vê dado de
+    saúde**, só números agregados e identificação da conta. Não há cadastro público: a conta
+    nasce por `python -m app.create_superuser`, nunca promovendo conta existente. O token dura
+    1 hora e fica só em memória. Suspender é reversível; excluir segue a decisão 9, e o
+    histórico (`admin_actions`) não guarda quem foi excluído. Conta de super usuário não é
+    alterada pelo painel. Ver [`docs/super-usuario.md`](docs/super-usuario.md).
 
 ## Design
 
@@ -164,6 +172,8 @@ vêm do bloco de tokens de `docs/design/sistema-de-design.md`.
   a instância do axios, os interceptors, as rotas e o que cada status faz na tela.
 - [`docs/arquitetura-mvvm.md`](docs/arquitetura-mvvm.md) — as camadas do app (Model,
   View, ViewModel), a convenção entre elas e o que fica de fora.
+- [`docs/super-usuario.md`](docs/super-usuario.md) — o painel web em `/admin`: o que ele
+  faz, como criar a conta e o que o super usuário não pode ver.
 - [`docs/publicacao.md`](docs/publicacao.md) — o ambiente publicado: API no Render,
   banco no Neon, app por APK e EAS Update; variáveis, deploy, rollback, seed e cold start.
 
@@ -180,6 +190,7 @@ python3 -m venv .venv                      # apenas na primeira vez
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --reload  # API em http://localhost:8000, alcançável pelo celular
 
 .venv/bin/pytest -q                        # testes do backend
+.venv/bin/python -m app.create_superuser --email voce@exemplo.com  # cria o super usuário; painel em /admin
 
 cd ../mobile && npx expo start             # app mobile (npm run dev:api-url fixa o IP da API no .env)
 cd ../mobile && npm test                   # testes do app
