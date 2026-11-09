@@ -46,16 +46,25 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(user_id: uuid.UUID, *, issued_at: datetime | None = None) -> str:
-    """Token assinado que identifica o usuário até expirar."""
+def create_access_token(
+    user_id: uuid.UUID,
+    *,
+    issued_at: datetime | None = None,
+    expire_minutes: int | None = None,
+) -> str:
+    """Token assinado que identifica o usuário até expirar.
+
+    Sem `expire_minutes`, vale o prazo padrão da configuração.
+    """
     settings = get_settings()
     now = issued_at or datetime.now(timezone.utc)
+    minutes = settings.access_token_expire_minutes if expire_minutes is None else expire_minutes
 
     return jwt.encode(
         {
             "sub": str(user_id),
             "iat": now,
-            "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+            "exp": now + timedelta(minutes=minutes),
         },
         settings.secret_key,
         algorithm=ALGORITHM,

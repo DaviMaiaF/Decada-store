@@ -69,10 +69,23 @@ class PriceConfidence(str, Enum):
 
 
 class UserRole(str, Enum):
-    """Papel da conta: quem segue um plano ou quem escreve receitas."""
+    """Papel da conta: quem segue um plano, quem o escreve ou quem cuida do sistema.
+
+    `admin` é o super usuário. Não há cadastro público dele: a conta nasce pelo
+    comando `python -m app.create_superuser` (decisão 15).
+    """
 
     PACIENTE = "paciente"
     NUTRICIONISTA = "nutricionista"
+    ADMIN = "admin"
+
+
+class AdminActionType(str, Enum):
+    """O que o super usuário fez com uma conta, para o histórico do painel."""
+
+    CONTA_SUSPENSA = "conta_suspensa"
+    CONTA_REATIVADA = "conta_reativada"
+    CONTA_EXCLUIDA = "conta_excluida"
 
 
 class PrescriptionStatus(str, Enum):

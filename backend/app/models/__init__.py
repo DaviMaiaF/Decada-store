@@ -4,8 +4,10 @@ Todos são importados aqui para que o Alembic enxergue o metadata completo
 ao gerar migrações automaticamente.
 """
 
+from app.models.admin_action import AdminAction
 from app.models.base import Base
 from app.models.enums import (
+    AdminActionType,
     BaseUnit,
     MeasurementUnit,
     PaymentMethod,
@@ -28,6 +30,8 @@ from app.models.shopping_list import ShoppingList, ShoppingListItem
 from app.models.user import User
 
 __all__ = [
+    "AdminAction",
+    "AdminActionType",
     "Base",
     "BaseUnit",
     "Market",

@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select, update
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.config import get_settings
 from app.models import (
     MealPlan,
     PantryItem,
@@ -43,10 +44,10 @@ def _create_account(session: DbSession, user: User) -> TokenOut:
 def _login(session: DbSession, payload: LoginIn, role: UserRole) -> TokenOut:
     """Troca e-mail e senha por um token, se a conta for do papel desta porta.
 
-    E-mail inexistente, senha errada e conta do outro papel devolvem a mesma
-    resposta de propósito: distinguir os casos entregaria de graça a lista de
-    quem tem conta — e aqui ter conta de paciente significa ter um plano
-    alimentar guardado.
+    E-mail inexistente, senha errada, conta do outro papel e conta suspensa
+    devolvem a mesma resposta de propósito: distinguir os casos entregaria de
+    graça a lista de quem tem conta — e aqui ter conta de paciente significa ter
+    um plano alimentar guardado.
     """
     user = session.scalars(select(User).where(User.email == payload.email.lower())).first()
 
@@ -54,10 +55,17 @@ def _login(session: DbSession, payload: LoginIn, role: UserRole) -> TokenOut:
         user is None
         or not verify_password(payload.password, user.password_hash)
         or user.role != role
+        or user.suspended_at is not None
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "e-mail ou senha inválidos")
 
-    return TokenOut(access_token=create_access_token(user.id), role=user.role)
+    expire_minutes = (
+        get_settings().admin_token_expire_minutes if role == UserRole.ADMIN else None
+    )
+    return TokenOut(
+        access_token=create_access_token(user.id, expire_minutes=expire_minutes),
+        role=user.role,
+    )
 
 
 @router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
@@ -101,6 +109,12 @@ def register_nutritionist(session: DbSession, payload: NutritionistRegisterIn) -
 def login_nutritionist(session: DbSession, payload: LoginIn) -> TokenOut:
     """Entrada da nutricionista. Conta de paciente não passa por aqui."""
     return _login(session, payload, UserRole.NUTRICIONISTA)
+
+
+@router.post("/admin/login", response_model=TokenOut)
+def login_admin(session: DbSession, payload: LoginIn) -> TokenOut:
+    """Entrada do super usuário. Não existe cadastro público para este papel."""
+    return _login(session, payload, UserRole.ADMIN)
 
 
 @router.get("/me", response_model=UserOut)

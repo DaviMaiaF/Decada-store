@@ -27,9 +27,9 @@ def get_current_user(
     aqui que o cabeçalho provisório `X-User-Id` da etapa 9 vivia, e trocá-lo por
     validação de token não exigiu mudança em nenhuma rota de domínio.
 
-    Token ausente, expirado, adulterado ou apontando para conta já excluída
-    devolvem o mesmo 401. Distinguir os casos ajudaria mais quem está tentando
-    adivinhar contas do que o dono da requisição — e conta excluída é
+    Token ausente, expirado, adulterado ou apontando para conta já excluída ou
+    suspensa devolvem o mesmo 401. Distinguir os casos ajudaria mais quem está
+    tentando adivinhar contas do que o dono da requisição — e conta excluída é
     exatamente o que a LGPD manda não confirmar.
     """
     negado = HTTPException(
@@ -47,7 +47,7 @@ def get_current_user(
         raise negado from erro
 
     user = session.get(User, user_id)
-    if user is None:
+    if user is None or user.suspended_at is not None:
         raise negado
 
     return user
@@ -77,3 +77,5 @@ def _require_role(role: UserRole):
 CurrentPatient = Annotated[User, Depends(_require_role(UserRole.PACIENTE))]
 # Rotas de trabalho da nutricionista, como o cadastro de receitas.
 CurrentNutritionist = Annotated[User, Depends(_require_role(UserRole.NUTRICIONISTA))]
+# Rotas do painel do super usuário. Para qualquer outro papel, elas não existem.
+CurrentAdmin = Annotated[User, Depends(_require_role(UserRole.ADMIN))]
