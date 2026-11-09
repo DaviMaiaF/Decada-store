@@ -35,6 +35,13 @@ Nenhum segredo está no repositório. Cada valor é colado no painel do serviço
 | `DATABASE_URL` | string do Neon | vence as `POSTGRES_*`; `postgresql://` vira `postgresql+psycopg://` |
 | `SECRET_KEY` | gerada pelo Render (**Generate**) | com a chave padrão ou vazia, a API se recusa a subir |
 | `ANTHROPIC_API_KEY` | opcional | sem ela, só a foto da despensa responde 503 |
+| `ABACATEPAY_API_KEY` | chave de **desenvolvimento** do Abacate Pay | sem ela, só o Pix responde 503. Chave de produção não funciona: a resposta com `devMode` falso é recusada |
+| `ABACATEPAY_WEBHOOK_SECRET` | gerado por você, o mesmo do webhook | sem ele, todo aviso é recusado, e o status do Pix vem só da consulta do app |
+
+O webhook é cadastrado no painel do Abacate Pay, em modo de teste, com o endpoint
+`https://decada-api.onrender.com/webhooks/abacatepay`, o evento `transparent.completed` e
+o mesmo segredo de `ABACATEPAY_WEBHOOK_SECRET`. Quando a API está dormindo, o provedor
+tenta de novo, e a consulta do app também confirma o pagamento.
 
 O Render define `PORT` sozinho. O serviço usa `backend/Dockerfile.prod` (Root Directory
 `backend`), com health check em `/health`.
@@ -129,4 +136,4 @@ cd mobile && EXPO_PUBLIC_API_URL=https://decada-api.onrender.com npm run test:sm
 O smoke cria a própria conta e a apaga no fim. Depois, o roteiro manual no celular,
 **em 4G e com o notebook desligado**: cadastro, importar o plano
 ([`demo/plano-exemplo.pdf`](demo/plano-exemplo.pdf)), casar os itens, despensa, lista de
-compras e pagamento simulado.
+compras e pagamento de teste.

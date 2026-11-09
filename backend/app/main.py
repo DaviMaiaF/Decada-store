@@ -14,8 +14,12 @@ from app.api.routes import (
     received_prescriptions,
     recipes,
     shopping_lists,
+    webhooks,
 )
 from app.core.config import Settings, get_settings
+from app.core.logs import install_log_filters
+
+install_log_filters()
 
 app = FastAPI(
     title="DÉCADA API",
@@ -54,6 +58,7 @@ app.include_router(meal_plans.router)
 app.include_router(shopping_lists.router)
 app.include_router(pantry.router)
 app.include_router(payments.router)
+app.include_router(webhooks.router)
 app.include_router(products.router)
 app.include_router(recipes.router)
 app.include_router(nutritionist_prescriptions.router)

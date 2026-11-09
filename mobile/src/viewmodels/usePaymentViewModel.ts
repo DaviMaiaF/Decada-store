@@ -1,10 +1,12 @@
 /**
- * ViewModel do pagamento — **simulado**, no molde do Mercado Pago.
+ * ViewModel do pagamento — **de teste**: nada é cobrado.
  *
- * Dois meios. O Pix nasce pendente, com o copia-e-cola, e só aprova quando a
- * pessoa toca em "simular pagamento recebido" — é o papel do aviso que o banco
- * mandaria. O cartão responde na hora, pelo titular de teste (`APRO` aprova,
- * `OTHE` recusa, `CONT` fica em análise).
+ * Dois meios. O Pix passa pelo Abacate Pay em modo de teste: nasce pendente, com
+ * o copia-e-cola, e aprova quando a pessoa toca em "simular pagamento recebido".
+ * Enquanto está pendente, o hook consulta o servidor, que também pode saber do
+ * pagamento pelo aviso do Abacate Pay ou descobrir que o Pix expirou. O cartão é
+ * simulado e responde na hora, pelo titular de teste (`APRO` aprova, `OTHE`
+ * recusa, `CONT` fica em análise).
  *
  * Recusado não é erro: é uma tentativa que deu "não", e a pessoa tenta de
  * novo. Erro é o que o servidor não aceitou (cartão inválido, lista já paga),
@@ -14,11 +16,17 @@
  * a conclusão — é de quem usa este hook, por `onAprovado`.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { ApiError, confirmPayment, payShoppingList, readPayments } from '../services/api';
+import {
+  ApiError,
+  confirmPayment,
+  payShoppingList,
+  readPayment,
+  readPayments,
+} from '../services/api';
 import {
   FORMULARIO_VAZIO,
   type FormularioCartao,
@@ -27,6 +35,9 @@ import {
   montarCartao,
 } from '../services/payment';
 import type { Payment, PaymentMethod, ShoppingList } from '../types/api';
+
+/** De quanto em quanto o Pix pendente é consultado. */
+const INTERVALO_CONSULTA_PIX_MS = 5000;
 
 function mensagem(erro: unknown, padrao: string): string {
   return erro instanceof ApiError ? erro.message : padrao;
@@ -56,11 +67,18 @@ export function usePaymentViewModel(
   // O histórico diz se a lista já foi paga numa visita anterior.
   const historico = useQuery({ queryKey: chave, queryFn: () => readPayments(lista.id) });
 
+  // A consulta e o toque em "simular" podem trazer a mesma aprovação, e quem usa
+  // o hook marca os itens como comprados: o aviso só pode sair uma vez.
+  const aprovacaoAvisada = useRef(false);
+
   const aoResponder = (pagamento: Payment) => {
     setAtual(pagamento);
     setCopiado(false);
     cliente.invalidateQueries({ queryKey: chave });
-    if (pagamento.status === 'aprovado') onAprovado?.(pagamento);
+    if (pagamento.status === 'aprovado' && !aprovacaoAvisada.current) {
+      aprovacaoAvisada.current = true;
+      onAprovado?.(pagamento);
+    }
   };
 
   const cartao = montarCartao(formulario);
@@ -75,6 +93,23 @@ export function usePaymentViewModel(
     mutationFn: (pagamentoId: string) => confirmPayment(lista.id, pagamentoId),
     onSuccess: aoResponder,
   });
+
+  // Falha na consulta não vira erro na tela: a próxima tenta de novo.
+  const pixEmEspera = atual?.status === 'pendente' && atual.method === 'pix' ? atual.id : null;
+  const consultaPix = useQuery({
+    queryKey: ['payment', lista.id, pixEmEspera],
+    queryFn: () => readPayment(lista.id, pixEmEspera!),
+    enabled: pixEmEspera !== null,
+    refetchInterval: INTERVALO_CONSULTA_PIX_MS,
+  });
+  const pixConsultado = consultaPix.data;
+
+  useEffect(() => {
+    // A resposta atrasada de um Pix que já saiu de cena não muda a tela.
+    if (pixConsultado && pixConsultado.id === pixEmEspera && pixConsultado.status !== 'pendente') {
+      aoResponder(pixConsultado);
+    }
+  }, [pixConsultado, pixEmEspera]);
 
   const pago =
     atual?.status === 'aprovado' ||
@@ -107,7 +142,7 @@ export function usePaymentViewModel(
 
     carregando: historico.isLoading,
     pago,
-    /** Pix com o copia-e-cola, esperando o recebimento simulado. */
+    /** Pix com o copia-e-cola, esperando o recebimento. */
     pixPendente: pendente?.method === 'pix' ? pendente : null,
     /** Cartão `CONT`: em análise, também resolvido pelo recebimento simulado. */
     cartaoEmAnalise: pendente?.method === 'cartao_credito' ? pendente : null,

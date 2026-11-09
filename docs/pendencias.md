@@ -15,8 +15,8 @@
   com a comparação entre as três suítes de teste
 - **Código do app em MVVM** (model, view, viewModel): ViewModels em `mobile/src/viewmodels/`,
   convenção e mapa em [`arquitetura-mvvm.md`](arquitetura-mvvm.md)
-- **Pagamento simulado, no molde do Mercado Pago**: Pix com QR e copia-e-cola, e cartão de
-  crédito com os titulares de teste. Nada é cobrado; regras em
+- **Pagamento de teste**: Pix com QR e copia-e-cola pelo Abacate Pay em modo de teste, e
+  cartão de crédito simulado, com os titulares de teste. Nada é cobrado; regras em
   [`design/telas.md`](design/telas.md#3-mercado), rotas em
   [`integracao-api.md`](integracao-api.md#pagamento-simulado)
 - **API publicada**: no Render, com Postgres gerenciado no Neon, imagem de produção

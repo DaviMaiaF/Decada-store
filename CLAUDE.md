@@ -129,6 +129,11 @@ decada/
     dela está no repositório), e só contas de teste — dado real de saúde não entra ali
     (decisão 5). `prod` continua proibindo o seed, e fora de `dev` a API não sobe com a
     `SECRET_KEY` padrão. Ver [`docs/publicacao.md`](docs/publicacao.md).
+14. O Pix passa pelo **Abacate Pay, só em modo de teste** (Dev Mode): nada é cobrado, e
+    resposta ou aviso com `devMode` falso é recusado no código. Não se envia dado da
+    pessoa ao provedor. O **cartão continua simulado**, porque o do Abacate Pay exige
+    token gerado no navegador e CPF. Cobrar de verdade pede reabrir esta decisão: não
+    há pedido nem entrega por trás da compra. Ver [`docs/lgpd.md`](docs/lgpd.md).
 
 ## Design
 

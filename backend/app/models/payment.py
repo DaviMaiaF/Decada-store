@@ -1,7 +1,7 @@
-"""Pagamento — **simulado** — de uma lista de compras.
+"""Pagamento — **de teste** — de uma lista de compras.
 
-Não existe gateway de verdade: o serviço `payment_gateway` imita o Mercado Pago
-para fechar o fluxo de compra na demonstração. Nada é cobrado.
+O Pix passa pelo Abacate Pay em modo de teste; o cartão é simulado pelo serviço
+`payment_gateway`, no molde do Mercado Pago. Nada é cobrado nos dois casos.
 """
 
 import uuid
@@ -56,6 +56,7 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="cartao_so_no_cartao",
         ),
         CheckConstraint("method = 'pix' OR pix_code IS NULL", name="pix_so_no_pix"),
+        CheckConstraint("method = 'pix' OR external_id IS NULL", name="cobranca_so_no_pix"),
     )
 
     shopping_list_id: Mapped[uuid.UUID] = mapped_column(
@@ -83,8 +84,14 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     card_brand: Mapped[str | None] = mapped_column(String(20))
     card_last_four: Mapped[str | None] = mapped_column(String(4))
-    # Copia-e-cola fictício; o QR da tela é desenhado a partir dele.
+    # Copia-e-cola do Abacate Pay em modo de teste; o QR da tela é desenhado a
+    # partir dele.
     pix_code: Mapped[str | None] = mapped_column(Text)
+    # Identificador da cobrança no Abacate Pay: é por ele que o webhook acha o
+    # pagamento. Cartão é simulado aqui mesmo e não tem.
+    external_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Até quando o Pix pode ser pago.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Quando foi aprovado. Nulo enquanto não foi.
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

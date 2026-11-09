@@ -1,4 +1,4 @@
-"""Schemas do pagamento simulado."""
+"""Schemas do pagamento de teste e do aviso do Abacate Pay."""
 
 import uuid
 from datetime import datetime
@@ -39,6 +39,25 @@ class PaymentIn(BaseModel):
         if self.method == PaymentMethod.PIX and self.card is not None:
             raise ValueError("Pix não leva dados de cartão")
         return self
+
+
+class AbacatePayCharge(BaseModel):
+    """A cobrança dentro do aviso, só com o que a DÉCADA usa."""
+
+    id: str
+    status: str
+
+
+class AbacatePayEventData(BaseModel):
+    transparent: AbacatePayCharge | None = None
+
+
+class AbacatePayEvent(BaseModel):
+    """Aviso do Abacate Pay. Campos fora daqui, como os de quem pagou, são descartados."""
+
+    event: str
+    dev_mode: bool | None = Field(default=None, alias="devMode")
+    data: AbacatePayEventData | None = None
 
 
 class PaymentOut(ApiModel):

@@ -201,7 +201,7 @@ export interface Payment {
   /** Do cartão só voltam a bandeira e os quatro últimos dígitos. */
   card_brand: string | null;
   card_last_four: string | null;
-  /** Copia-e-cola do Pix, no formato do BR Code. */
+  /** Copia-e-cola do Pix, gerado pelo Abacate Pay em modo de teste. */
   pix_code: string | null;
   paid_at: string | null;
   created_at: string;

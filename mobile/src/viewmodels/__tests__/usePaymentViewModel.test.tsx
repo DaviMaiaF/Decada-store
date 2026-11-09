@@ -20,6 +20,7 @@ jest.mock('../../services/api', () => ({
   ...jest.requireActual('../../services/api'),
   payShoppingList: jest.fn(),
   readPayments: jest.fn(),
+  readPayment: jest.fn(),
   confirmPayment: jest.fn(),
 }));
 
@@ -28,6 +29,7 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 const pagar = api.payShoppingList as jest.Mock;
 const lerPagamentos = api.readPayments as jest.Mock;
 const confirmar = api.confirmPayment as jest.Mock;
+const lerPagamento = api.readPayment as jest.Mock;
 
 const LISTA: ShoppingList = {
   id: 'lista-1',
@@ -77,6 +79,7 @@ function Provedor({ children }: { children: ReactNode }) {
 beforeEach(() => {
   jest.clearAllMocks();
   lerPagamentos.mockResolvedValue([]);
+  lerPagamento.mockResolvedValue(pagamento());
   cliente = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0 },
@@ -150,6 +153,86 @@ it('Pix fica pendente com o código e aprova no recebimento simulado', async () 
   expect(confirmar).toHaveBeenCalledWith('lista-1', 'pagamento-1');
   expect(result.current.pixPendente).toBeNull();
   expect(onAprovado).toHaveBeenCalledTimes(1);
+});
+
+it('consulta o Pix pendente, e o pagamento avisado pelo servidor aprova', async () => {
+  const onAprovado = jest.fn();
+  pagar.mockResolvedValue(pagamento());
+  lerPagamento.mockResolvedValue(pagamento({ status: 'aprovado', paid_at: '2026-10-26T10:01:00Z' }));
+  const { result } = await montar(onAprovado);
+
+  await act(async () => result.current.pagar());
+
+  await waitFor(() => expect(result.current.pago).toBe(true));
+  expect(lerPagamento).toHaveBeenCalledWith('lista-1', 'pagamento-1');
+  expect(result.current.pixPendente).toBeNull();
+  expect(onAprovado).toHaveBeenCalledTimes(1);
+});
+
+it('Pix expirado sai de cena com o motivo e deixa gerar outro', async () => {
+  pagar.mockResolvedValue(pagamento());
+  lerPagamento.mockResolvedValue(
+    pagamento({ status: 'recusado', status_detail: 'o Pix expirou sem pagamento' }),
+  );
+  const { result } = await montar();
+
+  await act(async () => result.current.pagar());
+
+  await waitFor(() => expect(result.current.recusa).toBe('o Pix expirou sem pagamento'));
+  expect(result.current.pixPendente).toBeNull();
+  expect(result.current.podePagar).toBe(true);
+});
+
+it('falha na consulta não vira erro na tela e o Pix continua esperando', async () => {
+  pagar.mockResolvedValue(pagamento());
+  lerPagamento.mockRejectedValue(new ApiError(503, 'fora do ar'));
+  const { result } = await montar();
+
+  await act(async () => result.current.pagar());
+  await waitFor(() => expect(lerPagamento).toHaveBeenCalled());
+
+  expect(result.current.pixPendente).not.toBeNull();
+  expect(result.current.erro).toBeNull();
+});
+
+it('a mesma aprovação pela consulta e pelo toque avisa uma vez só', async () => {
+  const onAprovado = jest.fn();
+  const aprovado = pagamento({ status: 'aprovado', paid_at: '2026-10-26T10:01:00Z' });
+  let liberarConfirmacao: (valor: Payment) => void = () => {};
+  pagar.mockResolvedValue(pagamento());
+  confirmar.mockReturnValue(
+    new Promise<Payment>((resolve) => {
+      liberarConfirmacao = resolve;
+    }),
+  );
+  const { result } = await montar(onAprovado);
+
+  await act(async () => result.current.pagar());
+  await waitFor(() => expect(lerPagamento).toHaveBeenCalled());
+  await act(async () => result.current.simularRecebimento());
+
+  lerPagamento.mockResolvedValue(aprovado);
+  await act(async () => {
+    await cliente.refetchQueries({ queryKey: ['payment', 'lista-1'] });
+  });
+  await waitFor(() => expect(result.current.pago).toBe(true));
+  await act(async () => liberarConfirmacao(aprovado));
+
+  await waitFor(() => expect(result.current.recebendo).toBe(false));
+  expect(onAprovado).toHaveBeenCalledTimes(1);
+});
+
+it('cartão em análise não é consultado', async () => {
+  pagar.mockResolvedValue(
+    pagamento({ method: 'cartao_credito', status_detail: 'pagamento em análise', pix_code: null }),
+  );
+  const { result } = await montar();
+  await preencherCartao(result, 'CONT');
+
+  await act(async () => result.current.pagar());
+  await waitFor(() => expect(result.current.cartaoEmAnalise).not.toBeNull());
+
+  expect(lerPagamento).not.toHaveBeenCalled();
 });
 
 it('máscara do formulário: número em grupos, validade com barra, CVV só dígitos', async () => {

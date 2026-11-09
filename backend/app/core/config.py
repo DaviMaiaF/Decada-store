@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     vision_model: str = "claude-haiku-5-5"
 
+    # Pix pelo Abacate Pay, só em modo de teste: a chave é a de desenvolvimento.
+    # Sem ela, só o Pix responde 503. O segredo é o que se cadastra no webhook:
+    # sem ele, todo aviso recebido é recusado.
+    abacatepay_api_key: str | None = None
+    abacatepay_webhook_secret: str | None = None
+
     postgres_user: str = "decada"
     postgres_password: str = "decada"
     postgres_db: str = "decada"

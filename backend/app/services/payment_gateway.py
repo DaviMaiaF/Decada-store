@@ -1,18 +1,17 @@
-"""Gateway de pagamento **simulado**, no molde do Mercado Pago.
+"""Gateway de pagamento **de teste**: nenhum valor é cobrado.
 
-Nada aqui fala com banco, adquirente ou PSP: o módulo existe para fechar o
-fluxo de compra na demonstração, e cada resposta diz que é simulação. Nenhum
-valor é cobrado.
+O módulo existe para fechar o fluxo de compra na demonstração, e cada resposta
+diz que é simulação.
 
 Dois meios:
 
-**Pix.** O pagamento nasce pendente, com um código copia-e-cola no formato do
-BR Code (EMV, com CRC16). A chave é `simulado@decada.invalid`: o domínio
-`.invalid` é reservado e nunca existe, então o código não paga ninguém nem se
-lido por um app de banco de verdade. O recebimento é simulado por
-`settle_payment`, no lugar do webhook que um PSP chamaria.
+**Pix.** A cobrança é criada no Abacate Pay em modo de teste
+([`abacatepay`](abacatepay.py), que recusa resposta de produção). O pagamento
+nasce pendente, com o copia-e-cola devolvido por ele.
 
-**Cartão de crédito.** A resposta sai na hora e depende do nome do titular,
+**Cartão de crédito.** Simulado aqui mesmo, sem provedor: o Abacate Pay exige um
+token gerado no navegador e os dados da pessoa, inclusive o CPF. A resposta sai
+na hora e depende do nome do titular,
 como nos cartões de teste do Mercado Pago (`APRO` aprova, `OTHE` recusa,
 `CONT` fica pendente...). Qualquer outro nome aprova, como um cartão comum. O
 número precisa passar no Luhn e ter bandeira conhecida — o formulário se
@@ -23,7 +22,6 @@ validade, CVV e titular entram por `CardData` e não vão para o banco
 (decisão 5, minimização).
 """
 
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -32,11 +30,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Payment, PaymentMethod, PaymentStatus, ShoppingList
+from app.services.abacatepay import PaymentProviderError, PixProvider
 
-# Chave Pix que não pode existir: `.invalid` é reservado (RFC 2606).
-PIX_KEY = "simulado@decada.invalid"
-PIX_MERCHANT_NAME = "DECADA SIMULADO"
-PIX_MERCHANT_CITY = "BRASILIA"
+# Quanto tempo o Pix pode ser pago.
+PIX_EXPIRES_IN_SECONDS = 60 * 60
+# O Abacate Pay não aceita cobrança menor que esta.
+PIX_MINIMUM_AMOUNT = Decimal("1.00")
+# Status do Abacate Pay que encerram a tentativa, com o motivo que a pessoa vê.
+_PIX_FINAL_REFUSALS = {
+    "EXPIRED": "o Pix expirou sem pagamento",
+    "CANCELLED": "o Pix foi cancelado",
+    "FAILED": "o Pix não foi concluído",
+}
 
 
 class PaymentError(Exception):
@@ -162,47 +167,21 @@ def _validate_card(card: CardData, now: datetime) -> tuple[str, str]:
     return brand, number
 
 
-def _emv(field_id: str, value: str) -> str:
-    return f"{field_id}{len(value):02d}{value}"
+def _ensure_not_paid(
+    session: Session, shopping_list: ShoppingList, ignoring: Payment | None = None
+) -> None:
+    """`ListAlreadyPaidError` se outra tentativa já pagou a lista.
 
-
-def crc16_ccitt(payload: str) -> str:
-    """CRC16-CCITT (0x1021, início 0xFFFF), o que o BR Code exige no campo 63."""
-    crc = 0xFFFF
-    for byte in payload.encode("utf-8"):
-        crc ^= byte << 8
-        for _ in range(8):
-            crc = ((crc << 1) ^ 0x1021) if crc & 0x8000 else crc << 1
-            crc &= 0xFFFF
-    return f"{crc:04X}"
-
-
-def build_pix_code(amount: Decimal, txid: str) -> str:
-    """Copia-e-cola no formato do BR Code, apontando para a chave que não existe."""
-    conta = _emv("00", "br.gov.bcb.pix") + _emv("01", PIX_KEY)
-    payload = (
-        _emv("00", "01")
-        + _emv("26", conta)
-        + _emv("52", "0000")
-        + _emv("53", "986")
-        + _emv("54", f"{amount:.2f}")
-        + _emv("58", "BR")
-        + _emv("59", PIX_MERCHANT_NAME)
-        + _emv("60", PIX_MERCHANT_CITY)
-        + _emv("62", _emv("05", txid))
-        + "6304"
+    `ignoring` é a tentativa sendo confirmada: o webhook pode tê-la aprovado
+    entre a leitura e a confirmação, e isso não é pagar duas vezes.
+    """
+    query = select(Payment.id).where(
+        Payment.shopping_list_id == shopping_list.id,
+        Payment.status == PaymentStatus.APROVADO,
     )
-    return payload + crc16_ccitt(payload)
-
-
-def _ensure_not_paid(session: Session, shopping_list: ShoppingList) -> None:
-    aprovado = session.scalars(
-        select(Payment.id).where(
-            Payment.shopping_list_id == shopping_list.id,
-            Payment.status == PaymentStatus.APROVADO,
-        )
-    ).first()
-    if aprovado is not None:
+    if ignoring is not None:
+        query = query.where(Payment.id != ignoring.id)
+    if session.scalars(query).first() is not None:
         raise ListAlreadyPaidError("esta lista já foi paga")
 
 
@@ -212,12 +191,14 @@ def create_payment(
     method: PaymentMethod,
     card: CardData | None = None,
     now: datetime | None = None,
+    pix_provider: PixProvider | None = None,
 ) -> Payment:
     """Registra uma tentativa de pagamento da lista e devolve o resultado.
 
-    O valor é o total estimado da lista, copiado. Pix sai pendente; cartão sai
-    com a resposta do titular de teste. Recusado também é gravado: é o
-    histórico de tentativas que a tela mostra.
+    O valor é o total estimado da lista, copiado. Pix sai pendente, com a
+    cobrança criada em `pix_provider`; cartão sai com a resposta do titular de
+    teste. Recusado também é gravado: é o histórico de tentativas que a tela
+    mostra.
     """
     now = now or datetime.now(timezone.utc)
     _ensure_not_paid(session, shopping_list)
@@ -229,11 +210,17 @@ def create_payment(
     # O Payment só nasce depois da validação: ligado à lista, ele entraria na
     # sessão pela relação mesmo com o cartão recusado pelo formulário.
     if method == PaymentMethod.PIX:
-        txid = "SIMULADO" + uuid.uuid4().hex[:17].upper()
+        if pix_provider is None:
+            raise PaymentProviderError("o pagamento por Pix não está configurado")
+        if amount < PIX_MINIMUM_AMOUNT:
+            raise NothingToPayError("o Pix aceita valores a partir de R$ 1,00")
+        charge = pix_provider.create_pix(amount, PIX_EXPIRES_IN_SECONDS)
         payment = Payment(
             method=method,
             amount=amount,
-            pix_code=build_pix_code(amount, txid),
+            pix_code=charge.br_code,
+            external_id=charge.external_id,
+            expires_at=charge.expires_at,
             status=PaymentStatus.PENDENTE,
             status_detail="aguardando pagamento",
         )
@@ -261,15 +248,85 @@ def create_payment(
 def settle_payment(session: Session, payment: Payment, now: datetime | None = None) -> Payment:
     """Confirma um pagamento pendente — o Pix recebido, o cartão que saiu da análise.
 
-    Faz o papel do webhook do PSP. Se a lista foi paga por outra tentativa
-    nesse meio-tempo, recusa: pagar duas vezes é o erro que mais importa evitar.
+    Se a lista foi paga por outra tentativa nesse meio-tempo, recusa: pagar duas
+    vezes é o erro que mais importa evitar.
     """
     if payment.status != PaymentStatus.PENDENTE:
         raise PaymentNotPendingError("este pagamento não está mais pendente")
-    _ensure_not_paid(session, payment.shopping_list)
+    _ensure_not_paid(session, payment.shopping_list, ignoring=payment)
 
     payment.status = PaymentStatus.APROVADO
     payment.status_detail = "pagamento aprovado"
     payment.paid_at = now or datetime.now(timezone.utc)
     session.flush()
     return payment
+
+
+def apply_pix_status(
+    session: Session, payment: Payment, provider_status: str, now: datetime | None = None
+) -> Payment:
+    """Leva ao pagamento o status que o Abacate Pay informou.
+
+    Pode ser chamada de novo com o mesmo status: só pagamento pendente muda, o
+    que torna inofensivo o aviso repetido. Se outra tentativa já pagou a lista, o
+    Pix fica como está em vez de virar um segundo pagamento aprovado.
+    """
+    if payment.status != PaymentStatus.PENDENTE:
+        return payment
+
+    if provider_status == "PAID":
+        try:
+            settle_payment(session, payment, now)
+        except ListAlreadyPaidError:
+            return payment
+    elif provider_status in _PIX_FINAL_REFUSALS:
+        payment.status = PaymentStatus.RECUSADO
+        payment.status_detail = _PIX_FINAL_REFUSALS[provider_status]
+        session.flush()
+    return payment
+
+
+def sync_pix_payment(
+    session: Session,
+    payment: Payment,
+    pix_provider: PixProvider | None,
+    now: datetime | None = None,
+) -> Payment:
+    """Atualiza o Pix pendente com o status do provedor, se houver resposta.
+
+    Cobre o aviso que não chega: na máquina de desenvolvimento, que o Abacate Pay
+    não alcança, e no servidor publicado enquanto ele acorda. Sem resposta, vale o
+    que está gravado — quem pergunta é a tela, que pergunta de novo em seguida.
+    """
+    if payment.status != PaymentStatus.PENDENTE or not payment.external_id or not pix_provider:
+        return payment
+    try:
+        provider_status = pix_provider.check_pix(payment.external_id)
+    except PaymentProviderError:
+        return payment
+    return apply_pix_status(session, payment, provider_status, now)
+
+
+def simulate_pix_payment(
+    session: Session,
+    payment: Payment,
+    pix_provider: PixProvider | None,
+    now: datetime | None = None,
+) -> Payment:
+    """Pede ao Abacate Pay, em modo de teste, que dê o Pix por pago.
+
+    Antes confere o que o provedor recusaria: Pix expirado não é mais pago, e a
+    lista paga no cartão não recebe uma segunda confirmação.
+    """
+    if payment.status != PaymentStatus.PENDENTE:
+        raise PaymentNotPendingError("este pagamento não está mais pendente")
+    _ensure_not_paid(session, payment.shopping_list, ignoring=payment)
+    if pix_provider is None:
+        raise PaymentProviderError("o pagamento por Pix não está configurado")
+
+    now = now or datetime.now(timezone.utc)
+    if payment.expires_at is not None and payment.expires_at <= now:
+        return apply_pix_status(session, payment, "EXPIRED", now)
+
+    provider_status = pix_provider.simulate_pix(payment.external_id)
+    return apply_pix_status(session, payment, provider_status, now)

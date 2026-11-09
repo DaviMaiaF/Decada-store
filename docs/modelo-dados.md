@@ -27,7 +27,7 @@ erDiagram
     pantry_items }o--o| products : "produto confirmado"
 
     shopping_lists ||--o{ shopping_list_items : "itens a comprar"
-    shopping_lists ||--o{ payments : "tentativas de pagamento (simulado)"
+    shopping_lists ||--o{ payments : "tentativas de pagamento (de teste)"
     shopping_list_items }o--|| plan_items : "atende a"
     shopping_list_items }o--|| products : "produto escolhido"
 
@@ -108,12 +108,12 @@ descobrir quem usa o app (decisão 10) —, e a pessoa pode criar a conta depois
 são curtos de propósito: o plano vira PDF, e é o horário que faz o import reconhecer a
 linha como cabeçalho de refeição. Ver `app/schemas/prescription.py`.
 
-**`payments` é simulado, e o banco garante o que importa nele.** Uma lista aceita várias
+**`payments` é de teste, e o banco garante o que importa nele.** Uma lista aceita várias
 tentativas — o cartão recusado e o Pix que veio depois —, mas um índice único parcial
 (`uq_payments_aprovado_por_lista`, `WHERE status = 'aprovado'`) impede dois pagamentos
 aprovados na mesma lista, sem depender de a rota lembrar de checar. *Check constraints*
-mantêm o valor positivo, dado de cartão só em pagamento com cartão e código Pix só em
-Pix. `amount` é **cópia** do total estimado da lista no momento do pagamento, pela mesma
+mantêm o valor positivo, dado de cartão só em pagamento com cartão, e código Pix e
+`external_id` (a cobrança no Abacate Pay, única) só em Pix. `amount` é **cópia** do total estimado da lista no momento do pagamento, pela mesma
 razão do preço congelado. Do cartão só ficam `card_brand` e `card_last_four` — ver
 [`lgpd.md`](lgpd.md#minimização).
 
@@ -143,3 +143,4 @@ cd backend
 | `1191bed32360` | Plano montado pela nutricionista: `prescriptions`, refeições, itens e `meal_plans.prescribed_meals` |
 | `54ea5109aa75` | `payments`: pagamento simulado da lista, com um aprovado por lista no máximo |
 | `82e821fa2951` | `meal_plans.pantry_reviewed_at`: quando a pessoa concluiu a etapa Despensa do plano |
+| `c4a7e19b52d3` | `payments`: `external_id` e `expires_at` da cobrança Pix no Abacate Pay, em modo de teste |

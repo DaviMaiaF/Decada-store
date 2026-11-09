@@ -141,14 +141,23 @@ calculada na leitura, cadastrar, editar ou remover item da despensa invalida
 
 ### Pagamento simulado
 
-Nada é cobrado: o backend imita o Mercado Pago (ver
+Nada é cobrado: o Pix passa pelo Abacate Pay em modo de teste e o cartão é simulado (ver
 [`telas.md`](design/telas.md#3-mercado)). Toda resposta traz `simulated: true`.
 
 | Método | Rota | Função |
 |---|---|---|
 | POST | `/shopping-lists/{id}/payments` | `payShoppingList` — Pix, ou cartão com os dados do formulário |
 | GET | `/shopping-lists/{id}/payments` | `readPayments` — é por aqui que o checkout sabe que a lista já foi paga |
+| GET | `/shopping-lists/{id}/payments/{payment}` | `readPayment` — o Pix pendente é consultado a cada 5 segundos; o servidor confere no provedor |
 | POST | `/shopping-lists/{id}/payments/{payment}/confirmation` | `confirmPayment` — simula o Pix recebido ou o cartão que saiu da análise |
+
+O Pix responde `503` quando o provedor está fora do ar ou sem chave. Falha na consulta
+periódica não aparece na tela: a próxima tenta de novo.
+
+`POST /webhooks/abacatepay` é chamada pelo Abacate Pay, não pelo app. Sem token de usuário:
+valida o `webhookSecret` da URL e a assinatura `X-Webhook-Signature`, ignora aviso fora do
+modo de teste e responde `200` ao aviso repetido. O provedor não alcança endereço local,
+então na máquina de desenvolvimento o status vem só da consulta.
 
 Cartão **recusado** volta `201` com `status: "recusado"`: é uma tentativa, não um
 erro, e o `usePaymentViewModel` mostra o `status_detail` e deixa tentar de novo.
