@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.seeds.runner import SeedNotAllowedError
 from app.services.abacatepay import PaymentProviderError
+from app.services.admin import AccountNotFoundError, ProtectedAccountError
 from app.services.pantry_photo import (
     ImageTooLargeError,
     InvalidImageError,
@@ -60,6 +61,10 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     # O Abacate Pay fora do ar ou sem chave: como a foto da despensa, 503 diz à
     # tela que vale tentar de novo.
     (PaymentProviderError, status.HTTP_503_SERVICE_UNAVAILABLE),
+    # Painel do super usuário: conta que não existe, e conta de super usuário, que
+    # o painel não suspende nem exclui.
+    (AccountNotFoundError, status.HTTP_404_NOT_FOUND),
+    (ProtectedAccountError, status.HTTP_409_CONFLICT),
     # Seed disparado fora de desenvolvimento: nunca deveria chegar por HTTP.
     (SeedNotAllowedError, status.HTTP_403_FORBIDDEN),
 )
