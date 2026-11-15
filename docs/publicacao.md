@@ -123,6 +123,12 @@ O APK e o Expo Go baixam o update ao abrir e aplicam na abertura seguinte. O
 `runtimeVersion` segue a `version` do `app.json`: um update só chega ao APK da mesma
 versão, o que impede código novo de rodar sobre módulos nativos antigos.
 
+**O link de download do APK vence em 14 dias** (plano gratuito; o `expirationDate` aparece
+em `eas build:view <id> --json`). Vencido, o link responde 404 e só um build novo gera
+outro. O app já instalado continua funcionando e recebendo updates. Por isso, ao terminar
+um build, **baixe o `.apk` e guarde o arquivo**; antes de uma apresentação, confira se o
+link do [`abrir-no-celular.md`](abrir-no-celular.md) ainda abre.
+
 O plano gratuito da Expo tem ~15 builds Android por mês e 1.000 usuários ativos por
 mês na EAS Update, sem cobrança de excedente (confirme em expo.dev/pricing).
 
