@@ -22,8 +22,9 @@ ligado** e sem estar na mesma rede. O app fala com a API publicada em
 ## A. Android: instalar o APK
 
 1. No celular, abra o link do build mais recente:
-   **https://expo.dev/accounts/davi-maias-team/projects/decada/builds/3504caad-2841-43cd-9156-1d3250a826af**
-   (se o link não abrir, peça ao Davi o do build atual).
+   **https://expo.dev/accounts/davi-maias-team/projects/decada/builds/4b4741af-33eb-4784-b2d1-63795e82252a**
+   (vale até 29/11/2026; o link de cada build vence em 14 dias. Se não abrir, peça ao
+   Davi o arquivo `.apk` ou o link do build atual).
 2. Toque em **Install** e baixe o arquivo `.apk`.
 3. Abra o arquivo baixado. O Android vai avisar que o app vem de "fonte desconhecida":
    toque em **Configurações**, permita a instalação **para o navegador** que baixou o
