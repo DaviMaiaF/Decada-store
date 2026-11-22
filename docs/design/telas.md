@@ -298,7 +298,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Quantidade do que se tem em casa | ✅ | Segundo passo do cadastro, já preenchido com a embalagem do produto; continua podendo ficar em branco |
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
 | Voltar e "Concluí a despensa" | ✅ | Não estava no protótipo. "Voltar" devolve à aba de onde a pessoa veio, ou ao início; "Concluí a despensa" cumpre a etapa da trilha (`POST /meal-plans/{id}/pantry-review`) e leva ao Mercado. Ver "A trilha da jornada" |
-| Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
+| Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria, até cinco fotos por envio; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
 | "Do seu plano": você tem isto em casa? | ✅ | Não estava no protótipo. Lista os produtos já confirmados do plano que ainda não estão na despensa; "Tenho" grava o item vinculado ao produto e sem quantidade, "Não tenho" só o tira da pergunta. Ver abaixo |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |
@@ -382,9 +382,13 @@ para imagem, nem nada a apagar depois. O reconhecimento é feito por serviço de
 
 **Como ficou.** O botão "Encher por foto" fica no cartão da despensa, logo abaixo do
 campo de digitar. Ele abre um painel com o aceite e dois botões, **Tirar foto** e
-**Escolher da galeria**, desativados até a pessoa aceitar. A foto vai para
-`POST /pantry/photo`, que responde com uma lista de propostas — `name`, `identified` e
-até cinco `candidates` — e **não grava nada**.
+**Escolher da galeria**, desativados até a pessoa aceitar. As fotos não saem na hora:
+entram numa fila com miniatura, **até cinco** (a galeria escolhe várias de uma vez; a
+câmera, uma por toque), e cada uma pode ser tirada antes de **Enviar N fotos**. Cada foto
+vai para `POST /pantry/photo`, que responde com uma lista de propostas — `name`,
+`identified` e até cinco `candidates` — e **não grava nada**. O app junta as propostas:
+o alimento que aparece em mais de uma foto vira uma linha só, e a foto que falhar não
+derruba as outras — a revisão avisa quantas não voltaram.
 
 A revisão mostra cada alimento com o produto mais parecido já escolhido. A pessoa
 **confirma**, **troca o produto** entre os candidatos ou **descarta**. O que não chega
