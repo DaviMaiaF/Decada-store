@@ -5,6 +5,11 @@
  * pendente, com o produto do catálogo que parece ser ele, e só vai para a
  * despensa quando a pessoa confirma. A foto sai do aparelho só depois do aceite
  * e não é guardada em lugar nenhum.
+ *
+ * Uma geladeira não cabe numa foto só. A pessoa junta até `MAXIMO_DE_FOTOS`
+ * (câmera, uma por vez, ou várias da galeria) e envia tudo de uma vez. Cada foto
+ * vai para `POST /pantry/photo` como antes, e as propostas se juntam aqui: o
+ * alimento que aparece em duas fotos vira uma revisão só.
  */
 
 import { useState } from 'react';
@@ -42,6 +47,45 @@ const OPCOES_DA_FOTO: ImagePicker.ImagePickerOptions = {
   exif: false,
 };
 
+// Mais que isso é muita espera pela rede do celular e muita linha para revisar.
+export const MAXIMO_DE_FOTOS = 5;
+
+export interface Foto {
+  uri: string;
+  mimeType?: string | null;
+}
+
+/** Nome sem caixa, acento nem espaço sobrando: "Feijão " e "feijao" são o mesmo alimento. */
+function chaveDoNome(nome: string): string {
+  return nome
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Junta as propostas de várias fotos, na ordem em que vieram, sem repetir
+ * alimento. Se o mesmo alimento veio identificado numa foto e não na outra,
+ * fica a versão identificada — ela já traz o produto.
+ */
+export function juntarPropostas(porFoto: PhotoProposal[][]): PhotoProposal[] {
+  const juntas: PhotoProposal[] = [];
+  const posicao = new Map<string, number>();
+
+  for (const proposta of porFoto.flat()) {
+    const chave = chaveDoNome(proposta.name);
+    const ja = posicao.get(chave);
+    if (ja === undefined) {
+      posicao.set(chave, juntas.length);
+      juntas.push(proposta);
+    } else if (!juntas[ja].identified && proposta.identified) {
+      juntas[ja] = proposta;
+    }
+  }
+  return juntas;
+}
+
 export function revisoesDe(propostas: PhotoProposal[]): Revisao[] {
   return propostas.map((proposta, id) => ({
     id,
@@ -65,11 +109,31 @@ export function usePantryPhotoViewModel(
   const [aceitou, setAceitou] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [revisoes, setRevisoes] = useState<Revisao[] | null>(null);
+  /** As fotos juntadas e ainda não enviadas. */
+  const [fotos, setFotos] = useState<Foto[]>([]);
 
+  /**
+   * Cada foto vai num pedido próprio, todos ao mesmo tempo. Uma foto que falha
+   * não derruba as outras: a revisão mostra o que deu certo e avisa quantas
+   * falharam. Só quando todas falham é erro.
+   */
   const reconhecer = useMutation({
-    mutationFn: (foto: ImagePicker.ImagePickerAsset) =>
-      recognizePantryPhoto({ uri: foto.uri, mimeType: foto.mimeType }, aceitou),
-    onSuccess: (resultado) => setRevisoes(revisoesDe(resultado.items)),
+    mutationFn: async (enviadas: Foto[]) => {
+      const resultados = await Promise.allSettled(
+        enviadas.map((foto) =>
+          recognizePantryPhoto({ uri: foto.uri, mimeType: foto.mimeType }, aceitou),
+        ),
+      );
+      const certas = resultados.flatMap((r) => (r.status === 'fulfilled' ? [r.value.items] : []));
+      const falhas = resultados.filter((r) => r.status === 'rejected');
+
+      if (certas.length === 0) throw (falhas[0] as PromiseRejectedResult).reason;
+      return { propostas: juntarPropostas(certas), enviadas: enviadas.length, falhas: falhas.length };
+    },
+    onSuccess: ({ propostas }) => {
+      setRevisoes(revisoesDe(propostas));
+      setFotos([]);
+    },
   });
 
   /**
@@ -112,10 +176,13 @@ export function usePantryPhotoViewModel(
     );
   }
 
+  const vagas = MAXIMO_DE_FOTOS - fotos.length;
+
+  /** Junta a foto à fila. Não envia: o envio é o `enviar`, depois de juntar tudo. */
   async function escolherFoto(origem: 'camera' | 'galeria') {
     setAviso(null);
-    setRevisoes(null);
     reconhecer.reset();
+    if (vagas <= 0) return;
 
     if (origem === 'camera') {
       const permissao = await ImagePicker.requestCameraPermissionsAsync();
@@ -128,10 +195,24 @@ export function usePantryPhotoViewModel(
     const resultado =
       origem === 'camera'
         ? await ImagePicker.launchCameraAsync(OPCOES_DA_FOTO)
-        : await ImagePicker.launchImageLibraryAsync(OPCOES_DA_FOTO);
+        : await ImagePicker.launchImageLibraryAsync({
+            ...OPCOES_DA_FOTO,
+            allowsMultipleSelection: true,
+            selectionLimit: vagas,
+          });
 
-    if (resultado.canceled || resultado.assets.length === 0) return;
-    reconhecer.mutate(resultado.assets[0]);
+    if (resultado.canceled || !resultado.assets?.length) return;
+    // A galeria do Android nem sempre respeita o limite: o corte é aqui.
+    const novas = resultado.assets
+      .slice(0, vagas)
+      .map(({ uri, mimeType }) => ({ uri, mimeType }));
+    setFotos((atuais) => [...atuais, ...novas].slice(0, MAXIMO_DE_FOTOS));
+  }
+
+  function limparFotos() {
+    setRevisoes(null);
+    setFotos([]);
+    reconhecer.reset();
   }
 
   const visiveis = (revisoes ?? []).filter((revisao) => revisao.situacao !== 'descartado');
@@ -142,11 +223,16 @@ export function usePantryPhotoViewModel(
     aviso,
     /** Nulo antes da foto ser reconhecida. */
     revisoes,
+    fotos,
+    podeJuntarMais: vagas > 0,
+    /** Quantas fotos não voltaram do reconhecimento, quando outras voltaram. */
+    fotosQueFalharam: reconhecer.data?.falhas ?? 0,
+    fotosEnviadas: reconhecer.data?.enviadas ?? 0,
     identificados: visiveis.filter((revisao) => revisao.proposta.identified),
     naoIdentificados: visiveis.filter((revisao) => !revisao.proposta.identified),
     reconhecendo: reconhecer.isPending,
     erroDoReconhecimento: reconhecer.isError
-      ? mensagem(reconhecer.error, 'não foi possível reconhecer a foto')
+      ? mensagem(reconhecer.error, 'não foi possível reconhecer as fotos')
       : null,
     erroDaCorrecao: renomeacao.isError
       ? mensagem(renomeacao.error, 'não foi possível buscar o nome corrigido')
@@ -156,20 +242,23 @@ export function usePantryPhotoViewModel(
     abrir: () => setAberto(true),
     alternarAceite: () => setAceitou((estava) => !estava),
     escolherFoto,
+    removerFoto: (indice: number) =>
+      setFotos((atuais) => atuais.filter((_, i) => i !== indice)),
+    enviar: () => {
+      if (!aceitou || fotos.length === 0) return;
+      setAviso(null);
+      reconhecer.mutate(fotos);
+    },
     confirmar: (revisao: Revisao) => confirmacao.mutate(revisao),
     escolher: (id: number, produto: Product | null) => mudar(id, { escolhido: produto }),
     descartar: (id: number) => mudar(id, { situacao: 'descartado' }),
     /** Falha rejeita a promessa: a linha mantém o campo aberto para tentar de novo. */
     renomear: (id: number, nome: string) => renomeacao.mutateAsync({ id, nome }),
-    outraFoto: () => {
-      setRevisoes(null);
-      reconhecer.reset();
-    },
+    outrasFotos: limparFotos,
     fechar: () => {
       setAberto(false);
-      setRevisoes(null);
       setAviso(null);
-      reconhecer.reset();
+      limparFotos();
       confirmacao.reset();
     },
   };

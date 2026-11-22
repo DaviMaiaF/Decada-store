@@ -14,6 +14,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as api from '../../services/api';
 import type { PhotoProposal, Product } from '../../types/api';
 import {
+  MAXIMO_DE_FOTOS,
+  juntarPropostas,
   revisoesDe,
   usePantryPhotoViewModel,
   usePhotoRowViewModel,
@@ -77,11 +79,19 @@ async function montar() {
   return renderHook(() => usePantryPhotoViewModel(aoAdicionar), { wrapper: Provedor });
 }
 
-/** Aceita o termo, escolhe a foto da galeria e espera a revisão. */
+/** Aceita o termo, escolhe a foto da galeria, envia e espera a revisão. */
 async function reconhecerFoto(result: { current: ReturnType<typeof usePantryPhotoViewModel> }) {
   await act(async () => result.current.alternarAceite());
   await act(() => result.current.escolherFoto('galeria'));
+  await act(async () => result.current.enviar());
   await waitFor(() => expect(result.current.revisoes).not.toBeNull());
+}
+
+function fotos(...nomes: string[]) {
+  return {
+    canceled: false,
+    assets: nomes.map((nome) => ({ uri: `file:///${nome}.jpg`, mimeType: 'image/jpeg' })),
+  };
 }
 
 beforeEach(() => {
@@ -121,6 +131,109 @@ it('reconhece com o aceite e separa os dois grupos, sem gravar nada', async () =
   expect(result.current.identificados.map((r) => r.proposta.name)).toEqual(['banana']);
   expect(result.current.naoIdentificados.map((r) => r.proposta.name)).toEqual(['kiwi']);
   expect(adicionarApi).not.toHaveBeenCalled();
+});
+
+it('juntarPropostas: alimento repetido entre fotos vira um só, e o identificado ganha', () => {
+  const kiwiIdentificado: PhotoProposal = { ...KIWI, name: 'Kiwi ', identified: true };
+  const feijao: PhotoProposal = { name: 'feijão', identified: true, candidates: [] };
+  const feijaoSemAcento: PhotoProposal = { name: 'Feijao', identified: true, candidates: [] };
+
+  const juntas = juntarPropostas([[BANANA, KIWI, feijao], [kiwiIdentificado, BANANA, feijaoSemAcento]]);
+
+  expect(juntas.map((p) => p.name)).toEqual(['banana', 'Kiwi ', 'feijão']);
+  expect(juntas[1].identified).toBe(true);
+});
+
+it('escolher foto só junta na fila: nada sai antes de enviar', async () => {
+  abrirGaleria.mockResolvedValue(fotos('a', 'b'));
+  const { result } = await montar();
+  await act(async () => result.current.alternarAceite());
+
+  await act(() => result.current.escolherFoto('galeria'));
+  await act(() => result.current.escolherFoto('camera'));
+
+  expect(result.current.fotos.map((f) => f.uri)).toEqual([
+    'file:///a.jpg',
+    'file:///b.jpg',
+    'file:///foto.jpg',
+  ]);
+  expect(reconhecerApi).not.toHaveBeenCalled();
+  expect(abrirGaleria).toHaveBeenCalledWith(
+    expect.objectContaining({ allowsMultipleSelection: true, selectionLimit: MAXIMO_DE_FOTOS }),
+  );
+});
+
+it('não junta mais que o máximo, mesmo se a galeria devolver mais', async () => {
+  abrirGaleria.mockResolvedValue(fotos('1', '2', '3', '4', '5', '6', '7'));
+  const { result } = await montar();
+  await act(async () => result.current.alternarAceite());
+
+  await act(() => result.current.escolherFoto('galeria'));
+
+  expect(result.current.fotos).toHaveLength(MAXIMO_DE_FOTOS);
+  expect(result.current.podeJuntarMais).toBe(false);
+  await act(() => result.current.escolherFoto('camera'));
+  expect(abrirCamera).not.toHaveBeenCalled();
+});
+
+it('tirar uma foto da fila', async () => {
+  abrirGaleria.mockResolvedValue(fotos('a', 'b', 'c'));
+  const { result } = await montar();
+  await act(async () => result.current.alternarAceite());
+  await act(() => result.current.escolherFoto('galeria'));
+
+  await act(async () => result.current.removerFoto(1));
+
+  expect(result.current.fotos.map((f) => f.uri)).toEqual(['file:///a.jpg', 'file:///c.jpg']);
+});
+
+it('envia cada foto e junta as propostas sem repetir', async () => {
+  abrirGaleria.mockResolvedValue(fotos('geladeira', 'armario'));
+  reconhecerApi
+    .mockResolvedValueOnce({ items: [BANANA] })
+    .mockResolvedValueOnce({ items: [BANANA, KIWI] });
+  const { result } = await montar();
+
+  await reconhecerFoto(result);
+
+  expect(reconhecerApi).toHaveBeenCalledTimes(2);
+  expect(reconhecerApi).toHaveBeenCalledWith(
+    { uri: 'file:///armario.jpg', mimeType: 'image/jpeg' },
+    true,
+  );
+  expect(result.current.identificados.map((r) => r.proposta.name)).toEqual(['banana']);
+  expect(result.current.naoIdentificados.map((r) => r.proposta.name)).toEqual(['kiwi']);
+  expect(result.current.fotos).toEqual([]);
+  expect(result.current.fotosQueFalharam).toBe(0);
+});
+
+it('uma foto que falha não derruba as outras', async () => {
+  abrirGaleria.mockResolvedValue(fotos('a', 'b'));
+  reconhecerApi
+    .mockRejectedValueOnce(new api.ApiError(503, 'fora do ar'))
+    .mockResolvedValueOnce({ items: [BANANA] });
+  const { result } = await montar();
+
+  await reconhecerFoto(result);
+
+  expect(result.current.identificados.map((r) => r.proposta.name)).toEqual(['banana']);
+  expect(result.current.fotosQueFalharam).toBe(1);
+  expect(result.current.fotosEnviadas).toBe(2);
+  expect(result.current.erroDoReconhecimento).toBeNull();
+});
+
+it('se todas falham, é erro e as fotos ficam na fila para tentar de novo', async () => {
+  abrirGaleria.mockResolvedValue(fotos('a', 'b'));
+  reconhecerApi.mockRejectedValue(new api.ApiError(503, 'fora do ar'));
+  const { result } = await montar();
+  await act(async () => result.current.alternarAceite());
+  await act(() => result.current.escolherFoto('galeria'));
+
+  await act(async () => result.current.enviar());
+
+  await waitFor(() => expect(result.current.erroDoReconhecimento).toBe('fora do ar'));
+  expect(result.current.revisoes).toBeNull();
+  expect(result.current.fotos).toHaveLength(2);
 });
 
 it('câmera sem permissão avisa e não abre nada', async () => {

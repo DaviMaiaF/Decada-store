@@ -74,11 +74,12 @@ async function montar() {
   );
 }
 
-/** Abre o painel, aceita o termo e escolhe a foto da galeria. */
+/** Abre o painel, aceita o termo, escolhe a foto da galeria e envia. */
 async function enviarFoto() {
   await fireEvent.press(await screen.findByText('Encher por foto'));
   await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
   await fireEvent.press(screen.getByText('Escolher da galeria'));
+  await fireEvent.press(await screen.findByText('Enviar 1 foto'));
 }
 
 beforeEach(() => {
@@ -134,6 +135,62 @@ describe('despensa por foto', () => {
       { uri: 'file:///foto.jpg', mimeType: 'image/jpeg' },
       true,
     );
+  });
+
+  it('junta várias fotos, deixa tirar uma e envia as que ficaram', async () => {
+    abrirGaleria.mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: 'file:///geladeira.jpg', mimeType: 'image/jpeg' },
+        { uri: 'file:///armario.jpg', mimeType: 'image/jpeg' },
+      ],
+    });
+    reconhecer
+      .mockResolvedValueOnce({ items: [BANANA] })
+      .mockResolvedValueOnce({ items: [BANANA, KIWI] });
+    await montar();
+    await fireEvent.press(await screen.findByText('Encher por foto'));
+    await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
+
+    await fireEvent.press(screen.getByText('Escolher da galeria'));
+    await fireEvent.press(await screen.findByText('Tirar outra'));
+    expect(await screen.findByText('3 de 5 fotos')).toBeTruthy();
+    expect(reconhecer).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText('Tirar a foto 3'));
+    await fireEvent.press(screen.getByText('Enviar 2 fotos'));
+
+    // A banana veio nas duas fotos e aparece uma vez só.
+    expect(await screen.findByText('banana')).toBeTruthy();
+    expect(screen.getAllByText('banana')).toHaveLength(1);
+    expect(screen.getByText('kiwi')).toBeTruthy();
+    expect(reconhecer).toHaveBeenCalledTimes(2);
+    expect(reconhecer).not.toHaveBeenCalledWith(
+      { uri: 'file:///foto.jpg', mimeType: 'image/jpeg' },
+      true,
+    );
+  });
+
+  it('avisa quantas fotos falharam e mostra o resto', async () => {
+    abrirGaleria.mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: 'file:///a.jpg', mimeType: 'image/jpeg' },
+        { uri: 'file:///b.jpg', mimeType: 'image/jpeg' },
+      ],
+    });
+    reconhecer
+      .mockResolvedValueOnce({ items: [BANANA] })
+      .mockRejectedValueOnce(new api.ApiError(503, 'fora do ar'));
+    await montar();
+    await fireEvent.press(await screen.findByText('Encher por foto'));
+    await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
+    await fireEvent.press(screen.getByText('Escolher da galeria'));
+
+    await fireEvent.press(await screen.findByText('Enviar 2 fotos'));
+
+    expect(await screen.findByText(/1 de 2 fotos não foi reconhecida/)).toBeTruthy();
+    expect(screen.getByText('banana')).toBeTruthy();
   });
 
   it('nada entra na despensa sem confirmar', async () => {

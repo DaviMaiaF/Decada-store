@@ -7,6 +7,10 @@
  * confirma — podendo trocar o produto ou descartar o alimento. O que o
  * reconhecimento não ligou a nenhum produto fica à parte, como não identificado.
  *
+ * Cabe mais de uma foto por envio: a pessoa junta até cinco (a geladeira, o
+ * armário, a fruteira), vê as miniaturas, tira a que não quer e envia tudo. O que
+ * aparece em mais de uma foto vira uma linha só na revisão.
+ *
  * A foto sai do aparelho para um serviço de terceiros, então o aceite vem antes
  * do primeiro envio. Ela não é guardada em lugar nenhum: nem aqui, nem no
  * servidor.
@@ -21,12 +25,13 @@
  * pessoa toca no item depois e diz quanto tem.
  */
 
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Body, Button, Checkbox, ErrorNotice } from './index';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { PantryItem, Product } from '../types/api';
 import {
+  MAXIMO_DE_FOTOS,
   type Revisao,
   usePantryPhotoViewModel,
   usePhotoRowViewModel,
@@ -39,7 +44,8 @@ export function DespensaPorFoto({
   onAdicionado: (item: PantryItem) => void;
 }) {
   const vm = usePantryPhotoViewModel(onAdicionado);
-  const { revisoes } = vm;
+  const { revisoes, fotos } = vm;
+  const juntou = fotos.length > 0;
 
   /** As linhas dos dois grupos recebem as mesmas ações. */
   function linha(revisao: Revisao) {
@@ -87,27 +93,67 @@ export function DespensaPorFoto({
             </Text>
           </View>
 
+          {juntou ? (
+            <>
+              <Text style={styles.detalhe}>
+                {fotos.length} de {MAXIMO_DE_FOTOS} fotos
+              </Text>
+              <View style={styles.miniaturas}>
+                {fotos.map((foto, indice) => (
+                  <View key={`${foto.uri}-${indice}`} style={styles.miniatura}>
+                    <Image source={{ uri: foto.uri }} style={styles.miniaturaImagem} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Tirar a foto ${indice + 1}`}
+                      disabled={vm.reconhecendo}
+                      onPress={() => vm.removerFoto(indice)}
+                      hitSlop={8}
+                      style={styles.remover}
+                    >
+                      <Text style={styles.removerTexto}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
+
           <View style={styles.acoes}>
             <Button
-              label="Tirar foto"
+              label={juntou ? 'Tirar outra' : 'Tirar foto'}
+              variant={juntou ? 'secondary' : 'primary'}
               onPress={() => vm.escolherFoto('camera')}
-              disabled={!vm.aceitou}
-              loading={vm.reconhecendo}
+              disabled={!vm.aceitou || !vm.podeJuntarMais || vm.reconhecendo}
             />
             <Button
               label="Escolher da galeria"
               variant="secondary"
               onPress={() => vm.escolherFoto('galeria')}
-              disabled={!vm.aceitou || vm.reconhecendo}
+              disabled={!vm.aceitou || !vm.podeJuntarMais || vm.reconhecendo}
             />
           </View>
 
-          {vm.reconhecendo ? <Body muted>Olhando a foto…</Body> : null}
+          {juntou ? (
+            <Button
+              label={fotos.length === 1 ? 'Enviar 1 foto' : `Enviar ${fotos.length} fotos`}
+              onPress={vm.enviar}
+              disabled={!vm.aceitou}
+              loading={vm.reconhecendo}
+            />
+          ) : null}
+
+          {vm.reconhecendo ? (
+            <Body muted>{fotos.length === 1 ? 'Olhando a foto…' : 'Olhando as fotos…'}</Body>
+          ) : null}
         </>
       ) : (
         <>
           {revisoes.length === 0 ? (
-            <Body muted>Não reconheci nenhum alimento nesta foto. Tente outra, mais de perto.</Body>
+            <Body muted>
+              {vm.fotosEnviadas > 1
+                ? 'Não reconheci nenhum alimento nestas fotos. Tente outras, mais de perto.'
+                : 'Não reconheci nenhum alimento nesta foto. Tente outra, mais de perto.'}
+            </Body>
           ) : (
             <Body muted>
               Confirme o que você tem — nada entra na despensa sem o seu toque. Os itens entram
@@ -115,6 +161,16 @@ export function DespensaPorFoto({
               no item depois e dizer quanto tem.
             </Body>
           )}
+
+          {vm.fotosQueFalharam > 0 ? (
+            <ErrorNotice
+              message={
+                vm.fotosQueFalharam === 1
+                  ? `1 de ${vm.fotosEnviadas} fotos não foi reconhecida; o que veio das outras está aqui.`
+                  : `${vm.fotosQueFalharam} de ${vm.fotosEnviadas} fotos não foram reconhecidas; o que veio das outras está aqui.`
+              }
+            />
+          ) : null}
 
           {vm.identificados.map(linha)}
 
@@ -141,10 +197,10 @@ export function DespensaPorFoto({
         {revisoes !== null ? (
           <Pressable
             accessibilityRole="button"
-            onPress={vm.outraFoto}
+            onPress={vm.outrasFotos}
             style={styles.acaoSecundaria}
           >
-            <Text style={styles.acaoSecundariaTexto}>Outra foto</Text>
+            <Text style={styles.acaoSecundariaTexto}>Outras fotos</Text>
           </Pressable>
         ) : null}
         <Pressable accessibilityRole="button" onPress={vm.fechar} style={styles.acaoSecundaria}>
@@ -320,6 +376,27 @@ const styles = StyleSheet.create({
   subtitulo: { ...typography.labelLg, color: colors.onSurface, marginTop: spacing.xs },
   consentimento: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   consentimentoTexto: { ...typography.bodySm, color: colors.onSurfaceVariant, flex: 1 },
+  miniaturas: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  miniatura: { width: 64, height: 64 },
+  miniaturaImagem: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceContainerLowest,
+  },
+  // Pequeno no desenho; o hitSlop completa o alvo do toque.
+  remover: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.onSurface,
+  },
+  removerTexto: { color: colors.surface, fontSize: 16, lineHeight: 18, fontWeight: '700' },
   acoes: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' },
   linha: {
     backgroundColor: colors.surfaceContainerLowest,
