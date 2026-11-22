@@ -76,7 +76,7 @@ async function montar() {
 
 /** Abre o painel, aceita o termo e escolhe a foto da galeria. */
 async function enviarFoto() {
-  await fireEvent.press(await screen.findByText('📷 Encher por foto'));
+  await fireEvent.press(await screen.findByText('Encher por foto'));
   await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
   await fireEvent.press(screen.getByText('Escolher da galeria'));
 }
@@ -112,7 +112,7 @@ afterEach(() => {
 describe('despensa por foto', () => {
   it('não deixa enviar a foto sem o aceite', async () => {
     await montar();
-    await fireEvent.press(await screen.findByText('📷 Encher por foto'));
+    await fireEvent.press(await screen.findByText('Encher por foto'));
 
     await fireEvent.press(screen.getByText('Escolher da galeria'));
     await fireEvent.press(screen.getByText('Tirar foto'));
@@ -277,7 +277,7 @@ describe('despensa por foto', () => {
   it('sem permissão da câmera não abre nada e explica', async () => {
     permissaoDaCamera.mockResolvedValue({ granted: false });
     await montar();
-    await fireEvent.press(await screen.findByText('📷 Encher por foto'));
+    await fireEvent.press(await screen.findByText('Encher por foto'));
     await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
 
     await fireEvent.press(screen.getByText('Tirar foto'));
@@ -289,7 +289,7 @@ describe('despensa por foto', () => {
   it('cancelar a câmera não envia nada', async () => {
     abrirCamera.mockResolvedValue({ canceled: true, assets: null });
     await montar();
-    await fireEvent.press(await screen.findByText('📷 Encher por foto'));
+    await fireEvent.press(await screen.findByText('Encher por foto'));
     await fireEvent.press(screen.getByLabelText('Aceito enviar a foto para reconhecimento'));
 
     await fireEvent.press(screen.getByText('Tirar foto'));

@@ -57,7 +57,7 @@ export function DespensaPorFoto({
   }
 
   if (!vm.aberto) {
-    return <Button label="📷 Encher por foto" variant="secondary" onPress={vm.abrir} />;
+    return <Button label="Encher por foto" variant="secondary" onPress={vm.abrir} />;
   }
 
   return (
