@@ -11,6 +11,8 @@ import { Animated } from 'react-native';
 
 import PantryScreen, { ESPERA_DAS_RECEITAS } from '../PantryScreen';
 import * as api from '../../services/api';
+import * as notifications from '../../services/notifications';
+import * as session from '../../services/session';
 import { motion } from '../../theme/motion';
 import type { PantryItem, Product, Recipe, RecipeAvailability } from '../../types/api';
 
@@ -26,6 +28,17 @@ jest.mock('../../services/api', () => ({
   readShoppingList: jest.fn(),
   readMealPlan: jest.fn(),
   reviewPantry: jest.fn(),
+}));
+
+jest.mock('../../services/notifications', () => ({
+  notifyRecipesUpdated: jest.fn(),
+  requestNotificationPermission: jest.fn(),
+}));
+
+jest.mock('../../services/session', () => ({
+  ...jest.requireActual('../../services/session'),
+  readRecipeUpdatesPreference: jest.fn(),
+  saveRecipeUpdatesPreference: jest.fn(),
 }));
 
 // A revisão da foto tem os próprios testes; aqui importa só o que a tela faz
@@ -64,6 +77,10 @@ const acrescentarNaLista = api.addExtraItem as jest.Mock;
 const lerLista = api.readShoppingList as jest.Mock;
 const lerPlano = api.readMealPlan as jest.Mock;
 const revisarDespensa = api.reviewPantry as jest.Mock;
+const avisarReceitas = notifications.notifyRecipesUpdated as jest.Mock;
+const pedirPermissao = notifications.requestNotificationPermission as jest.Mock;
+const lerPreferenciaAviso = session.readRecipeUpdatesPreference as jest.Mock;
+const salvarPreferenciaAviso = session.saveRecipeUpdatesPreference as jest.Mock;
 
 function produto(nome: string, over: Partial<Product> = {}): Product {
   return {
@@ -152,6 +169,10 @@ beforeEach(() => {
     items: [],
   });
   lerReceitas.mockResolvedValue([]);
+  lerPreferenciaAviso.mockResolvedValue(false);
+  salvarPreferenciaAviso.mockResolvedValue(undefined);
+  pedirPermissao.mockResolvedValue(true);
+  avisarReceitas.mockResolvedValue(true);
   buscarProdutos.mockResolvedValue([
     { product: produto('Aveia em flocos'), score: '0.930' },
     { product: produto('Granola tradicional'), score: '0.640' },
@@ -772,6 +793,47 @@ describe('itens confirmados pela foto', () => {
     await new Promise((resolve) => setTimeout(resolve, ESPERA_DAS_RECEITAS + 200));
     expect(lerReceitas.mock.calls.length).toBe(leiturasAntes + 1);
     expect(screen.getByText('3 itens')).toBeTruthy();
+  });
+});
+
+describe('aviso de receitas atualizadas', () => {
+  it('a chave começa desligada e, ao ligar, pede permissão e salva', async () => {
+    await montar();
+    const chave = await screen.findByLabelText('Avisar sobre receitas');
+    await waitFor(() => expect(chave.props.disabled).toBeFalsy());
+    expect(chave.props.value).toBe(false);
+
+    await fireEvent(chave, 'valueChange', true);
+
+    await waitFor(() => expect(salvarPreferenciaAviso).toHaveBeenCalledWith(true));
+    expect(pedirPermissao).toHaveBeenCalledTimes(1);
+  });
+
+  it('com a chave ligada, avisa uma vez depois de recalcular as receitas da foto', async () => {
+    lerPreferenciaAviso.mockResolvedValue(true);
+    await montar();
+    await screen.findByText(/Sua despensa está vazia/);
+
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+
+    await waitFor(() => expect(avisarReceitas).toHaveBeenCalledTimes(1), {
+      timeout: ESPERA_DAS_RECEITAS + 2000,
+    });
+  });
+
+  it('com a chave desligada, a foto não avisa', async () => {
+    await montar();
+    await screen.findByText(/Sua despensa está vazia/);
+    const leiturasAntes = lerReceitas.mock.calls.length;
+
+    await fireEvent.press(screen.getByText('confirmar item da foto'));
+
+    await waitFor(() => expect(lerReceitas.mock.calls.length).toBe(leiturasAntes + 1), {
+      timeout: ESPERA_DAS_RECEITAS + 2000,
+    });
+    await waitFor(() => expect(lerPreferenciaAviso.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(avisarReceitas).not.toHaveBeenCalled();
   });
 });
 

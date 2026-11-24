@@ -46,7 +46,11 @@ function mensagem(erro: unknown, padrao: string): string {
   return erro instanceof ApiError ? erro.message : padrao;
 }
 
-export function usePantryViewModel(listId: string | null) {
+export function usePantryViewModel(
+  listId: string | null,
+  /** As receitas acabaram de ser recalculadas com o que a foto trouxe. */
+  onReceitasAtualizadasPelaFoto?: () => void,
+) {
   const cliente = useQueryClient();
 
   const despensa = useQuery({ queryKey: ['pantry'], queryFn: readPantry });
@@ -92,15 +96,20 @@ export function usePantryViewModel(listId: string | null) {
    * entre um toque e outro. O item que o servidor devolveu entra direto no
    * cache — a lista vem do mais recente ao mais antigo, então vai no começo —,
    * e as receitas e a lista de compras são recarregadas uma vez só, quando os
-   * toques param.
+   * toques param. Recarregadas as receitas, sai o aviso — um por rodada de
+   * confirmações, e só se o recálculo deu certo.
    */
   function guardadoPelaFoto(item: PantryItem) {
     cliente.setQueryData<PantryItem[]>(['pantry'], (atual) => [item, ...(atual ?? [])]);
     if (recargaDasReceitas.current) clearTimeout(recargaDasReceitas.current);
     recargaDasReceitas.current = setTimeout(() => {
       recargaDasReceitas.current = null;
-      cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
+      const recalculo = cliente.invalidateQueries({ queryKey: ['recipe-suggestions'] });
       cliente.invalidateQueries({ queryKey: ['shopping-list'] });
+      void recalculo.then(() => {
+        const estado = cliente.getQueryState(['recipe-suggestions', listId]);
+        if (estado?.status === 'success') onReceitasAtualizadasPelaFoto?.();
+      });
     }, ESPERA_DAS_RECEITAS);
   }
 

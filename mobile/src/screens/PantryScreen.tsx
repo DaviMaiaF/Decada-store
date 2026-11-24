@@ -26,6 +26,7 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -42,6 +43,9 @@ import { formatQuantity } from '../services/format';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
 import type { PantryItem, ProductSuggestion, RecipeAvailability } from '../types/api';
 import { usePantryViewModel, useRecipeCardViewModel } from '../viewmodels/usePantryViewModel';
+import { useRecipeUpdateNoticeViewModel } from '../viewmodels/useRecipeUpdateNoticeViewModel';
+
+type RecipeUpdateNoticeViewModel = ReturnType<typeof useRecipeUpdateNoticeViewModel>;
 
 // O teste da tela espera a recarga das receitas por este tempo.
 export { ESPERA_DAS_RECEITAS } from '../viewmodels/usePantryViewModel';
@@ -60,7 +64,8 @@ export default function PantryScreen({
   /** Etapa concluída: segue para a próxima, a região. */
   onConcluida: () => void;
 }) {
-  const vm = usePantryViewModel(listId);
+  const avisoDeReceitas = useRecipeUpdateNoticeViewModel();
+  const vm = usePantryViewModel(listId, () => void avisoDeReceitas.onRecipesUpdated());
   const { itens, adicao, edicao, semVinculo, semQuantidade } = vm;
   const { escolhendo, medindo } = adicao;
   const { editando } = edicao;
@@ -92,6 +97,8 @@ export default function PantryScreen({
               da sua dieta sem gastar a mais.
             </Body>
           </View>
+
+          <PreferenciaDoAvisoDeReceitas vm={avisoDeReceitas} />
 
           <DespensaPorFoto onAdicionado={vm.guardadoPelaFoto} />
 
@@ -397,6 +404,29 @@ export default function PantryScreen({
  * Quem cadastrou às pressas — sem produto ou sem quantidade — precisa de um
  * caminho de volta, e o próprio chip já marca visualmente o que está incompleto.
  */
+function PreferenciaDoAvisoDeReceitas({ vm }: { vm: RecipeUpdateNoticeViewModel }) {
+  return (
+    <Card style={styles.cardAviso}>
+      <View style={styles.linhaAviso}>
+        <View style={styles.textoAviso}>
+          <Text style={styles.rotuloAviso}>Avisar sobre receitas</Text>
+          <Body muted>Receba um aviso quando a foto da despensa mudar suas receitas.</Body>
+        </View>
+        <Switch
+          accessibilityRole="switch"
+          accessibilityLabel="Avisar sobre receitas"
+          value={vm.enabled}
+          onValueChange={vm.setNoticeEnabled}
+          disabled={vm.loading || vm.saving}
+          trackColor={{ false: colors.outline, true: colors.primary }}
+          thumbColor={colors.onPrimary}
+        />
+      </View>
+      {vm.error ? <ErrorNotice message={vm.error} /> : null}
+    </Card>
+  );
+}
+
 function ChipDaDespensa({
   item,
   onPress,
@@ -552,6 +582,10 @@ const styles = StyleSheet.create({
   titulo: { ...typography.headlineLg, color: colors.primary },
 
   cartaoDespensa: { gap: spacing.sm },
+  cardAviso: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+  linhaAviso: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  textoAviso: { flex: 1, gap: spacing.xs2 },
+  rotuloAviso: { ...typography.labelLg, color: colors.onSurface },
   linhaTitulo: {
     flexDirection: 'row',
     alignItems: 'center',

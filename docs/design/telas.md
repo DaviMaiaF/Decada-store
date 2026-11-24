@@ -300,6 +300,7 @@ O mapa de rótulos, para não inventar categoria nova no banco:
 | Corrigir item já salvo | ✅ | Tocar no chip abre o mesmo par produto + quantidade (`PATCH /pantry/{id}`) |
 | Voltar e "Concluí a despensa" | ✅ | Não estava no protótipo. "Voltar" devolve à aba de onde a pessoa veio, ou ao início; "Concluí a despensa" cumpre a etapa da trilha (`POST /meal-plans/{id}/pantry-review`) e leva ao Mercado. Ver "A trilha da jornada" |
 | Encher a despensa por foto | ✅ | Não estava no protótipo. Câmera ou galeria, até cinco fotos por envio; o app diz o que viu e a pessoa confirma, troca o produto ou descarta cada item (`POST /pantry/photo`) |
+| Avisar sobre receitas | ✅ | Não estava no protótipo. Chave opcional, desligada no começo, salva no armazenamento seguro; pede a permissão só ao ligar. Depois de uma rodada de confirmações da foto, quando as receitas terminam de recalcular, sai uma notificação local, "Suas opções de receitas foram atualizadas.", sem nomes de alimentos, no canal Android "Receitas". Adicionar à mão não avisa. Sair da conta desliga esta chave e o "Lembrar de comprar" |
 | "Do seu plano": você tem isto em casa? | ✅ | Não estava no protótipo. Lista os produtos já confirmados do plano que ainda não estão na despensa; "Tenho" grava o item vinculado ao produto e sem quantidade, "Não tenho" só o tira da pergunta. Ver abaixo |
 | "3 receitas 100% compatíveis" | ✅ | Tela ordena por disponibilidade, contando despensa **e** lista de compras |
 | "85% disponível (falta chia)" | ✅ | Percentual, barra e "Falta: …" na tela |

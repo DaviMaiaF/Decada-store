@@ -341,6 +341,74 @@ it('item da foto entra no cache e as receitas e a lista recarregam uma vez só',
   }
 });
 
+describe('aviso de receitas atualizadas pela foto', () => {
+  async function montarComAviso(aviso: jest.Mock) {
+    const hook = await renderHook(() => usePantryViewModel(null, aviso), { wrapper: Provedor });
+    await waitFor(() => expect(hook.result.current.carregando).toBe(false));
+    await waitFor(() => expect(hook.result.current.buscandoReceitas).toBe(false));
+    return hook;
+  }
+
+  it('avisa uma vez por rodada de confirmações, depois de recalcular as receitas', async () => {
+    jest.useFakeTimers();
+    try {
+      const aviso = jest.fn();
+      const { result } = await montarComAviso(aviso);
+      lerReceitas.mockClear();
+
+      await act(async () => {
+        result.current.guardadoPelaFoto(item({ id: 'f1', raw_description: 'banana' }));
+        result.current.guardadoPelaFoto(item({ id: 'f2', raw_description: 'kiwi' }));
+      });
+      expect(aviso).not.toHaveBeenCalled();
+
+      await act(async () => jest.advanceTimersByTime(ESPERA_DAS_RECEITAS));
+
+      await waitFor(() => expect(aviso).toHaveBeenCalledTimes(1));
+      expect(lerReceitas).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('não avisa se o recálculo das receitas falhar', async () => {
+    jest.useFakeTimers();
+    try {
+      const aviso = jest.fn();
+      const { result } = await montarComAviso(aviso);
+      lerReceitas.mockRejectedValueOnce(new Error('fora do ar'));
+
+      await act(async () => {
+        result.current.guardadoPelaFoto(item({ id: 'f1', raw_description: 'banana' }));
+      });
+      await act(async () => jest.advanceTimersByTime(ESPERA_DAS_RECEITAS));
+
+      await waitFor(() => expect(result.current.receitasFalharam).toBe(true));
+      expect(aviso).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('adicionar à mão não avisa', async () => {
+    const aviso = jest.fn();
+    buscar.mockResolvedValue([]);
+    adicionarApi.mockResolvedValue(item({ id: 'm1', raw_description: 'ovos' }));
+    const { result } = await montarComAviso(aviso);
+    lerReceitas.mockClear();
+
+    await act(async () => result.current.adicao.setTexto('ovos'));
+    await act(async () => result.current.adicao.comecarEscolha());
+    await act(async () => result.current.adicao.guardarSoTexto());
+
+    // As receitas recalculam com o item novo, mas o aviso é só da foto.
+    await waitFor(() => expect(lerReceitas).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.buscandoReceitas).toBe(false));
+    expect(adicionarApi).toHaveBeenCalledTimes(1);
+    expect(aviso).not.toHaveBeenCalled();
+  });
+});
+
 describe('useRecipeCardViewModel', () => {
   it('separa o que dá para acrescentar do que já está na lista', async () => {
     const { result } = await renderHook(

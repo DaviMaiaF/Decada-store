@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import {
   buildShoppingReminderText,
   cancelShoppingReminders,
+  notifyRecipesUpdated,
   requestNotificationPermission,
   scheduleShoppingReminder,
 } from '../notifications';
@@ -163,4 +164,36 @@ it('cancelarLembretes preserva notificações de outras funcionalidades', async 
 
   expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
   expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('lembrete-pendente');
+});
+
+it('avisa na hora, no canal das receitas, que as receitas foram atualizadas', async () => {
+  await expect(notifyRecipesUpdated()).resolves.toBe(true);
+
+  expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
+    'receitas',
+    expect.objectContaining({ name: 'Receitas' }),
+  );
+  expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith({
+    content: {
+      title: 'Receitas atualizadas',
+      body: 'Suas opções de receitas foram atualizadas.',
+      data: { feature: 'decada.recipes-updated' },
+    },
+    trigger: { channelId: 'receitas' },
+  });
+});
+
+it('não avisa das receitas sem permissão', async () => {
+  (Notifications.getPermissionsAsync as jest.Mock).mockResolvedValue({ status: 'denied' });
+
+  await expect(notifyRecipesUpdated()).resolves.toBe(false);
+  expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+it('fora do Android não cria canal, mas avisa', async () => {
+  (Platform as { OS: string }).OS = 'ios';
+
+  await expect(notifyRecipesUpdated()).resolves.toBe(true);
+  expect(Notifications.setNotificationChannelAsync).not.toHaveBeenCalled();
+  expect(Notifications.scheduleNotificationAsync).toHaveBeenCalled();
 });
