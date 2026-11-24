@@ -19,6 +19,12 @@ bem documentado**, não escala de produção.
 - **Uma etapa por vez.** Não implemente funcionalidades que não foram pedidas.
 - **Commits pequenos e descritivos**, em português, no padrão Conventional Commits
   (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`).
+- **Branches seguem o git flow.** `main` é o que está publicado; `develop` é onde
+  o trabalho se junta. Feature, docs e design saem da `develop` (`feature/...`,
+  `docs/...`, `design/...`) e o PR volta para ela. Para publicar, a `develop` vai
+  para a `main` por PR. Correção urgente do que está publicado sai da `main` como
+  `hotfix/...`, volta para a `main` e depois também para a `develop`. Nada é
+  commitado direto na `main` nem na `develop`.
 - **Todo módulo de regra de negócio precisa de teste.** Sem exceção para:
   casamento item–produto, cálculo de preço, parser de NFC-e.
 - **Nunca invente dados de preço em produção.** Dados fictícios só no seed de
@@ -212,7 +218,7 @@ cd ../mobile && npm run test:smoke         # ponta a ponta: exige a API de pé
 > **Ambiente publicado** (demonstração): API em `https://decada-api.onrender.com`
 > (Render, com o banco no Neon) e app por APK Android ou Expo Go, recebendo código pela
 > EAS Update no canal `demo`. Não depende do notebook, do `HOST_IP` nem da mesma rede.
-> Merge na `main` publica a API; `eas update --channel demo --environment preview`
+> Merge na `main` publica a API (merge na `develop` não publica nada); `eas update --channel demo --environment preview`
 > publica o app. Ver [`docs/publicacao.md`](docs/publicacao.md).
 
 > O `test:smoke` fala com o backend de verdade e cria a própria conta, que apaga
