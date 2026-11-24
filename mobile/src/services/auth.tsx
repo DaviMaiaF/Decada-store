@@ -13,7 +13,9 @@ import type { ReactNode } from 'react';
 import * as api from './api';
 import { resetSessionAtivo } from './config';
 import { onSessionExpired } from './http';
+import { cancelShoppingReminders } from './notifications';
 import {
+  clearNotificationPreferences,
   clearToken,
   readRememberMe,
   readRole,
@@ -140,6 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await clearToken();
+    // Os avisos são da pessoa que saiu: quem entrar depois no mesmo celular
+    // começa com eles desligados, e o lembrete já agendado não chega a ninguém.
+    // Falha do sistema de notificações não pode impedir a saída.
+    await Promise.allSettled([cancelShoppingReminders(), clearNotificationPreferences()]);
     setNotice(null);
     setRole(null);
     setSignedIn(false);

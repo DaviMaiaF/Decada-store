@@ -15,6 +15,11 @@ jest.mock('../session', () => ({
   saveRole: jest.fn().mockResolvedValue(undefined),
   readRole: jest.fn().mockResolvedValue('paciente'),
   readRememberMe: jest.fn().mockResolvedValue(true),
+  clearNotificationPreferences: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../notifications', () => ({
+  cancelShoppingReminders: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../api', () => ({
@@ -30,12 +35,20 @@ jest.mock('../config', () => ({
   resetSessionAtivo: () => mockConfig.reset,
 }));
 
-const { readToken, saveToken, clearToken, readRole, saveRole, readRememberMe } =
-  jest.requireMock('../session');
+const {
+  readToken,
+  saveToken,
+  clearToken,
+  readRole,
+  saveRole,
+  readRememberMe,
+  clearNotificationPreferences,
+} = jest.requireMock('../session');
+const { cancelShoppingReminders } = jest.requireMock('../notifications');
 const readAccountFalso = api.readAccount as jest.Mock;
 
 function Estado() {
-  const { signedIn, role, notice, signIn } = useAuth();
+  const { signedIn, role, notice, signIn, signOut } = useAuth();
   return (
     <>
       <Text>
@@ -47,6 +60,7 @@ function Estado() {
         entrar como nutricionista
       </Text>
       <Text onPress={() => signIn('ana@example.com', 'senha-boa')}>entrar sem lembrar</Text>
+      <Text onPress={() => signOut()}>sair</Text>
     </>
   );
 }
@@ -100,6 +114,9 @@ it('token vencido leva ao login com aviso', async () => {
 
   await waitFor(() => expect(screen.getByText(/deslogado/)).toBeTruthy());
   expect(screen.getByText(/sua sessão expirou/)).toBeTruthy();
+  // Token vencido é a mesma pessoa: os avisos que ela ligou continuam ligados.
+  expect(clearNotificationPreferences).not.toHaveBeenCalled();
+  expect(cancelShoppingReminders).not.toHaveBeenCalled();
 });
 
 it('servidor fora do ar não derruba a sessão', async () => {
@@ -211,4 +228,41 @@ it('entrar sem lembrar não grava o token nem o papel', async () => {
   expect(await screen.findByText('logado')).toBeTruthy();
   expect(saveToken).toHaveBeenCalledWith('t', false);
   expect(saveRole).not.toHaveBeenCalled();
+});
+
+it('sair apaga as preferências de notificação e cancela o lembrete agendado', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com' });
+  await montar();
+  await screen.findByText('logado');
+
+  await fireEvent.press(screen.getByText('sair'));
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearToken).toHaveBeenCalled();
+  expect(clearNotificationPreferences).toHaveBeenCalled();
+  expect(cancelShoppingReminders).toHaveBeenCalled();
+});
+
+it('falha ao cancelar o lembrete não impede a saída', async () => {
+  readToken.mockResolvedValue('token-bom');
+  readAccountFalso.mockResolvedValue({ id: '1', email: 'a@b.com' });
+  cancelShoppingReminders.mockRejectedValueOnce(new Error('sem módulo'));
+  await montar();
+  await screen.findByText('logado');
+
+  await fireEvent.press(screen.getByText('sair'));
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearNotificationPreferences).toHaveBeenCalled();
+});
+
+it('a abertura sem "lembrar de mim" não apaga as preferências de notificação', async () => {
+  readRememberMe.mockResolvedValue(false);
+  readToken.mockResolvedValue(null);
+  await montar();
+
+  expect(await screen.findByText('deslogado')).toBeTruthy();
+  expect(clearToken).toHaveBeenCalled();
+  expect(clearNotificationPreferences).not.toHaveBeenCalled();
 });

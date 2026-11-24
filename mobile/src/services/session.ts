@@ -20,6 +20,7 @@ const CHAVE_REGIAO = 'decada.user_region';
 const CHAVE_PAPEL = 'decada.user_role';
 const CHAVE_LEMBRAR = 'decada.remember_me';
 const SHOPPING_REMINDERS_KEY = 'decada.shopping_reminders';
+const RECIPE_UPDATES_KEY = 'decada.recipe_updates';
 
 export interface UserRegion {
   stateCode: string;
@@ -45,6 +46,11 @@ async function gravar(chave: string, valor: string): Promise<void> {
     return;
   }
   await SecureStore.setItemAsync(chave, valor);
+}
+
+async function ler(chave: string): Promise<string | null> {
+  if (Platform.OS === 'web') return localStorage.getItem(chave);
+  return SecureStore.getItemAsync(chave);
 }
 
 async function apagar(chave: string): Promise<void> {
@@ -94,11 +100,25 @@ export async function saveShoppingReminderPreference(enabled: boolean): Promise<
 }
 
 export async function readShoppingReminderPreference(): Promise<boolean> {
-  const valor =
-    Platform.OS === 'web'
-      ? localStorage.getItem(SHOPPING_REMINDERS_KEY)
-      : await SecureStore.getItemAsync(SHOPPING_REMINDERS_KEY);
-  return valor === '1';
+  return (await ler(SHOPPING_REMINDERS_KEY)) === '1';
+}
+
+export async function saveRecipeUpdatesPreference(enabled: boolean): Promise<void> {
+  await gravar(RECIPE_UPDATES_KEY, enabled ? '1' : '0');
+}
+
+export async function readRecipeUpdatesPreference(): Promise<boolean> {
+  return (await ler(RECIPE_UPDATES_KEY)) === '1';
+}
+
+/**
+ * Apaga as preferências de notificação. Só o "Sair" chama: elas são da pessoa,
+ * e quem entrar depois no mesmo celular começa com os avisos desligados. Token
+ * vencido e abertura sem "lembrar de mim" não apagam — é a mesma pessoa.
+ */
+export async function clearNotificationPreferences(): Promise<void> {
+  await apagar(SHOPPING_REMINDERS_KEY);
+  await apagar(RECIPE_UPDATES_KEY);
 }
 
 /** Sai da sessão: o papel e a preferência vão juntos, porque só valem com o token. */
