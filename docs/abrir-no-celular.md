@@ -55,10 +55,10 @@ do projeto. Por isso há um passo de convite.
 5. Escaneie o QR abaixo — no Android, pelo botão **Scan QR code** do Expo Go; no
    iPhone, pela câmera do próprio celular:
 
-   <img src="https://qr.expo.dev/eas-update?slug=exp&projectId=ad872add-88c9-476b-8168-b0cc5d25c71f&runtimeVersion=1.0.0&channel=demo" alt="QR do app no Expo Go" width="200">
+   <img src="https://qr.expo.dev/eas-update?slug=exp&projectId=ad872add-88c9-476b-8168-b0cc5d25c71f&runtimeVersion=1.1.0&channel=demo" alt="QR do app no Expo Go" width="200">
 
    Sem como escanear (você está vendo isto no próprio celular)? Toque no link:
-   `exp://u.expo.dev/ad872add-88c9-476b-8168-b0cc5d25c71f?runtime-version=1.0.0&channel-name=demo`
+   `exp://u.expo.dev/ad872add-88c9-476b-8168-b0cc5d25c71f?runtime-version=1.1.0&channel-name=demo`
 
 Depois da primeira vez, o app aparece na lista de **recentes** do Expo Go.
 
