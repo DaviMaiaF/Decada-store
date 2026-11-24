@@ -142,6 +142,7 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Adicionar item avulso | ✅ | Busca no catálogo, quantidade na unidade do produto, e o item entra no corredor dele |
 | Escolher a região antes de gerar | ✅ | UF e cidade na tela, lembradas entre sessões; resolve a divergência 2 |
 | Pergunta da despensa antes de gerar | ✅ | Despensa vazia: "O que você já tem em casa?", com cadastrar ou "Não tenho nada em casa", que conclui a etapa Despensa. Com itens: "N itens em casa serão descontados". Não trava a geração. Ver abaixo |
+| Lembrar de comprar | ✅ | Preferência opcional salva no armazenamento seguro. Com permissão, agenda um lembrete local após gerar a lista; a mensagem informa só a quantidade e o total, sem nomes de alimentos. Desativar cancela os lembretes pendentes |
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
