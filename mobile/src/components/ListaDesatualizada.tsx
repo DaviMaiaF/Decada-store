@@ -21,7 +21,7 @@ export function ListaDesatualizada({
   onGenerated,
 }: {
   lista: ShoppingList;
-  onGenerated: (listId: string) => void;
+  onGenerated: (listId: string, lista: ShoppingList) => void;
 }) {
   const vm = useOutdatedListViewModel(lista, onGenerated);
 

@@ -3,7 +3,7 @@
     "name": "DÉCADA",
     "slug": "decada",
     "owner": "davi-maias-team",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -30,6 +30,14 @@
       "expo-secure-store",
       "expo-font",
       "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "color": "#1B4332",
+          "defaultChannel": "lembretes-de-compras",
+          "enableRemoteNotifications": false
+        }
+      ],
       [
         "expo-image-picker",
         {

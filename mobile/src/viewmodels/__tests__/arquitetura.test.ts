@@ -16,6 +16,7 @@ const PROIBIDOS = [
   /from '[./]*services\/api'/,
   /from '@tanstack\/react-query'/,
   /from '[./]*services\/auth'/,
+  /from 'expo-notifications'/,
 ];
 
 function arquivosDaView(): string[] {
@@ -33,7 +34,7 @@ it('encontra as telas e os componentes', () => {
   );
 });
 
-it('nenhuma tela ou componente importa api, react-query ou auth', () => {
+it('nenhuma tela ou componente importa serviços de estado ou notificações nativas', () => {
   const violacoes = arquivosDaView().flatMap((arquivo) => {
     const codigo = readFileSync(join(RAIZ, arquivo), 'utf8');
     return PROIBIDOS.filter((padrao) => padrao.test(codigo)).map(

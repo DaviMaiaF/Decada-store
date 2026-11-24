@@ -35,7 +35,7 @@ export default function CheckoutScreen({
   lista: ShoppingList;
   onVoltar: () => void;
   /** Lista nova, gerada pelo aviso de plano alterado. */
-  onGenerated: (listId: string) => void;
+  onGenerated: (listId: string, lista: ShoppingList) => void;
   /** Fecha a compra concluída e leva ao início. */
   onIrAoInicio: () => void;
 }) {

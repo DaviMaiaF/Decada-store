@@ -113,7 +113,10 @@ export function usePantryQuestionViewModel(planId: string | null) {
 }
 
 /** UF e cidade, lembradas entre sessões, e a geração da lista nelas. */
-export function useRegionFormViewModel(planId: string, onGerada: (listId: string) => void) {
+export function useRegionFormViewModel(
+  planId: string,
+  onGenerated: (listId: string, lista: ShoppingList) => void,
+) {
   const [stateCode, setStateCode] = useState(UF_PADRAO);
   const [city, setCity] = useState(CIDADE_PADRAO);
 
@@ -137,7 +140,8 @@ export function useRegionFormViewModel(planId: string, onGerada: (listId: string
       await saveRegion({ stateCode: ufLimpa, city: cidadeLimpa });
       return generateShoppingList(planId, ufLimpa, cidadeLimpa);
     },
-    onSuccess: (resultado) => onGerada(resultado.shopping_list.id),
+    onSuccess: (resultado) =>
+      onGenerated(resultado.shopping_list.id, resultado.shopping_list),
   });
 
   return {

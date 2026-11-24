@@ -111,7 +111,8 @@ it('lista em dia não mostra aviso', async () => {
 });
 
 it('gera de novo na mesma região e entrega o id da lista nova', async () => {
-  gerarApi.mockResolvedValue({ shopping_list: { id: 'lista-2' } });
+  const listaGerada = { ...lista(), id: 'lista-2' };
+  gerarApi.mockResolvedValue({ shopping_list: listaGerada });
   const onGerada = jest.fn();
   const desatualizada = lista({
     outdated_items: [{ plan_item_id: 'a', description: 'Aveia', change: 'produto_trocado' }],
@@ -123,7 +124,7 @@ it('gera de novo na mesma região e entrega o id da lista nova', async () => {
 
   await act(async () => result.current.gerar());
 
-  await waitFor(() => expect(onGerada).toHaveBeenCalledWith('lista-2'));
+  await waitFor(() => expect(onGerada).toHaveBeenCalledWith('lista-2', listaGerada));
   expect(gerarApi).toHaveBeenCalledWith('plano-1', 'DF', 'Brasília');
 });
 

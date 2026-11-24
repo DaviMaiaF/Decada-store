@@ -58,11 +58,12 @@ export function descreverDivergencia(item: OutdatedItem): string {
 
 export function useOutdatedListViewModel(
   lista: ShoppingList,
-  onGerada: (listId: string) => void,
+  onGenerated: (listId: string, lista: ShoppingList) => void,
 ) {
   const geracao = useMutation({
     mutationFn: () => generateShoppingList(lista.meal_plan_id, lista.state_code, lista.city),
-    onSuccess: (resultado) => onGerada(resultado.shopping_list.id),
+    onSuccess: (resultado) =>
+      onGenerated(resultado.shopping_list.id, resultado.shopping_list),
   });
 
   return {
