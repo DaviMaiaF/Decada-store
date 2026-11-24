@@ -117,7 +117,7 @@ ao menos 12 caracteres, e não fica em lugar nenhum além do hash no banco. Regr
 | O que mudou | O que fazer |
 |---|---|
 | Só código JS/TS, telas, estilos | `cd mobile && eas update --channel demo --environment preview --message "…"` |
-| Dependência nativa nova, permissão, ícone, `app.json` | aumentar `version` no `app.json` e gerar APK novo: `eas build --profile preview --platform android` |
+| Dependência nativa nova (como `expo-notifications`), permissão, ícone, `app.json` | aumentar `version` no `app.json` e gerar APK novo: `eas build --profile preview --platform android` |
 
 O APK e o Expo Go baixam o update ao abrir e aplicam na abertura seguinte. O
 `runtimeVersion` segue a `version` do `app.json`: um update só chega ao APK da mesma

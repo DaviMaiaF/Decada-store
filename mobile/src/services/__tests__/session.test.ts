@@ -5,7 +5,14 @@
 
 import * as SecureStore from 'expo-secure-store';
 
-import { clearToken, readRememberMe, readToken, saveToken } from '../session';
+import {
+  clearToken,
+  readRememberMe,
+  readShoppingReminderPreference,
+  readToken,
+  saveShoppingReminderPreference,
+  saveToken,
+} from '../session';
 
 jest.mock('expo-secure-store', () => {
   const disco = new Map<string, string>();
@@ -25,6 +32,7 @@ const { disco } = jest.requireMock('expo-secure-store') as { disco: Map<string, 
 
 beforeEach(async () => {
   await clearToken();
+  disco.delete('decada.shopping_reminders');
   jest.clearAllMocks();
 });
 
@@ -59,4 +67,14 @@ it('sair apaga a memória e o disco', async () => {
   expect(await readToken()).toBeNull();
   expect(disco.size).toBe(0);
   expect(await readRememberMe()).toBe(false);
+});
+
+it('persiste a preferência de lembrete no armazenamento seguro', async () => {
+  await saveShoppingReminderPreference(true);
+
+  expect(disco.get('decada.shopping_reminders')).toBe('1');
+  expect(await readShoppingReminderPreference()).toBe(true);
+
+  await saveShoppingReminderPreference(false);
+  expect(await readShoppingReminderPreference()).toBe(false);
 });

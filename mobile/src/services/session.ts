@@ -19,6 +19,7 @@ const CHAVE_TOKEN = 'decada.access_token';
 const CHAVE_REGIAO = 'decada.user_region';
 const CHAVE_PAPEL = 'decada.user_role';
 const CHAVE_LEMBRAR = 'decada.remember_me';
+const SHOPPING_REMINDERS_KEY = 'decada.shopping_reminders';
 
 export interface UserRegion {
   stateCode: string;
@@ -85,6 +86,18 @@ export async function readRememberMe(): Promise<boolean> {
     Platform.OS === 'web'
       ? localStorage.getItem(CHAVE_LEMBRAR)
       : await SecureStore.getItemAsync(CHAVE_LEMBRAR);
+  return valor === '1';
+}
+
+export async function saveShoppingReminderPreference(enabled: boolean): Promise<void> {
+  await gravar(SHOPPING_REMINDERS_KEY, enabled ? '1' : '0');
+}
+
+export async function readShoppingReminderPreference(): Promise<boolean> {
+  const valor =
+    Platform.OS === 'web'
+      ? localStorage.getItem(SHOPPING_REMINDERS_KEY)
+      : await SecureStore.getItemAsync(SHOPPING_REMINDERS_KEY);
   return valor === '1';
 }
 

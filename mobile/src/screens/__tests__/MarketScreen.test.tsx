@@ -13,6 +13,7 @@ import MarketScreen from '../MarketScreen';
 import * as api from '../../services/api';
 import { motion } from '../../theme/motion';
 import * as session from '../../services/session';
+import * as notifications from '../../services/notifications';
 import type { ShoppingList, ShoppingListItem } from '../../types/api';
 
 jest.mock('../../services/api', () => ({
@@ -38,6 +39,14 @@ jest.mock('../../services/session', () => ({
   ...jest.requireActual('../../services/session'),
   readRegion: jest.fn(),
   saveRegion: jest.fn(),
+  readShoppingReminderPreference: jest.fn(),
+  saveShoppingReminderPreference: jest.fn(),
+}));
+
+jest.mock('../../services/notifications', () => ({
+  cancelShoppingReminders: jest.fn(),
+  requestNotificationPermission: jest.fn(),
+  scheduleShoppingReminder: jest.fn(),
 }));
 
 const lerLista = api.readShoppingList as jest.Mock;
@@ -55,6 +64,8 @@ const lerPagamentos = api.readPayments as jest.Mock;
 const confirmarPagamento = api.confirmPayment as jest.Mock;
 const lerRegiao = session.readRegion as jest.Mock;
 const salvarRegiao = session.saveRegion as jest.Mock;
+const lerPreferenciaLembrete = session.readShoppingReminderPreference as jest.Mock;
+const agendarLembrete = notifications.scheduleShoppingReminder as jest.Mock;
 
 const HA_TRES_DIAS = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -146,6 +157,7 @@ beforeEach(() => {
   lerDespensa.mockResolvedValue([]);
   lerRegiao.mockResolvedValue({ stateCode: 'DF', city: 'Brasília' });
   salvarRegiao.mockResolvedValue(undefined);
+  lerPreferenciaLembrete.mockResolvedValue(false);
 });
 
 // Sem isto o cache do React Query deixa temporizadores abertos e o Jest não
@@ -159,6 +171,7 @@ it('mostra o total estimado e a região', async () => {
   await montar(lista([item({ id: 'a' })]));
 
   expect(await screen.findByText('R$ 174,20')).toBeTruthy();
+  expect(screen.getByLabelText('Lembrar de comprar')).toBeTruthy();
   // Média de preço é sempre regional: a tela precisa dizer de onde ela é.
   expect(screen.getByText('Brasília · DF')).toBeTruthy();
 });
@@ -604,9 +617,10 @@ it('desistir da troca devolve a lista que já existia', async () => {
 });
 
 it('permite escolher a região e gera a lista com os dados informados', async () => {
-  gerarLista.mockResolvedValue({
-    shopping_list: lista([item({ id: 'a' })]),
-  });
+  const generatedList = lista([item({ id: 'a' })]);
+  gerarLista.mockResolvedValue({ shopping_list: generatedList });
+  lerPreferenciaLembrete.mockResolvedValue(true);
+  agendarLembrete.mockResolvedValue(true);
 
   const onGenerated = jest.fn();
 
@@ -636,6 +650,7 @@ it('permite escolher a região e gera a lista com os dados informados', async ()
     expect(salvarRegiao).toHaveBeenCalledWith({ stateCode: 'SP', city: 'São Paulo' });
     expect(gerarLista).toHaveBeenCalledWith('plano-1', 'SP', 'São Paulo');
     expect(onGenerated).toHaveBeenCalledWith('lista-1');
+    expect(agendarLembrete).toHaveBeenCalledWith(generatedList);
   });
 });
 

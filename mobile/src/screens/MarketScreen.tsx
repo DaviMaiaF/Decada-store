@@ -21,6 +21,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -43,6 +44,9 @@ import {
   useShoppingListViewModel,
   useSimulatedQuantityField,
 } from '../viewmodels/useMarketViewModel';
+import { useShoppingReminderViewModel } from '../viewmodels/useShoppingReminderViewModel';
+
+type ShoppingReminderViewModel = ReturnType<typeof useShoppingReminderViewModel>;
 
 /** Rótulo de cada corredor. As chaves são as categorias do catálogo. */
 const CORREDORES: Record<string, string> = {
@@ -68,11 +72,17 @@ export default function MarketScreen({
   onIrADespensa: () => void;
 }) {
   const vm = useMarketViewModel(listId);
+  const shoppingReminder = useShoppingReminderViewModel();
+  const handleGeneratedList = (id: string, generatedList?: ShoppingList) => {
+    if (generatedList) void shoppingReminder.onShoppingListGenerated(generatedList);
+    onGenerated(id);
+  };
 
   if (vm.mostrarRegiao) {
     return (
       <ScrollView contentContainerStyle={styles.conteudo}>
         <Text style={styles.titulo}>Lista de Mercado</Text>
+        <ShoppingReminderPreference vm={shoppingReminder} />
         {planId === null ? (
           <Body muted>
             Envie o plano da sua nutricionista na aba Dieta para gerar sua lista.
@@ -81,9 +91,9 @@ export default function MarketScreen({
           <FormularioRegiaoEGeracao
             planId={planId}
             onIrADespensa={onIrADespensa}
-            onGenerated={(novaLista) => {
+            onGenerated={(novaLista, listaGeradaCompleta) => {
               vm.manterRegiao();
-              onGenerated(novaLista);
+              handleGeneratedList(novaLista, listaGeradaCompleta);
             }}
             onCancel={vm.trocandoRegiao ? vm.manterRegiao : undefined}
           />
@@ -107,7 +117,7 @@ export default function MarketScreen({
       <CheckoutScreen
         lista={vm.lista}
         onVoltar={vm.voltarALista}
-        onGenerated={onGenerated}
+        onGenerated={handleGeneratedList}
         onIrAoInicio={onCompraConcluida}
       />
     );
@@ -116,10 +126,34 @@ export default function MarketScreen({
   return (
     <ListaCarregada
       lista={vm.lista}
+      shoppingReminder={shoppingReminder}
       onTrocarRegiao={vm.trocarRegiao}
       onFinalizar={vm.finalizar}
-      onGenerated={onGenerated}
+      onGenerated={handleGeneratedList}
     />
+  );
+}
+
+function ShoppingReminderPreference({ vm }: { vm: ShoppingReminderViewModel }) {
+  return (
+    <Card style={styles.cardLembrete}>
+      <View style={styles.linhaLembrete}>
+        <View style={styles.textoLembrete}>
+          <Text style={styles.rotuloLembrete}>Lembrar de comprar</Text>
+          <Body muted>Receba um aviso quando uma lista for gerada.</Body>
+        </View>
+        <Switch
+          accessibilityRole="switch"
+          accessibilityLabel="Lembrar de comprar"
+          value={vm.enabled}
+          onValueChange={vm.setReminderEnabled}
+          disabled={vm.loading || vm.saving}
+          trackColor={{ false: colors.outline, true: colors.primary }}
+          thumbColor={colors.onPrimary}
+        />
+      </View>
+      {vm.error ? <ErrorNotice message={vm.error} /> : null}
+    </Card>
   );
 }
 
@@ -131,7 +165,7 @@ function FormularioRegiaoEGeracao({
 }: {
   planId: string;
   onIrADespensa: () => void;
-  onGenerated: (listId: string) => void;
+  onGenerated: (listId: string, lista: ShoppingList) => void;
   /** Só existe quando se está trocando a região de uma lista que já existe. */
   onCancel?: () => void;
 }) {
@@ -223,16 +257,18 @@ function FormularioRegiaoEGeracao({
 
 function ListaCarregada({
   lista,
+  shoppingReminder,
   onTrocarRegiao,
   onFinalizar,
   onGenerated,
 }: {
   lista: ShoppingList;
+  shoppingReminder: ShoppingReminderViewModel;
   onTrocarRegiao: () => void;
   /** Abre o checkout simulado. */
   onFinalizar: () => void;
   /** Lista nova, gerada pelo aviso de plano alterado. */
-  onGenerated: (listId: string) => void;
+  onGenerated: (listId: string, lista: ShoppingList) => void;
 }) {
   const vm = useShoppingListViewModel(lista);
   // Corredor que surge de um item acrescentado entra na hora.
@@ -241,6 +277,7 @@ function ListaCarregada({
   return (
     <ScrollView contentContainerStyle={styles.conteudo}>
       <Text style={styles.titulo}>Lista de Mercado</Text>
+      <ShoppingReminderPreference vm={shoppingReminder} />
 
       <Card style={styles.resumo}>
         <Text style={styles.resumoRotulo}>
@@ -648,6 +685,10 @@ const styles = StyleSheet.create({
   titulo: { ...typography.headlineLg, color: colors.primary },
 
   cardRegiao: { gap: spacing.xs },
+  cardLembrete: { backgroundColor: colors.surfaceContainerLow, gap: spacing.xs2 },
+  linhaLembrete: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  textoLembrete: { flex: 1, gap: spacing.xs2 },
+  rotuloLembrete: { ...typography.labelLg, color: colors.onSurface },
   linhaCamposRegiao: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   campoUfContainer: { width: 72, gap: 4 },
   campoCidadeContainer: { flex: 1, gap: 4 },
