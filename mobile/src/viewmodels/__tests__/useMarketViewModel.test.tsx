@@ -184,7 +184,11 @@ describe('useRegionFormViewModel', () => {
     });
     await act(async () => result.current.gerar());
 
-    await waitFor(() => expect(onGerada).toHaveBeenCalledWith('lista-2'));
+    await waitFor(() =>
+      expect(onGerada).toHaveBeenCalledWith('lista-2', {
+        id: 'lista-2',
+      }),
+    );
     expect(salvarRegiao).toHaveBeenCalledWith({ stateCode: 'GO', city: 'Goiânia' });
     expect(gerarApi).toHaveBeenCalledWith('plano-1', 'GO', 'Goiânia');
   });
