@@ -6,10 +6,13 @@
 import * as SecureStore from 'expo-secure-store';
 
 import {
+  clearNotificationPreferences,
   clearToken,
+  readRecipeUpdatesPreference,
   readRememberMe,
   readShoppingReminderPreference,
   readToken,
+  saveRecipeUpdatesPreference,
   saveShoppingReminderPreference,
   saveToken,
 } from '../session';
@@ -33,6 +36,7 @@ const { disco } = jest.requireMock('expo-secure-store') as { disco: Map<string, 
 beforeEach(async () => {
   await clearToken();
   disco.delete('decada.shopping_reminders');
+  disco.delete('decada.recipe_updates');
   jest.clearAllMocks();
 });
 
@@ -77,4 +81,36 @@ it('persiste a preferência de lembrete no armazenamento seguro', async () => {
 
   await saveShoppingReminderPreference(false);
   expect(await readShoppingReminderPreference()).toBe(false);
+});
+
+it('persiste a preferência do aviso de receitas no armazenamento seguro', async () => {
+  await saveRecipeUpdatesPreference(true);
+
+  expect(disco.get('decada.recipe_updates')).toBe('1');
+  expect(await readRecipeUpdatesPreference()).toBe(true);
+
+  await saveRecipeUpdatesPreference(false);
+  expect(await readRecipeUpdatesPreference()).toBe(false);
+});
+
+it('apagar as preferências de notificação desliga os dois avisos', async () => {
+  await saveShoppingReminderPreference(true);
+  await saveRecipeUpdatesPreference(true);
+
+  await clearNotificationPreferences();
+
+  expect(await readShoppingReminderPreference()).toBe(false);
+  expect(await readRecipeUpdatesPreference()).toBe(false);
+});
+
+it('o clearToken não apaga as preferências de notificação', async () => {
+  // Token vencido e abertura sem "lembrar de mim" passam pelo clearToken: é a
+  // mesma pessoa no mesmo celular. Só o "Sair" apaga.
+  await saveShoppingReminderPreference(true);
+  await saveRecipeUpdatesPreference(true);
+
+  await clearToken();
+
+  expect(await readShoppingReminderPreference()).toBe(true);
+  expect(await readRecipeUpdatesPreference()).toBe(true);
 });
