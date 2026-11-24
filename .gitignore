@@ -28,3 +28,7 @@ yarn-error.log*
 .vscode/
 .idea/
 .DS_Store
+
+# --- Builds do app ---
+# APK baixado do EAS fica só na máquina (~90 MB); ver docs/publicacao.md
+*.apk
