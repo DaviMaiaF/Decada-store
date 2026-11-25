@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import PaymentMethod, PaymentStatus
 from app.schemas.common import ApiModel
+from app.schemas.shopping_list import SimulationItemIn
 
 
 class CardIn(BaseModel):
@@ -27,10 +28,17 @@ class CardIn(BaseModel):
 
 
 class PaymentIn(BaseModel):
-    """Pedido de pagamento da lista. Cartão só acompanha o meio cartão."""
+    """Pedido de pagamento da lista. Cartão só acompanha o meio cartão.
+
+    `excluded_item_ids` e `quantities` são o cenário simulado no Mercado: os
+    itens que ficam fora desta compra e os que vão em outra quantidade. Vazios,
+    paga-se a lista como está. O valor é sempre calculado pelo servidor.
+    """
 
     method: PaymentMethod
     card: CardIn | None = None
+    excluded_item_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    quantities: list[SimulationItemIn] = Field(default_factory=list, max_length=200)
 
     @model_validator(mode="after")
     def _card_only_with_credit_card(self) -> "PaymentIn":

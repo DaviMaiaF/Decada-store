@@ -23,6 +23,7 @@ from app.services.payment_gateway import (
     simulate_pix_payment,
     sync_pix_payment,
 )
+from app.services.simulation import scenario_total
 
 router = APIRouter(tags=["pagamentos"])
 
@@ -83,7 +84,11 @@ def pay_shopping_list(
     payload: PaymentIn,
     pix_provider: PixProviderDep,
 ) -> Payment:
-    """Paga a lista — de mentira — pelo total estimado dela.
+    """Paga a lista — de mentira — pelo total estimado dela, ou pelo cenário simulado.
+
+    Com `excluded_item_ids` ou `quantities`, o valor é o da simulação do
+    Mercado, refeito aqui com os preços congelados. A lista salva não muda: os
+    itens que ficaram de fora continuam nela, a comprar.
 
     Pix volta pendente, com o copia-e-cola do Abacate Pay em modo de teste; se
     ele não responder ou não estiver configurado, é 503. Cartão volta com a
@@ -97,8 +102,16 @@ def pay_shopping_list(
     if payload.card is not None:
         card = CardData(**payload.card.model_dump())
 
+    amount = None
+    if payload.excluded_item_ids or payload.quantities:
+        amount = scenario_total(
+            shopping_list,
+            set(payload.excluded_item_ids),
+            {pedido.item_id: pedido.quantity for pedido in payload.quantities},
+        )
+
     payment = create_payment(
-        session, shopping_list, payload.method, card, pix_provider=pix_provider
+        session, shopping_list, payload.method, card, pix_provider=pix_provider, amount=amount
     )
     session.commit()
     session.refresh(payment)

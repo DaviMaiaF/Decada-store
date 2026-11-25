@@ -28,6 +28,7 @@ from app.services.payment_gateway import (
 from app.services.pdf import InvalidPdfError, PdfWithoutTextError
 from app.services.prescriptions import PrescriptionLockedError
 from app.services.shopping import PrescribedItemError, ProductAlreadyInListError
+from app.services.simulation import InvalidScenarioError, ItemNotInListError
 from app.services.units import IncompatibleUnitError
 
 # Cada exceção do domínio e o código que ela merece.
@@ -58,6 +59,11 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[Exception], int], ...] = (
     (NothingToPayError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (ListAlreadyPaidError, status.HTTP_409_CONFLICT),
     (PaymentNotPendingError, status.HTTP_409_CONFLICT),
+    # Cenário simulado do pagamento: item que não é da lista responde como
+    # recurso que não existe (decisão 10); item tirado e mudado ao mesmo tempo é
+    # pedido sem sentido.
+    (ItemNotInListError, status.HTTP_404_NOT_FOUND),
+    (InvalidScenarioError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     # O Abacate Pay fora do ar ou sem chave: como a foto da despensa, 503 diz à
     # tela que vale tentar de novo.
     (PaymentProviderError, status.HTTP_503_SERVICE_UNAVAILABLE),

@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.models import ShoppingListItem
+from app.models import ShoppingList, ShoppingListItem
 from app.services.pricing import quantity_to_charge
 from app.services.units import IncompatibleUnitError, to_base_quantity
 
@@ -74,3 +74,48 @@ def simulate_item(item: ShoppingListItem, quantity: Decimal) -> SimulatedItem:
         packages_needed=packages,
         estimated_cost=cost,
     )
+
+
+class ItemNotInListError(Exception):
+    """O cenário cita item que não é desta lista — de outra pessoa ou inexistente."""
+
+
+class InvalidScenarioError(Exception):
+    """O cenário pede duas coisas ao mesmo item: tirá-lo e mudar a quantidade."""
+
+
+def scenario_total(
+    shopping_list: ShoppingList,
+    excluded: set[uuid.UUID],
+    quantities: dict[uuid.UUID, Decimal],
+) -> Decimal:
+    """Total da lista sob o cenário que a pessoa simulou no Mercado.
+
+    É a conta que o pagamento cobra quando a pessoa paga sem um item, ou com
+    outra quantidade. Mora aqui, e não na tela, pelo mesmo motivo da simulação:
+    a embalagem fechada. E porque o valor cobrado não pode vir de quem paga.
+
+    Item sem preço não entra, como em `list_total`. A prescrição e a lista
+    salva não mudam (decisão 8): o cenário vale só para esta cobrança.
+    """
+    by_id = {item.id: item for item in shopping_list.items}
+
+    unknown = (excluded | quantities.keys()) - by_id.keys()
+    if unknown:
+        # Item de outra pessoa e item que não existe respondem igual (decisão 10).
+        raise ItemNotInListError("item não encontrado nesta lista")
+    if excluded & quantities.keys():
+        raise InvalidScenarioError("o mesmo item não pode sair da compra e mudar de quantidade")
+
+    total = Decimal("0.00")
+    for item in shopping_list.items:
+        if item.id in excluded:
+            continue
+        if item.id in quantities:
+            cost = simulate_item(item, quantities[item.id]).estimated_cost
+        else:
+            cost = item.estimated_cost
+        if cost is not None:
+            total += cost
+
+    return total
