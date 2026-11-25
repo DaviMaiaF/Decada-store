@@ -285,3 +285,96 @@ def test_pagar_exige_autenticacao(client, lista_id):
         client.post(f"/shopping-lists/{lista_id}/payments", json={"method": "pix"}).status_code
         == 401
     )
+
+
+# --------------------------------------------------------------------------
+# pagar o cenário simulado no Mercado
+# --------------------------------------------------------------------------
+
+def _com_aveia(client, user, lista_id, db_session) -> dict:
+    """A lista com um segundo item, avulso, para haver o que tirar da compra."""
+    from app.models import Product
+
+    aveia = db_session.scalars(select(Product).where(Product.name == "Aveia em flocos")).one()
+    client.post(
+        f"/shopping-lists/{lista_id}/items",
+        headers=auth_headers(user),
+        json={"product_id": str(aveia.id), "quantity": "500", "unit": "g"},
+    )
+    return client.get(f"/shopping-lists/{lista_id}", headers=auth_headers(user)).json()
+
+
+def test_pagar_sem_um_item_cobra_so_o_resto(client, marina, lista_id, db_session):
+    lista = _com_aveia(client, marina, lista_id, db_session)
+    frango, aveia = lista["items"]
+
+    resposta = _pagar(
+        client, marina, lista_id, method="cartao_credito", card=CARTAO,
+        excluded_item_ids=[aveia["id"]],
+    )
+
+    assert resposta.status_code == 201
+    assert Decimal(resposta.json()["amount"]) == Decimal(frango["estimated_cost"])
+    # A lista salva não muda: a aveia continua nela, a comprar.
+    relida = client.get(f"/shopping-lists/{lista_id}", headers=auth_headers(marina)).json()
+    assert relida["estimated_total"] == lista["estimated_total"]
+    assert len(relida["items"]) == 2
+
+
+def test_pagar_outra_quantidade_cobra_a_conta_do_servidor(client, marina, lista_id, db_session):
+    lista = _com_aveia(client, marina, lista_id, db_session)
+    frango, aveia = lista["items"]
+    simulado = client.post(
+        f"/shopping-lists/{lista_id}/simulation",
+        headers=auth_headers(marina),
+        json={"items": [{"item_id": frango["id"], "quantity": "0.6"}]},
+    ).json()[0]
+
+    resposta = _pagar(
+        client, marina, lista_id, method="pix",
+        quantities=[{"item_id": frango["id"], "quantity": "0.6"}],
+    )
+
+    esperado = Decimal(simulado["estimated_cost"]) + Decimal(aveia["estimated_cost"])
+    assert Decimal(resposta.json()["amount"]) == esperado
+    assert esperado < Decimal(lista["estimated_total"])
+
+
+def test_total_vindo_da_tela_e_ignorado(client, marina, lista_id):
+    # O valor cobrado nunca vem de quem paga.
+    resposta = _pagar(client, marina, lista_id, method="pix", amount="0.01")
+
+    assert Decimal(resposta.json()["amount"]) == _total(client, marina, lista_id)
+
+
+def test_cenario_com_item_de_outra_lista_e_404(client, marina, lista_id):
+    resposta = _pagar(
+        client, marina, lista_id, method="pix",
+        excluded_item_ids=["00000000-0000-0000-0000-000000000000"],
+    )
+
+    assert resposta.status_code == 404
+
+
+def test_tirar_e_mudar_o_mesmo_item_e_422(client, marina, lista_id, db_session):
+    lista = _com_aveia(client, marina, lista_id, db_session)
+    aveia = lista["items"][1]
+
+    resposta = _pagar(
+        client, marina, lista_id, method="pix",
+        excluded_item_ids=[aveia["id"]],
+        quantities=[{"item_id": aveia["id"], "quantity": "100"}],
+    )
+
+    assert resposta.status_code == 422
+
+
+def test_tirar_tudo_nao_tem_o_que_pagar(client, marina, lista_id):
+    lista = client.get(f"/shopping-lists/{lista_id}", headers=auth_headers(marina)).json()
+
+    resposta = _pagar(
+        client, marina, lista_id, method="pix",
+        excluded_item_ids=[item["id"] for item in lista["items"]],
+    )
+
+    assert resposta.status_code == 422

@@ -256,19 +256,49 @@ def price_item(
         item.pantry_savings = None
         return None
 
-    quantity_charged, packages_needed = quantity_to_charge(quantity_in_base, item.product)
-    cost = (aggregate.average * quantity_charged).quantize(_MONEY, ROUND_HALF_UP)
-
-    item.packages_needed = packages_needed
     item.unit_price_snapshot = aggregate.average
     item.price_reference_date = aggregate.latest_collected_at
     item.price_origin = aggregate.latest_origin
     item.price_confidence = aggregate.confidence
     item.price_sample_size = aggregate.sample_size
-    item.estimated_cost = cost
-    item.pantry_savings = _pantry_savings(item, quantity_in_base, aggregate.average, cost)
+    _apply_cost(item, quantity_in_base, aggregate.average)
 
     return aggregate.confidence
+
+
+def _apply_cost(item: ShoppingListItem, quantity_in_base: Decimal, unit_price: Decimal) -> None:
+    """Grava no item o custo da quantidade a comprar e o que a despensa poupou."""
+    quantity_charged, packages_needed = quantity_to_charge(quantity_in_base, item.product)
+    cost = (unit_price * quantity_charged).quantize(_MONEY, ROUND_HALF_UP)
+
+    item.packages_needed = packages_needed
+    item.estimated_cost = cost
+    item.pantry_savings = _pantry_savings(item, quantity_in_base, unit_price, cost)
+
+
+def reprice_with_snapshot(item: ShoppingListItem) -> None:
+    """Refaz custo e economia do item com o preço que a lista já congelou.
+
+    É o caminho de quando muda a quantidade a comprar, e não o preço: a despensa
+    mudou depois da geração. Consultar o preço de novo misturaria duas coisas —
+    o total mudaria pela despensa e pela coleta que chegou no meio, e a pessoa
+    não saberia dizer quanto a despensa poupou.
+
+    Item sem preço congelado continua sem custo: zero seria mentira.
+    """
+    if item.unit_price_snapshot is None:
+        item.estimated_cost = None
+        item.pantry_savings = None
+        return
+
+    try:
+        quantity_in_base = to_base_quantity(item.quantity, item.unit, item.product.base_unit)
+    except IncompatibleUnitError:
+        item.estimated_cost = None
+        item.pantry_savings = None
+        return
+
+    _apply_cost(item, quantity_in_base, item.unit_price_snapshot)
 
 
 def lowest_confidence(confidences: Sequence[PriceConfidence]) -> PriceConfidence | None:

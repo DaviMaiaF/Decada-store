@@ -21,8 +21,8 @@
  * põe o item na despensa.
  *
  * O item entra sem quantidade, como no cadastro manual sem medida — foto não
- * pesa arroz. Conta para as receitas na hora; para descontar da compra, a
- * pessoa toca no item depois e diz quanto tem.
+ * pesa arroz. Conta para as receitas na hora e tira o produto inteiro da compra;
+ * quem tem só um pouco toca no item depois e diz quanto.
  */
 
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -157,8 +157,8 @@ export function DespensaPorFoto({
           ) : (
             <Body muted>
               Confirme o que você tem — nada entra na despensa sem o seu toque. Os itens entram
-              sem quantidade: já contam para as receitas, e para descontar da compra é só tocar
-              no item depois e dizer quanto tem.
+              sem quantidade: já contam para as receitas e saem inteiros da compra. Se tem só um
+              pouco, toque no item depois e diga quanto.
             </Body>
           )}
 

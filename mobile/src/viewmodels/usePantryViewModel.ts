@@ -73,8 +73,8 @@ export function usePantryViewModel(
 
   /**
    * Depois de mexer na despensa, as receitas mudam junto. A lista de compras
-   * também: o servidor compara o desconto gravado com a despensa de agora, e
-   * sem recarregar o aviso de despensa alterada só apareceria na volta do app.
+   * também: o servidor refaz o desconto da lista ainda não paga, e sem recarregar
+   * o Mercado e a Economia só mostrariam o valor novo na volta do app.
    */
   function recarregar() {
     cliente.invalidateQueries({ queryKey: ['pantry'] });
@@ -128,8 +128,8 @@ export function usePantryViewModel(
     carregando: despensa.isPending,
     falhou: despensa.isError,
     semVinculo: itens.filter((item) => item.product === null).length,
-    // Item vinculado mas sem quantidade conta para as receitas e não abate nada
-    // da compra. Sem este aviso a pessoa acha que o vínculo bastava.
+    // Item vinculado mas sem quantidade tira o produto inteiro da compra. Sem
+    // este aviso, quem tem só um pouco não saberia que precisa dizer quanto.
     semQuantidade: itens.filter(
       (item) => item.product !== null && (item.quantity === null || item.unit === null),
     ).length,

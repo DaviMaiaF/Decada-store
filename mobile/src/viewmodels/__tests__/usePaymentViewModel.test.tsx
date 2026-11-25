@@ -142,7 +142,7 @@ it('Pix fica pendente com o código e aprova no recebimento simulado', async () 
   await act(async () => result.current.pagar());
   await waitFor(() => expect(result.current.pixPendente).not.toBeNull());
 
-  expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined);
+  expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined, undefined);
   expect(result.current.pixPendente?.pix_code).toBe('000201SIMULADO');
   expect(result.current.podePagar).toBe(false);
   expect(onAprovado).not.toHaveBeenCalled();
@@ -277,7 +277,7 @@ it('cartão aprovado vai direto e avisa quem usa o hook', async () => {
     expiration_month: 11,
     expiration_year: 2030,
     security_code: '123',
-  });
+  }, undefined);
   expect(onAprovado).toHaveBeenCalledWith(CARTAO_APROVADO);
 });
 

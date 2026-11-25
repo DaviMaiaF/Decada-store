@@ -31,6 +31,7 @@ from app.services.shopping import (
     PrescribedItemError,
     ProductAlreadyInListError,
     add_extra_item,
+    apply_pantry,
     generate_shopping_list,
     outdated_items,
     remove_item,
@@ -241,7 +242,7 @@ def test_despensa_de_outro_usuario_nao_entra_na_conta(db_session, usuario, catal
     assert resultado.shopping_list.items[0].quantity == Decimal("1.200")
 
 
-def test_item_da_despensa_sem_quantidade_nao_abate(db_session, usuario, catalogo_carregado):
+def test_item_da_despensa_sem_quantidade_abate_tudo(db_session, usuario, catalogo_carregado):
     frango = catalogo_carregado(FRANGO)
     _guardar(db_session, PantryItem(raw_description="frango", product=frango), usuario)
 
@@ -252,8 +253,9 @@ def test_item_da_despensa_sem_quantidade_nao_abate(db_session, usuario, catalogo
     resultado = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
     item = resultado.shopping_list.items[0]
 
-    assert item.quantity == Decimal("1.200")
-    assert item.quantity_from_pantry == Decimal("0.000")
+    assert item.quantity == Decimal("0.000")
+    assert item.quantity_from_pantry == Decimal("1.200")
+    assert item.dispensed_by_pantry
 
 
 # --------------------------------------------------------------------------
@@ -780,14 +782,14 @@ def test_despensa_igual_a_da_geracao_nao_avisa(db_session, usuario, catalogo_car
     assert _divergencias(db_session, lista) == []
 
 
-def test_item_da_despensa_sem_quantidade_nao_avisa(db_session, usuario, catalogo_carregado):
-    # Sem quantidade não abate nada, e a lista já mandava comprar tudo.
+def test_item_da_despensa_sem_quantidade_avisa(db_session, usuario, catalogo_carregado):
+    # Sem quantidade abate a linha inteira, e a lista mandava comprar tudo.
     frango = catalogo_carregado(FRANGO)
     lista = _lista_de_um_item(db_session, usuario, frango)
 
     _frango_em_casa(db_session, usuario, frango, None)
 
-    assert _divergencias(db_session, lista) == []
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.DESPENSA_ALTERADA)]
 
 
 def test_sobra_acima_do_que_a_linha_pedia_nao_avisa(db_session, usuario, catalogo_carregado):
@@ -868,3 +870,148 @@ def test_gerar_de_novo_absorve_a_despensa_nova(db_session, usuario, catalogo_car
 
     assert _divergencias(db_session, nova) == []
     assert nova.items[0].quantity == Decimal("0.700")
+
+
+# --------------------------------------------------------------------------
+# a despensa mudou e a lista se corrige: `apply_pantry`
+# --------------------------------------------------------------------------
+
+def _aplicar(db_session, lista: ShoppingList) -> bool:
+    return apply_pantry(lista, user_pantry(db_session, lista.meal_plan.user_id))
+
+
+def test_despensa_nova_abate_da_lista_com_o_preco_congelado(
+    db_session, usuario, catalogo_carregado
+):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    item = lista.items[0]
+    preco, total = item.unit_price_snapshot, lista.estimated_total
+
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert _aplicar(db_session, lista)
+    assert item.quantity == Decimal("0.700")
+    assert item.quantity_from_pantry == Decimal("0.500")
+    assert item.unit_price_snapshot == preco
+    assert item.pantry_savings > 0
+    assert lista.estimated_total == total - item.pantry_savings
+    # Corrigida, a lista não tem mais o que avisar da despensa.
+    assert _divergencias(db_session, lista) == []
+
+
+def test_despensa_que_cobre_tudo_dispensa_o_item(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    total = lista.estimated_total
+
+    _frango_em_casa(db_session, usuario, frango, "3")
+
+    assert _aplicar(db_session, lista)
+    item = lista.items[0]
+    assert item.dispensed_by_pantry
+    assert item.quantity_from_pantry == Decimal("1.200")
+    assert item.estimated_cost == Decimal("0.00")
+    assert item.pantry_savings == total
+    assert lista.estimated_total == Decimal("0.00")
+
+
+def test_tirar_da_despensa_devolve_a_compra(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    em_casa = _frango_em_casa(db_session, usuario, frango, "0.5")
+    lista = _lista_de_um_item(db_session, usuario, frango)
+
+    db_session.delete(em_casa)
+    db_session.flush()
+
+    assert _aplicar(db_session, lista)
+    assert lista.items[0].quantity == Decimal("1.200")
+    assert lista.items[0].pantry_savings == Decimal("0.00")
+
+
+def test_embalado_so_poupa_quando_tira_uma_embalagem(db_session, usuario, catalogo_carregado):
+    # 300 g de queijo vendido em pacote: 100 g em casa ainda leva o pacote.
+    queijo = catalogo_carregado(QUEIJO)
+    plano = _plano(usuario, _item(1, "300 g de queijo minas", "300", G, queijo))
+    db_session.add(plano)
+    db_session.flush()
+    gerada = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
+    lista = gerada.shopping_list
+    custo = lista.items[0].estimated_cost
+
+    _guardar(db_session, PantryItem(raw_description="queijo", product=queijo,
+                                    quantity=Decimal("100"), unit=G), usuario)
+
+    assert _aplicar(db_session, lista)
+    assert lista.items[0].quantity_from_pantry == Decimal("0.100")
+    assert lista.items[0].estimated_cost == custo
+    assert lista.items[0].pantry_savings == Decimal("0.00")
+
+
+def test_despensa_sem_quantidade_dispensa_o_item(db_session, usuario, catalogo_carregado):
+    # "Tenho frango", sem dizer quanto: o frango sai da compra.
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    total = lista.estimated_total
+
+    _frango_em_casa(db_session, usuario, frango, None)
+
+    assert _aplicar(db_session, lista)
+    assert lista.items[0].dispensed_by_pantry
+    assert lista.items[0].pantry_savings == total
+
+
+def test_linha_ja_comprada_nao_muda(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    lista.items[0].purchased_at = AGORA
+
+    _frango_em_casa(db_session, usuario, frango, "1.2")
+
+    assert not _aplicar(db_session, lista)
+    assert lista.items[0].quantity == Decimal("1.200")
+
+
+@pytest.mark.parametrize("situacao", [PaymentStatus.PENDENTE, PaymentStatus.APROVADO])
+def test_lista_com_pagamento_em_curso_nao_muda(
+    db_session, usuario, catalogo_carregado, situacao
+):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    total = lista.estimated_total
+    lista.payments.append(
+        Payment(method=PaymentMethod.PIX, status=situacao, amount=total)
+    )
+    db_session.flush()
+
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert not _aplicar(db_session, lista)
+    assert lista.estimated_total == total
+
+
+def test_pagamento_recusado_nao_trava_a_lista(db_session, usuario, catalogo_carregado):
+    frango = catalogo_carregado(FRANGO)
+    lista = _lista_de_um_item(db_session, usuario, frango)
+    lista.payments.append(
+        Payment(method=PaymentMethod.CARTAO_CREDITO, status=PaymentStatus.RECUSADO,
+                amount=lista.estimated_total)
+    )
+    db_session.flush()
+
+    _frango_em_casa(db_session, usuario, frango, "0.5")
+
+    assert _aplicar(db_session, lista)
+
+
+def test_avulso_tambem_e_corrigido(db_session, usuario, catalogo_carregado):
+    lista = _lista_de_um_item(db_session, usuario, catalogo_carregado(FRANGO))
+    aveia = catalogo_carregado(AVEIA)
+    item = add_extra_item(db_session, lista, aveia, Decimal("500"), G, reference=AGORA)
+
+    _guardar(db_session, PantryItem(raw_description="aveia", product=aveia,
+                                    quantity=Decimal("200"), unit=G), usuario)
+
+    assert _aplicar(db_session, lista)
+    assert item.quantity == Decimal("0.300")
+    assert item.quantity_from_pantry == Decimal("0.200")

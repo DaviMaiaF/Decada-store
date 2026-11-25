@@ -25,7 +25,12 @@ import {
 } from '../services/api';
 import { formatMoney } from '../services/format';
 import { readRegion, saveRegion } from '../services/session';
-import { simulatedDifference, simulatedTotal } from '../services/simulation';
+import {
+  CENARIO_VAZIO,
+  type CenarioDeCompra,
+  simulatedDifference,
+  simulatedTotal,
+} from '../services/simulation';
 import { parseDecimal, suggestedAmount } from '../services/units';
 import { usePantryReviewViewModel } from './usePantryReviewViewModel';
 import type {
@@ -55,6 +60,9 @@ export function useMarketViewModel(listId: string | null) {
   const [trocandoRegiao, setTrocandoRegiao] = useState(false);
   // Checkout simulado: toma a aba até a pessoa voltar à lista.
   const [finalizando, setFinalizando] = useState(false);
+  // A simulação do Mercado segue para o checkout, que cobra esse cenário, e
+  // volta com a pessoa para a lista — desfazer a conta ao voltar seria perdê-la.
+  const [cenario, setCenario] = useState<CenarioDeCompra>(CENARIO_VAZIO);
 
   const lista = useQuery({
     queryKey: ['shopping-list', listId],
@@ -72,7 +80,11 @@ export function useMarketViewModel(listId: string | null) {
     lista: lista.data ?? null,
     trocarRegiao: () => setTrocandoRegiao(true),
     manterRegiao: () => setTrocandoRegiao(false),
-    finalizar: () => setFinalizando(true),
+    cenario,
+    finalizar: (simulado: CenarioDeCompra = CENARIO_VAZIO) => {
+      setCenario(simulado);
+      setFinalizando(true);
+    },
     voltarALista: () => setFinalizando(false),
   };
 }
@@ -80,8 +92,9 @@ export function useMarketViewModel(listId: string | null) {
 /**
  * O que há em casa, perguntado antes de gerar a lista.
  *
- * A despensa é descontada quando a lista é gerada, e a lista fica congelada: quem
- * gera com a despensa vazia leva a compra inteira. Por isso a pergunta vem antes,
+ * A despensa é descontada quando a lista é gerada; mudar a despensa depois
+ * corrige a lista, mas quem gera com a despensa vazia vê a compra inteira até
+ * cadastrar o que tem. Por isso a pergunta vem antes,
  * mas não trava — "não tenho nada" e simplesmente gerar são respostas válidas.
  * "Não tenho nada" conclui a etapa Despensa da trilha, como o botão da aba.
  * Lê a mesma chave da aba Despensa, então cadastrar lá aparece aqui na volta.
@@ -169,7 +182,10 @@ export function descreverSimulacao(fora: number, diferenca: string): string {
 }
 
 /** A lista carregada: corredores, marcação, remoção do avulso e simulação. */
-export function useShoppingListViewModel(lista: ShoppingList) {
+export function useShoppingListViewModel(
+  lista: ShoppingList,
+  cenarioInicial: CenarioDeCompra = CENARIO_VAZIO,
+) {
   const cliente = useQueryClient();
   const chave = ['shopping-list', lista.id];
 
@@ -238,12 +254,14 @@ export function useShoppingListViewModel(lista: ShoppingList) {
   // marcação no servidor, mas não faz parte do trajeto pelo mercado.
   const comprados = aComprar.filter((item) => item.purchased).length;
 
-  // Simulação: "e se eu não levar isto?". Vive só na tela — nada é enviado, a
-  // lista salva não muda e a prescrição menos ainda (decisão 8). Por isso é um
-  // estado local, e não uma mutação.
-  const [foraDaSimulacao, setForaDaSimulacao] = useState<string[]>([]);
+  // Simulação: "e se eu não levar isto?". A lista salva não muda e a prescrição
+  // menos ainda (decisão 8). Por isso é um estado local, e não uma mutação: ele
+  // só sai daqui como o cenário que o pagamento cobra, ao finalizar.
+  const [foraDaSimulacao, setForaDaSimulacao] = useState<string[]>(cenarioInicial.excluidos);
   // Resultado que veio do servidor para cada item cuja quantidade foi mexida.
-  const [porQuantidade, setPorQuantidade] = useState<Record<string, SimulatedItem>>({});
+  const [porQuantidade, setPorQuantidade] = useState<Record<string, SimulatedItem>>(
+    cenarioInicial.quantidades,
+  );
   const excluidos = new Set(foraDaSimulacao);
 
   const simulacao = useMutation({
@@ -280,6 +298,8 @@ export function useShoppingListViewModel(lista: ShoppingList) {
       aComprar.length > 0 && aComprar.every((item) => item.estimated_cost === null),
 
     simulando,
+    /** O cenário que segue para o checkout: o pagamento cobra o que está aqui. */
+    cenario: { excluidos: foraDaSimulacao, quantidades: porQuantidade } satisfies CenarioDeCompra,
     totalSimulado,
     totalOriginal,
     resumoDaSimulacao: descreverSimulacao(

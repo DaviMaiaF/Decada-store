@@ -24,6 +24,7 @@ from app.services.pantry_photo import (
     build_recognizer,
     recognize_photo,
 )
+from app.services.shopping import apply_pantry_to_user_lists
 from app.services.text import normalize_text
 
 router = APIRouter(prefix="/pantry", tags=["despensa"])
@@ -72,6 +73,9 @@ def add_pantry_item(
 
     Aceita item só com texto: enquanto não houver produto do catálogo
     confirmado, o item aparece na despensa mas não abate nada da compra.
+
+    Com produto e quantidade, o item já abate das listas que ainda não foram
+    pagas — ver `apply_pantry`.
     """
     ensure_measurable(_get_product(session, payload.product_id), payload.unit)
 
@@ -84,6 +88,7 @@ def add_pantry_item(
         unit=payload.unit,
     )
     session.add(item)
+    apply_pantry_to_user_lists(session, user.id)
     session.commit()
     session.refresh(item)
     return item
@@ -147,6 +152,7 @@ def update_pantry_item(
     for field, value in data.items():
         setattr(item, field, value)
 
+    apply_pantry_to_user_lists(session, user.id)
     session.commit()
     # Recarrega junto com o produto: a resposta devolve o vínculo, não só o id.
     return _get_item(session, user, item_id)
@@ -154,8 +160,9 @@ def update_pantry_item(
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_pantry_item(session: DbSession, user: CurrentPatient, item_id: uuid.UUID) -> Response:
-    """Tira um item da despensa."""
+    """Tira um item da despensa — e o desconto dele das listas ainda não pagas."""
     session.delete(_get_item(session, user, item_id))
+    apply_pantry_to_user_lists(session, user.id)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

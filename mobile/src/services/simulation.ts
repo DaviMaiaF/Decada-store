@@ -10,6 +10,8 @@
  * justamente no número que a pessoa usa para decidir a compra.
  */
 
+import type { SimulatedItem } from '../types/api';
+
 /** O mínimo que a simulação precisa saber de um item. */
 export type ItemSimulavel = {
   id: string;
@@ -44,4 +46,22 @@ export function simulatedTotal(items: ItemSimulavel[], excluded: Set<string>): s
  */
 export function simulatedDifference(simulado: string, original: string): string {
   return ((paraCentavos(simulado) - paraCentavos(original)) / 100).toFixed(2);
+}
+
+/**
+ * O cenário simulado no Mercado, como ele segue para o checkout.
+ *
+ * `excluidos` são os itens que ficam fora desta compra; `quantidades`, o custo
+ * que o servidor calculou para cada item com outra quantidade. O pagamento
+ * envia os dois, e o servidor refaz o valor — a conta daqui é só para mostrar.
+ */
+export type CenarioDeCompra = {
+  excluidos: string[];
+  quantidades: Record<string, SimulatedItem>;
+};
+
+export const CENARIO_VAZIO: CenarioDeCompra = { excluidos: [], quantidades: {} };
+
+export function cenarioVazio(cenario: CenarioDeCompra): boolean {
+  return cenario.excluidos.length === 0 && Object.keys(cenario.quantidades).length === 0;
 }

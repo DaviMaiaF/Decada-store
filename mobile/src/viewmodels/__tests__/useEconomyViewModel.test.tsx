@@ -132,6 +132,28 @@ describe('resumir', () => {
     expect(resumo.economia).toBeCloseTo(14.75);
   });
 
+  it('lista o que a despensa abateu, do maior ao menor, sem os zeros', () => {
+    const produto = (nome: string) => ({ ...item({ id: 'x' }).product, name: nome });
+    const resumo = resumir(
+      lista([
+        item({ id: 'a', product: produto('Ovos'), pantry_savings: '2.25' }),
+        item({
+          id: 'b',
+          product: produto('Frango'),
+          pantry_savings: '12.50',
+          dispensed_by_pantry: true,
+        }),
+        item({ id: 'c', product: produto('Leite'), pantry_savings: '0.00' }),
+        item({ id: 'd', product: produto('Arroz'), pantry_savings: null }),
+      ]),
+    );
+
+    expect(resumo.abatidos).toEqual([
+      { id: 'b', nome: 'Frango', valor: 12.5, inteiro: true },
+      { id: 'a', nome: 'Ovos', valor: 2.25, inteiro: false },
+    ]);
+  });
+
   it('separa carrinho e falta, sem contar o que a despensa dispensou', () => {
     const resumo = resumir(
       lista([

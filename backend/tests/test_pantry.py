@@ -168,24 +168,25 @@ def test_produto_vendido_por_unidade():
 # o que não foi medido não abate
 # --------------------------------------------------------------------------
 
-def test_item_sem_quantidade_nao_abate_mas_sinaliza():
-    # "Tenho azeite em casa" não diz quanto. Abater seria inventar o número.
+def test_item_sem_quantidade_abate_o_item_inteiro():
+    # "Tenho frango em casa", sem dizer quanto, é dizer que há o bastante.
     frango = _produto()
 
     cobertura = coverage(Decimal("1.2"), KG, frango, [_na_despensa(frango, None)])
 
-    assert cobertura.available == Decimal("0.000")
-    assert cobertura.to_buy == Decimal("1.200")
+    assert cobertura.available == Decimal("1.200")
+    assert cobertura.to_buy == Decimal("0.000")
+    assert cobertura.fully_covered is True
     assert cobertura.has_unmeasured_items is True
 
 
-def test_item_com_quantidade_mas_sem_unidade_tambem_nao_abate():
+def test_item_com_quantidade_mas_sem_unidade_tambem_abate_tudo():
     frango = _produto()
     item = _na_despensa(frango, "2")
 
     cobertura = coverage(Decimal("1.2"), KG, frango, [item])
 
-    assert cobertura.to_buy == Decimal("1.200")
+    assert cobertura.to_buy == Decimal("0.000")
     assert cobertura.has_unmeasured_items is True
 
 
@@ -200,13 +201,13 @@ def test_unidade_de_outra_grandeza_na_despensa_nao_abate():
     assert cobertura.has_unmeasured_items is True
 
 
-def test_o_que_foi_medido_abate_mesmo_com_item_sem_quantidade_ao_lado():
+def test_item_sem_quantidade_ao_lado_do_medido_ainda_abate_tudo():
     frango = _produto()
     despensa = [_na_despensa(frango, "0.5", KG), _na_despensa(frango, None)]
 
     cobertura = coverage(Decimal("1.2"), KG, frango, despensa)
 
-    assert cobertura.to_buy == Decimal("0.700")
+    assert cobertura.to_buy == Decimal("0.000")
     assert cobertura.has_unmeasured_items is True
 
 

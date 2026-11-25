@@ -285,6 +285,27 @@ describe('simulação de cenário', () => {
     expect(screen.getByText('1 item fora da simulação · R$ 12,31 a menos')).toBeTruthy();
   });
 
+  it('a simulação segue para o checkout e volta com a pessoa para a lista', async () => {
+    await montar(
+      lista([
+        item({ id: 'a', estimated_cost: '12.31' }),
+        item({ id: 'b', estimated_cost: '5.32' }),
+      ]),
+    );
+
+    await fireEvent.press((await screen.findAllByText('Simular sem este item'))[0]);
+    await fireEvent.press(screen.getByText('Finalizar compra (simulada)'));
+
+    expect(await screen.findByText('TOTAL DA SIMULAÇÃO')).toBeTruthy();
+    expect(screen.getAllByText('R$ 5,32').length).toBeGreaterThan(0);
+    expect(screen.getByText(/1 item\(ns\) ficaram fora desta compra/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Voltar à lista'));
+
+    // Voltar não desfaz a conta: a lista continua simulando sem o item.
+    expect(await screen.findByText('SIMULANDO A COMPRA')).toBeTruthy();
+  });
+
   it('simular não mexe na lista salva nem manda nada ao servidor', async () => {
     await montar(lista([item({ id: 'a', estimated_cost: '12.31' })]));
 
@@ -881,7 +902,7 @@ describe('checkout simulado', () => {
 
     expect(await screen.findByLabelText('QR code do Pix de teste')).toBeTruthy();
     expect(screen.getByText('000201SIMULADO')).toBeTruthy();
-    expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined);
+    expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined, { excluidos: [], quantidades: {} });
     expect(marcarItem).not.toHaveBeenCalled();
 
     await fireEvent.press(screen.getByText('Copiar código Pix'));
@@ -944,7 +965,7 @@ describe('checkout simulado', () => {
       expiration_month: 11,
       expiration_year: 2030,
       security_code: '123',
-    });
+    }, { excluidos: [], quantidades: {} });
   });
 
   it('cartão recusado mostra o motivo e não conclui', async () => {

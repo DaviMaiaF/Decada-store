@@ -146,22 +146,32 @@ não mudou: a rota de confirmação já sobrescrevia a anterior.
 | Aviso quando a região não tem preço | ✅ | Nenhum item com `estimated_cost` quer dizer região sem coleta, e a tela diz isso |
 | Simular a compra sem um item | ✅ | Soma local em `services/simulation.ts`; não altera a lista |
 | Simular outra quantidade | ✅ | `POST /shopping-lists/{id}/simulation`: a conta da embalagem é do servidor |
-| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento; aprovado o pagamento, marca como comprados os itens que faltavam (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
+| Finalizar compra | ✅ | **Simulada**: `CheckoutScreen` avisa que os valores são fictícios e nenhum pedido é feito. Tem duas etapas, o resumo e o pagamento. Com simulação em curso no Mercado, o checkout mostra e cobra esse cenário (ver "Pagar o que foi simulado"); aprovado o pagamento, marca como comprados os itens que faltavam e entraram na compra (o mesmo `PATCH` do "já comprei"), mostra o ícone de sucesso animado e leva à tela de início |
 | Pagamento de teste | ✅ | Pix pelo Abacate Pay em modo de teste (QR, copia-e-cola e "simular pagamento recebido") ou cartão de crédito simulado, com os titulares de teste do Mercado Pago. `POST /shopping-lists/{id}/payments`; ver abaixo |
-| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado, confirmado depois da geração ou despensa que hoje abateria outra quantidade (`despensa_alterada`). Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; o título diz se mudou o plano, a despensa ou os dois. A lista salva nunca se corrige sozinha |
+| Aviso de lista desatualizada | ✅ | `GET /shopping-lists/{id}` devolve `outdated_items`: produto trocado, item que deixou de estar confirmado, confirmado depois da geração ou despensa que hoje abateria outra quantidade (`despensa_alterada`, só na lista com pagamento pendente). Mercado e checkout avisam e oferecem "Gerar lista atualizada" na mesma região; o título diz se mudou o plano, a despensa ou os dois. Mudança no plano nunca corrige a lista sozinha; mudança na despensa corrige (ver abaixo) |
 | Exportar para WhatsApp | ⛔ | |
 
-**A despensa é perguntada antes de a lista nascer.** O desconto acontece na geração e a
-lista fica congelada: quem gera com a despensa vazia leva a compra inteira, e cadastrar a
-despensa depois não corrige a lista. Por isso o formulário de região abre com a pergunta
+**A despensa é perguntada antes de a lista nascer.** O desconto acontece na geração, e
+quem gera com a despensa vazia vê a compra inteira até cadastrar o que tem. Por isso o
+formulário de região abre com a pergunta
 (`usePantryQuestionViewModel`, que lê a mesma consulta `['pantry']` da aba Despensa). Ela
 **não trava** a geração — "Não tenho nada em casa" e gerar direto são respostas válidas — e
 essa resposta fica gravada no plano (`pantry_reviewed_at`, ver "A trilha da jornada"):
 quem já respondeu não é perguntado de novo ao reabrir o app, e a etapa Despensa da trilha
 conta como cumprida.
 
-**E a despensa que muda depois avisa.** Cadastrar, editar ou tirar da despensa depois de
-gerar não corrige a lista, mas ela deixa de ficar calada. A cada leitura o servidor refaz,
+**E a despensa que muda depois corrige a lista.** Cadastrar, editar ou tirar da despensa
+refaz o desconto em todas as listas da pessoa que ainda não têm pagamento pendente nem
+aprovado (`apply_pantry`, em [`shopping.py`](../../backend/app/services/shopping.py)). Para
+cada linha ainda não comprada, o que ela cobre (o que compra mais o que veio de casa) não
+muda; muda a divisão entre as duas partes, com o mesmo teto da geração. O custo e o
+`pantry_savings` são refeitos com o **preço congelado** (`reprice_with_snapshot`): a
+diferença no total é só a despensa, e é ela que a aba Economia mostra. Ficam de fora a
+linha já comprada — o que a pessoa guarda em casa depois da compra não vira desconto do que
+ela já pagou — e a lista com pagamento: o valor da cobrança já foi copiado.
+
+Na lista com Pix pendente a despensa não corrige nada, então o aviso continua. A cada
+leitura o servidor refaz,
 para cada linha, a conta da geração sobre o que a linha cobria (o que compra mais o que veio
 de casa) e compara com o `quantity_from_pantry` gravado; se diferir, a linha entra em
 `outdated_items` como `despensa_alterada`. É calculado, não gravado: não há coluna nova. Com
@@ -170,7 +180,6 @@ desconto foi calculado com a despensa de antes. Ficam de fora, de propósito:
 
 - **sobra acima do pedido** — o abatimento é limitado ao que a linha pedia, então ter
   mais em casa não muda nada;
-- **item sem quantidade** — não abate, e a lista já sabia disso;
 - **linha comprada e lista paga** — depois da compra a pessoa guarda o que trouxe na
   despensa, e o aviso pediria uma lista nova do que já está em casa;
 - **avulso** — o aviso mostra a descrição do item do plano, e o avulso não tem; ele é
@@ -252,6 +261,15 @@ demonstração, com o Pix no Abacate Pay em modo de teste e o cartão simulado a
 a resposta da API carrega `simulated: true` para a tela não ter como esquecer o aviso. O valor cobrado é o total estimado da lista,
 **copiado** no pagamento — se a lista mudar depois, o que foi pago não muda.
 
+**Pagar o que foi simulado.** Quem tira um item ou muda uma quantidade na simulação e
+finaliza paga esse cenário, não a lista salva. O `useMarketViewModel` leva o cenário
+(`CenarioDeCompra`, em [`simulation.ts`](../../mobile/src/services/simulation.ts)) ao
+checkout, que mostra o total dele e o envia no `POST /payments` como `excluded_item_ids` e
+`quantities`. O servidor refaz o valor (`scenario_total`) com os preços congelados e
+**nunca** aceita total vindo da tela. A lista salva e a prescrição não mudam (decisão 8): o
+item tirado continua na lista, a comprar, e não é marcado como comprado. Voltar do checkout
+à lista mantém a simulação.
+
 - **Pix** é criado no [Abacate Pay](../../backend/app/services/abacatepay.py) em modo de
   teste e nasce pendente, com o copia-e-cola dele e o QR desenhado a partir do código. Vale
   uma hora e aceita a partir de R$ 1,00. O botão "Simular pagamento recebido" chama o
@@ -315,7 +333,8 @@ pessoa não fazer, e ela só abate da compra se existir quando a lista é gerada
 diz o que ela vai precisar, então o cartão pergunta só por isso
 (`usePantryGuideViewModel`). Quem decide é a pessoa (decisão 11): nada entra sem o toque em
 "Tenho". O item entra como o da foto — vinculado ao produto e **sem quantidade** —, então
-conta para as receitas na hora e só abate da compra depois que a pessoa disser quanto tem.
+conta para as receitas na hora e **tira o produto inteiro da compra**: "tenho ovo" é ter o
+bastante. Quem tem só um pouco toca no item e diz quanto, e aí o abatimento é parcial.
 "Não tenho" não grava nada e vale só para a sessão. Produto repetido no plano aparece uma
 vez, e com a despensa sem carregar o cartão não pergunta.
 
@@ -437,11 +456,14 @@ confundi-las.
 
 ## 5. Economia
 
-Não tem protótipo. A tela mostra só conta que o servidor sabe fazer:
+Não tem protótipo. A tela mostra só conta que o servidor sabe fazer. Ela acompanha a
+despensa: mudar a despensa refaz o desconto da lista ainda não paga, e a Despensa invalida
+`['shopping-list']`, que é a chave que esta aba lê.
 
 | A tela mostra | Backend | Observação |
 |---|---|---|
 | "A despensa poupou R$ X" | ✅ | `ShoppingListItem.pantry_savings`, somado na lista |
+| O que a despensa abateu, item a item | ✅ | Cada item com `pantry_savings` maior que zero, do que mais poupou ao que menos poupou; "não precisa comprar" quando `dispensed_by_pantry` |
 | Total estimado da compra | ✅ | `ShoppingList.estimated_total` |
 | Já no carrinho · ainda falta | ✅ | Soma de `estimated_cost` dos itens com `purchased` |
 | Itens com preço · sem preço na região | ✅ | Contagem sobre os itens |

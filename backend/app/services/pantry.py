@@ -2,13 +2,16 @@
 
 Regras que este módulo faz valer:
   - o abatimento é parcial: precisa de 1,2 kg e tem 0,5 kg em casa, compra 0,7 kg;
-  - item da despensa sem quantidade não abate nada — só sinaliza que existe;
-  - item cuja unidade é de outra grandeza que a do produto também não abate;
+  - item da despensa sem quantidade abate o item inteiro: quem diz "tenho ovo"
+    sem dizer quanto está dizendo que tem o bastante;
+  - item cuja unidade é de outra grandeza que a do produto não abate: é dado
+    errado, não um "tenho" (a entrada já recusa, ver `ensure_measurable`);
   - a soma é feita na unidade base do produto (kg, l ou unidade);
   - ter mais do que precisa zera a compra, nunca produz quantidade negativa.
 
-Não abater o que não foi medido é a mesma regra que vale para preço: melhor
-mandar comprar de novo do que decidir por um número que ninguém informou.
+O item sem quantidade abate tudo porque é o que a pessoa quis dizer ao marcar
+"Tenho" ou confirmar o alimento da foto — e é a mesma leitura que as receitas já
+fazem dele. Quem tem só um pouco diz quanto, e aí o abatimento é parcial.
 """
 
 import uuid
@@ -39,14 +42,14 @@ class PantryCoverage:
     """
 
     needed: Decimal
-    # O que a despensa abate de fato: só o que tem quantidade e unidade compatível.
+    # O que a despensa abate de fato. Com item sem quantidade, é tudo o que se
+    # precisa — ver `has_unmeasured_stock`.
     available: Decimal
     # O que sobra para comprar. Nunca negativo.
     to_buy: Decimal
     fully_covered: bool
-    # Há item deste produto na despensa que não entrou na conta — sem quantidade
-    # ou em unidade de outra grandeza. Serve para a tela avisar "você já tem algo
-    # disso em casa" sem que o número de compra tenha mudado.
+    # Há item deste produto na despensa fora da soma — sem quantidade, que cobre
+    # o item inteiro, ou em unidade de outra grandeza, que não abate nada.
     has_unmeasured_items: bool
     base_unit: BaseUnit
 
@@ -103,6 +106,32 @@ def available_quantity(
     return _quantize(total), unmeasured
 
 
+def has_unmeasured_stock(pantry_items: Sequence[PantryItem], product: Product) -> bool:
+    """A despensa tem este produto sem medida: o "Tenho" do guia, o item da foto.
+
+    Sem quantidade ou sem unidade, o item diz que há o bastante em casa, e abate
+    o que se precisa por inteiro.
+    """
+    return any(
+        item.product_id == product.id and (item.quantity is None or item.unit is None)
+        for item in pantry_items
+    )
+
+
+def pantry_cover(
+    pantry_items: Sequence[PantryItem], product: Product, needed: Decimal
+) -> Decimal:
+    """Quanto de `needed` (na unidade base) a despensa abate deste produto.
+
+    Nunca mais do que se precisa: ter três quilos em casa não faz o item ter
+    pedido três quilos. Item sem quantidade abate tudo.
+    """
+    if has_unmeasured_stock(pantry_items, product):
+        return _quantize(needed)
+    available, _ = available_quantity(pantry_items, product)
+    return _quantize(min(available, needed))
+
+
 def coverage(
     quantity: Decimal,
     unit: MeasurementUnit,
@@ -117,6 +146,8 @@ def coverage(
     """
     needed = _quantize(to_base_quantity(quantity, unit, product.base_unit))
     available, unmeasured = available_quantity(pantry_items, product)
+    if has_unmeasured_stock(pantry_items, product):
+        available = needed
 
     to_buy = needed - available
     if to_buy < _ZERO:
