@@ -1243,39 +1243,86 @@ def test_editar_o_produto_depois_de_gerar_a_lista_aparece_na_leitura(
     assert relida["estimated_total"] == em_dia["estimated_total"]
 
 
-def test_cadastrar_na_despensa_depois_de_gerar_a_lista_aparece_na_leitura(
-    client, marina, db_session
-):
-    # Quem cadastra o frango depois de gerar a lista continuava com a compra
-    # inteira e sem aviso nenhum.
-    plano_id, frango = plano_confirmado(client, marina, db_session)
-    lista_id = client.post(
+# Titular de teste que o cartão simulado aprova.
+CARTAO_APROVADO = {
+    "number": "4235 6477 2802 5682",
+    "holder_name": "APRO",
+    "expiration_month": 11,
+    "expiration_year": 2030,
+    "security_code": "123",
+}
+
+
+def _gerar_lista(client, marina, plano_id) -> str:
+    return client.post(
         f"/meal-plans/{plano_id}/shopping-lists",
         headers=_headers(marina),
         json={"state_code": "DF", "city": "Brasília"},
     ).json()["shopping_list"]["id"]
-    em_dia = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
 
-    client.post(
+
+def _frango_na_despensa(client, marina, frango, quantidade: str) -> dict:
+    return client.post(
         "/pantry",
         headers=_headers(marina),
         json={
-            "raw_description": "meio quilo de frango",
+            "raw_description": "frango",
             "product_id": str(frango.id),
-            "quantity": "0.5",
+            "quantity": quantidade,
             "unit": "kg",
         },
+    ).json()
+
+
+def test_cadastrar_na_despensa_depois_de_gerar_a_lista_abate_dela(client, marina, db_session):
+    # Quem cadastra o frango depois de gerar a lista continuava pagando a
+    # compra inteira: a economia só aparecia gerando a lista de novo.
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = _gerar_lista(client, marina, plano_id)
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+
+    _frango_na_despensa(client, marina, frango, "0.5")
+
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    item = depois["items"][0]
+
+    assert depois["outdated_items"] == []
+    assert Decimal(item["quantity"]) == Decimal(antes["items"][0]["quantity"]) - Decimal("0.5")
+    assert Decimal(item["quantity_from_pantry"]) == Decimal("0.5")
+    assert Decimal(item["pantry_savings"]) > 0
+    # O preço é o congelado: a diferença no total é exatamente a economia.
+    assert Decimal(depois["estimated_total"]) == (
+        Decimal(antes["estimated_total"]) - Decimal(item["pantry_savings"])
     )
+    assert item["unit_price_snapshot"] == antes["items"][0]["unit_price_snapshot"]
 
-    relida = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
-    plano = client.get(f"/meal-plans/{plano_id}", headers=_headers(marina)).json()
 
-    assert relida["outdated_items"] == [
-        {
-            "plan_item_id": plano["items"][0]["id"],
-            "description": plano["items"][0]["raw_description"],
-            "change": "despensa_alterada",
-        }
-    ]
-    # O desconto continua o da geração até a pessoa gerar de novo.
-    assert relida["items"][0]["quantity"] == em_dia["items"][0]["quantity"]
+def test_tirar_da_despensa_devolve_o_item_a_lista(client, marina, db_session):
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = _gerar_lista(client, marina, plano_id)
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    em_casa = _frango_na_despensa(client, marina, frango, "0.5")
+
+    client.delete(f"/pantry/{em_casa['id']}", headers=_headers(marina))
+
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert depois["items"][0]["quantity"] == antes["items"][0]["quantity"]
+    assert depois["estimated_total"] == antes["estimated_total"]
+
+
+def test_lista_paga_nao_muda_com_a_despensa(client, marina, db_session):
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = _gerar_lista(client, marina, plano_id)
+    pago = client.post(
+        f"/shopping-lists/{lista_id}/payments",
+        headers=_headers(marina),
+        json={"method": "cartao_credito", "card": CARTAO_APROVADO},
+    )
+    assert pago.json()["status"] == "aprovado"
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+
+    _frango_na_despensa(client, marina, frango, "0.5")
+
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert depois["items"][0]["quantity"] == antes["items"][0]["quantity"]
+    assert depois["estimated_total"] == antes["estimated_total"]

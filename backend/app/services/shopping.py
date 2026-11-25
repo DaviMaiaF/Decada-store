@@ -13,8 +13,9 @@ Regras que este módulo faz valer:
   - o mesmo produto não entra duas vezes na lista: itens do plano que pedem o
     mesmo produto são somados numa linha, e a despensa abate uma vez só;
   - item vindo da prescrição não pode ser removido; item avulso pode;
-  - a lista não se corrige quando o plano ou a despensa mudam: ela diz o que
-    divergiu.
+  - a lista não se corrige quando o plano muda: ela diz o que divergiu;
+  - quando a despensa muda, a lista sem pagamento refaz o desconto das linhas
+    ainda não compradas, com o preço que já tinha congelado.
 
 Depois de gerada, a lista aceita item avulso: o que a pessoa acrescenta à
 compra sem que o plano o tenha pedido. Ele muda a compra, nunca a prescrição —
@@ -32,6 +33,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -49,6 +51,7 @@ from app.services.pricing import (
     list_total,
     price_item,
     price_shopping_list,
+    reprice_with_snapshot,
 )
 from app.services.units import (
     IncompatibleUnitError,
@@ -244,6 +247,71 @@ def remove_item(session: Session, item: ShoppingListItem) -> None:
     session.flush()
 
     shopping_list.estimated_total = list_total(shopping_list)
+
+
+# Com pagamento nesses estados o valor já foi copiado para a cobrança: mexer na
+# lista faria a tela mostrar um total e o pagamento cobrar outro.
+_LOCKING_PAYMENTS = (PaymentStatus.PENDENTE, PaymentStatus.APROVADO)
+
+
+def apply_pantry(shopping_list: ShoppingList, pantry_items: Sequence[PantryItem]) -> bool:
+    """Refaz o desconto da despensa na lista. Devolve se alguma linha mudou.
+
+    Cada linha cobre o que compra mais o que veio de casa; isso não muda. O que
+    muda é a divisão entre as duas partes, pela despensa de agora — com o mesmo
+    teto da geração: ter três quilos em casa não faz a linha ter pedido três.
+
+    O preço é o congelado na geração (`reprice_with_snapshot`). Assim a
+    diferença no total é só a despensa, e é isso que a aba Economia mostra.
+
+    Ficam de fora:
+      - a lista com pagamento pendente ou aprovado: o valor da cobrança já foi
+        copiado, e a lista paga é a compra que aconteceu;
+      - a linha já comprada: depois da compra a pessoa guarda em casa o que
+        trouxe, e isso não pode virar desconto do que ela já pagou.
+
+    Não confirma a transação: quem chama decide quando fazer commit.
+    """
+    if any(payment.status in _LOCKING_PAYMENTS for payment in shopping_list.payments):
+        return False
+
+    changed = False
+    for item in shopping_list.items:
+        if item.purchased:
+            continue
+
+        covered = item.quantity + item.quantity_from_pantry
+        available, _ = available_quantity(pantry_items, item.product)
+        from_pantry = min(available, covered).quantize(Decimal("0.001"))
+
+        if from_pantry == item.quantity_from_pantry.quantize(Decimal("0.001")):
+            continue
+
+        item.quantity_from_pantry = from_pantry
+        item.quantity = covered - from_pantry
+        reprice_with_snapshot(item)
+        changed = True
+
+    if changed:
+        shopping_list.estimated_total = list_total(shopping_list)
+    return changed
+
+
+def apply_pantry_to_user_lists(session: Session, user_id: uuid.UUID) -> None:
+    """Leva a despensa de agora a todas as listas da pessoa que ainda aceitam.
+
+    Chamado pelas rotas da despensa depois de cada mudança. Não confirma a
+    transação: a mudança da despensa e a das listas vão juntas no mesmo commit.
+    """
+    # Sem flush a consulta da despensa não veria o item que acabou de mudar.
+    session.flush()
+    pantry_items = user_pantry(session, user_id)
+    lists = session.scalars(
+        select(ShoppingList).join(MealPlan).where(MealPlan.user_id == user_id)
+    ).all()
+
+    for shopping_list in lists:
+        apply_pantry(shopping_list, pantry_items)
 
 
 @dataclass(frozen=True)
