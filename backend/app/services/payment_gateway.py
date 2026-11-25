@@ -192,18 +192,21 @@ def create_payment(
     card: CardData | None = None,
     now: datetime | None = None,
     pix_provider: PixProvider | None = None,
+    amount: Decimal | None = None,
 ) -> Payment:
     """Registra uma tentativa de pagamento da lista e devolve o resultado.
 
-    O valor é o total estimado da lista, copiado. Pix sai pendente, com a
-    cobrança criada em `pix_provider`; cartão sai com a resposta do titular de
-    teste. Recusado também é gravado: é o histórico de tentativas que a tela
-    mostra.
+    O valor é o total estimado da lista, copiado — ou `amount`, quando a pessoa
+    paga o cenário que simulou no Mercado. Quem calcula esse valor é o servidor
+    (`scenario_total`), nunca a tela. Pix sai pendente, com a cobrança criada
+    em `pix_provider`; cartão sai com a resposta do titular de teste. Recusado
+    também é gravado: é o histórico de tentativas que a tela mostra.
     """
     now = now or datetime.now(timezone.utc)
     _ensure_not_paid(session, shopping_list)
 
-    amount = shopping_list.estimated_total
+    if amount is None:
+        amount = shopping_list.estimated_total
     if amount is None or amount <= 0:
         raise NothingToPayError("a lista não tem valor estimado para pagar")
 

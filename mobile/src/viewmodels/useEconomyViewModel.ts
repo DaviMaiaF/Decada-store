@@ -3,7 +3,9 @@
  *
  * Lê a lista de compras e faz as contas que a tela mostra. Só há conta que o
  * servidor sabe sustentar: o total, o que já foi para o carrinho e o que a
- * despensa poupou.
+ * despensa poupou — no total e item a item. A lista ainda não paga acompanha a
+ * despensa (o servidor refaz o desconto quando ela muda), e a Despensa invalida
+ * a chave da lista, então esta aba se atualiza sozinha.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -12,9 +14,21 @@ import { readShoppingList } from '../services/api';
 import { useAuth } from '../services/auth';
 import type { ShoppingList, ShoppingListItem } from '../types/api';
 
+/** Um item em que a despensa tirou dinheiro da compra. */
+export type ItemAbatido = {
+  id: string;
+  nome: string;
+  /** O que deixou de custar, em reais. */
+  valor: number;
+  /** A despensa cobriu o item inteiro: ele nem entra no carrinho. */
+  inteiro: boolean;
+};
+
 export type ResumoDaEconomia = {
   /** O que a despensa poupou, somado item a item. */
   economia: number;
+  /** De onde veio a economia, do item que mais poupou ao que menos poupou. */
+  abatidos: ItemAbatido[];
   estimatedTotal: string | null;
   jaNoCarrinho: number;
   falta: number;
@@ -61,8 +75,22 @@ export function resumir(lista: ShoppingList): ResumoDaEconomia {
   const total = Number(lista.estimated_total ?? 0);
   const comPreco = lista.items.filter((item) => item.estimated_cost !== null);
 
+  // Só entra o que tirou dinheiro de verdade: item que estava em casa, mas não
+  // chegou a tirar uma embalagem do carrinho, não poupou nada — e listá-lo com
+  // R$ 0,00 faria a pessoa achar que o app esqueceu de descontar.
+  const abatidos = lista.items
+    .filter((item) => Number(item.pantry_savings ?? 0) > 0)
+    .map((item) => ({
+      id: item.id,
+      nome: item.product.name,
+      valor: Number(item.pantry_savings),
+      inteiro: item.dispensed_by_pantry,
+    }))
+    .sort((a, b) => b.valor - a.valor);
+
   return {
     economia: somar(lista.items, 'pantry_savings'),
+    abatidos,
     estimatedTotal: lista.estimated_total,
     jaNoCarrinho,
     falta: Math.max(total - jaNoCarrinho, 0),

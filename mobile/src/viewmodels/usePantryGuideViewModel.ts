@@ -8,8 +8,8 @@
  * (decisão 11): "Tenho" grava o item, "Não tenho" só o tira da pergunta.
  *
  * O item entra vinculado ao produto confirmado e sem quantidade, como o da foto:
- * conta para as receitas na hora e só abate da compra depois que a pessoa disser
- * quanto tem.
+ * conta para as receitas na hora e tira o produto inteiro da compra. Quem tem só
+ * um pouco diz quanto, e aí o abatimento é parcial.
  */
 
 import { useState } from 'react';

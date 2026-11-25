@@ -4,8 +4,9 @@
  * Nenhum protótipo desenhou esta tela, e a decisão do projeto é dura com ela:
  * número de economia sem base não aparece. Por isso aqui só há conta que o
  * servidor sabe fazer — o total da lista, o que já foi para o carrinho e o que
- * a despensa poupou. "Desperdício evitado" e "previsão mensal", que os outros
- * protótipos mostravam, continuam de fora porque não há como calcular.
+ * a despensa poupou, no total e item a item. "Desperdício evitado" e "previsão
+ * mensal", que os outros protótipos mostravam, continuam de fora porque não há
+ * como calcular.
  *
  * A conta e o botão de sair ficam no rodapé: o app guarda dado de saúde e
  * precisa ter uma saída visível, e nenhuma das quatro telas do protótipo
@@ -65,7 +66,26 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
         </Card>
       </Entrada>
 
-      <Entrada atraso={atrasoDaCascata(1)}>
+      {resumo.abatidos.length > 0 ? (
+        <Entrada atraso={atrasoDaCascata(1)}>
+          <Card>
+            <SectionTitle>O que a despensa abateu</SectionTitle>
+            {resumo.abatidos.map((item) => (
+              <View key={item.id} style={styles.abatido}>
+                <View style={styles.abatidoTexto}>
+                  <Text style={styles.linhaValor}>{item.nome}</Text>
+                  <Text style={styles.abatidoNota}>
+                    {item.inteiro ? 'você já tem tudo: não precisa comprar' : 'parte veio de casa'}
+                  </Text>
+                </View>
+                <Text style={styles.abatidoValor}>− {formatMoney(item.valor.toFixed(2))}</Text>
+              </View>
+            ))}
+          </Card>
+        </Entrada>
+      ) : null}
+
+      <Entrada atraso={atrasoDaCascata(2)}>
         <Card>
           <SectionTitle>Esta compra</SectionTitle>
           <Linha rotulo="Total estimado" valor={formatMoney(resumo.estimatedTotal)} />
@@ -83,7 +103,7 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
         </Card>
       </Entrada>
 
-      <Entrada atraso={atrasoDaCascata(2)}>
+      <Entrada atraso={atrasoDaCascata(3)}>
         <Card>
           <SectionTitle>De onde vêm estes números</SectionTitle>
           <Linha rotulo="Itens com preço" valor={String(resumo.comPreco)} />
@@ -140,6 +160,17 @@ const styles = StyleSheet.create({
   },
   linhaRotulo: { ...typography.bodyMd, color: colors.onSurfaceVariant },
   linhaValor: { ...typography.bodyMd, color: colors.onSurface },
+
+  abatido: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  abatidoTexto: { flex: 1 },
+  abatidoNota: { ...typography.bodySm, color: colors.onSurfaceVariant },
+  abatidoValor: { ...typography.bodyMd, color: colors.primary },
 
   progresso: { gap: spacing.xs, marginTop: spacing.xs },
   progressoTexto: { ...typography.bodySm, color: colors.onSurfaceVariant },

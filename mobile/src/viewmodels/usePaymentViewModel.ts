@@ -34,6 +34,7 @@ import {
   formatarValidade,
   montarCartao,
 } from '../services/payment';
+import type { CenarioDeCompra } from '../services/simulation';
 import type { Payment, PaymentMethod, ShoppingList } from '../types/api';
 
 /** De quanto em quanto o Pix pendente é consultado. */
@@ -53,7 +54,17 @@ const MASCARAS: Record<keyof FormularioCartao, (texto: string) => string> = {
 
 export function usePaymentViewModel(
   lista: ShoppingList,
-  { onAprovado }: { onAprovado?: (pagamento: Payment) => void } = {},
+  {
+    onAprovado,
+    cenario,
+    total,
+  }: {
+    onAprovado?: (pagamento: Payment) => void;
+    /** O que foi simulado no Mercado: o pagamento cobra este cenário. */
+    cenario?: CenarioDeCompra;
+    /** O valor do cenário, para mostrar antes de pagar. Sem cenário, o da lista. */
+    total?: string | null;
+  } = {},
 ) {
   const cliente = useQueryClient();
   const chave = ['payments', lista.id];
@@ -85,7 +96,12 @@ export function usePaymentViewModel(
 
   const pagamento = useMutation({
     mutationFn: () =>
-      payShoppingList(lista.id, metodo, metodo === 'cartao_credito' ? cartao! : undefined),
+      payShoppingList(
+        lista.id,
+        metodo,
+        metodo === 'cartao_credito' ? cartao! : undefined,
+        cenario,
+      ),
     onSuccess: aoResponder,
   });
 
@@ -124,7 +140,7 @@ export function usePaymentViewModel(
       : null;
 
   return {
-    total: lista.estimated_total,
+    total: total ?? lista.estimated_total,
     metodo,
     /** Trocar de meio descarta a tentativa em tela: o Pix esperando não vale para o cartão. */
     escolherMetodo: (novo: PaymentMethod) => {

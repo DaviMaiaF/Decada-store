@@ -6,12 +6,13 @@
  *
  * Ao adicionar, a pessoa escolhe qual produto do catálogo é aquilo e diz quanto
  * tem. Sem o vínculo o item não abate da lista de compras nem conta para as
- * receitas; sem a quantidade ele conta para as receitas mas não abate nada. Um
- * item que não faz nada é pior que dois toques a mais no cadastro.
+ * receitas; sem a quantidade ele conta para as receitas e tira o produto inteiro
+ * da compra — "tenho ovo" é ter o bastante. Um item que não faz nada é pior que
+ * dois toques a mais no cadastro.
  *
  * A quantidade continua opcional: "tenho azeite" é informação válida sem número,
  * e guardar só como texto continua possível para o que não existe no catálogo.
- * Nos dois casos a tela avisa o que aquele item deixa de fazer.
+ * Nos dois casos a tela avisa o que aquele item faz com a compra.
  *
  * O que ficou pela metade não fica preso assim: tocar em um item já salvo abre o
  * mesmo par produto + quantidade, e é por ali que o item solto passa a abater.
@@ -370,8 +371,8 @@ export default function PantryScreen({
             {semQuantidade > 0 ? (
               <Body muted>
                 {semQuantidade === 1
-                  ? '1 item está ligado a um produto mas não tem quantidade, então também não desconta da sua lista de compras.'
-                  : `${semQuantidade} itens estão ligados a produtos mas não têm quantidade, então também não descontam da sua lista de compras.`}
+                  ? '1 item está sem quantidade, então sai inteiro da sua lista de compras. Se tem só um pouco, toque nele e diga quanto.'
+                  : `${semQuantidade} itens estão sem quantidade, então saem inteiros da sua lista de compras. Se tem só um pouco de algum, toque nele e diga quanto.`}
               </Body>
             ) : null}
           </Card>

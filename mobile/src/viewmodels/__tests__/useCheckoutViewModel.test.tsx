@@ -175,3 +175,71 @@ it('pagamento aprovado marca os itens e conclui sem outro toque', async () => {
   await waitFor(() => expect(result.current.concluido).toBe(true));
   expect(marcarComprado).toHaveBeenCalledWith('lista-1', 'a', true);
 });
+
+describe('com o cenário simulado no Mercado', () => {
+  const cenario = {
+    excluidos: ['b'],
+    quantidades: {
+      a: {
+        item_id: 'a',
+        quantity: '0.500',
+        quantity_charged: '0.500',
+        packages_needed: null,
+        estimated_cost: '5.00',
+      },
+    },
+  };
+  const tresItens = () => lista([item({ id: 'a' }), item({ id: 'b' }), item({ id: 'c' })]);
+
+  it('mostra o total e os itens do cenário, não os da lista salva', async () => {
+    const { result } = await renderHook(() => useCheckoutViewModel(tresItens(), cenario), {
+      wrapper: Provedor,
+    });
+
+    expect(result.current.simulando).toBe(true);
+    // a com 0,5 kg (R$ 5,00) + c inteiro (R$ 10,00); b fica fora.
+    expect(result.current.total).toBe('15.00');
+    expect(result.current.aComprar.map((i) => [i.id, i.quantity, i.simulado])).toEqual([
+      ['a', '0.500', true],
+      ['c', '1.000', false],
+    ]);
+    expect(result.current.foraDaCompra).toBe(1);
+    expect(result.current.pagamento.total).toBe('15.00');
+  });
+
+  it('sem simulação o total é o salvo da lista', async () => {
+    const { result } = await renderHook(() => useCheckoutViewModel(tresItens()), {
+      wrapper: Provedor,
+    });
+
+    expect(result.current.simulando).toBe(false);
+    expect(result.current.total).toBe('30.00');
+  });
+
+  it('paga o cenário e marca como comprado só o que entrou na compra', async () => {
+    marcarComprado.mockResolvedValue(undefined);
+    pagar.mockResolvedValue({
+      id: 'pagamento-1',
+      shopping_list_id: 'lista-1',
+      method: 'pix',
+      status: 'aprovado',
+      status_detail: 'pagamento aprovado',
+      amount: '15.00',
+      card_brand: null,
+      card_last_four: null,
+      pix_code: null,
+      paid_at: '2026-10-26T10:00:00Z',
+      created_at: '2026-10-26T10:00:00Z',
+      simulated: true,
+    });
+    const { result } = await renderHook(() => useCheckoutViewModel(tresItens(), cenario), {
+      wrapper: Provedor,
+    });
+
+    await act(async () => result.current.pagamento.pagar());
+
+    await waitFor(() => expect(result.current.concluido).toBe(true));
+    expect(pagar).toHaveBeenCalledWith('lista-1', 'pix', undefined, cenario);
+    expect(marcarComprado.mock.calls.map((chamada) => chamada[1])).toEqual(['a', 'c']);
+  });
+});
