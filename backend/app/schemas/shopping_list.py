@@ -52,10 +52,6 @@ class ShoppingListItemOut(ApiModel):
     # O que a despensa poupou neste item. Nulo quando não há preço; zero quando
     # o que havia em casa não chegou a tirar uma embalagem do carrinho.
     pantry_savings: Decimal | None = None
-    # A despensa tem este produto, mas sem quantidade (entrou pela foto ou pelo
-    # "Tenho"): não abate nada até a pessoa dizer quanto tem. Calculado na
-    # leitura da lista, como `outdated_items`; não é coluna.
-    pantry_unmeasured: bool = False
 
 
 class ExtraItemIn(BaseModel):

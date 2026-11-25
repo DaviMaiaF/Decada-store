@@ -1328,13 +1328,11 @@ def test_lista_paga_nao_muda_com_a_despensa(client, marina, db_session):
     assert depois["estimated_total"] == antes["estimated_total"]
 
 
-def test_item_na_despensa_sem_quantidade_aparece_na_lista(client, marina, db_session):
-    # Quem marca "tenho ovo" sem dizer quanto esperava ver o ovo abatido, e a
-    # tela precisa dizer por que não foi.
+def test_item_na_despensa_sem_quantidade_abate_o_item_inteiro(client, marina, db_session):
+    # Quem marca "tenho frango" sem dizer quanto está dizendo que tem o bastante.
     plano_id, frango = plano_confirmado(client, marina, db_session)
     lista_id = _gerar_lista(client, marina, plano_id)
     antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
-    assert antes["items"][0]["pantry_unmeasured"] is False
 
     client.post(
         "/pantry",
@@ -1343,5 +1341,8 @@ def test_item_na_despensa_sem_quantidade_aparece_na_lista(client, marina, db_ses
     )
 
     depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
-    assert depois["items"][0]["pantry_unmeasured"] is True
-    assert depois["estimated_total"] == antes["estimated_total"]
+    item = depois["items"][0]
+    assert item["dispensed_by_pantry"] is True
+    assert item["quantity_from_pantry"] == antes["items"][0]["quantity"]
+    assert Decimal(item["pantry_savings"]) == Decimal(antes["estimated_total"])
+    assert Decimal(depois["estimated_total"]) == Decimal("0")

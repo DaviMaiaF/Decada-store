@@ -29,8 +29,6 @@ export type ResumoDaEconomia = {
   economia: number;
   /** De onde veio a economia, do item que mais poupou ao que menos poupou. */
   abatidos: ItemAbatido[];
-  /** Produtos que estão em casa sem quantidade e, por isso, ainda não abatem nada. */
-  semQuantidade: string[];
   estimatedTotal: string | null;
   jaNoCarrinho: number;
   falta: number;
@@ -93,9 +91,6 @@ export function resumir(lista: ShoppingList): ResumoDaEconomia {
   return {
     economia: somar(lista.items, 'pantry_savings'),
     abatidos,
-    semQuantidade: lista.items
-      .filter((item) => item.pantry_unmeasured)
-      .map((item) => item.product.name),
     estimatedTotal: lista.estimated_total,
     jaNoCarrinho,
     falta: Math.max(total - jaNoCarrinho, 0),

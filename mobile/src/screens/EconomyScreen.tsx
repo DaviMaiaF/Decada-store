@@ -66,7 +66,7 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
         </Card>
       </Entrada>
 
-      {resumo.abatidos.length > 0 || resumo.semQuantidade.length > 0 ? (
+      {resumo.abatidos.length > 0 ? (
         <Entrada atraso={atrasoDaCascata(1)}>
           <Card>
             <SectionTitle>O que a despensa abateu</SectionTitle>
@@ -81,9 +81,6 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
                 <Text style={styles.abatidoValor}>− {formatMoney(item.valor.toFixed(2))}</Text>
               </View>
             ))}
-            {resumo.semQuantidade.length > 0 ? (
-              <Text style={styles.semQuantidade}>{avisoSemQuantidade(resumo.semQuantidade)}</Text>
-            ) : null}
           </Card>
         </Entrada>
       ) : null}
@@ -132,16 +129,6 @@ function Resumo({ resumo }: { resumo: ResumoDaEconomia }) {
   );
 }
 
-/** Produto em casa sem quantidade não abate nada: a tela diz por quê e o que fazer. */
-function avisoSemQuantidade(nomes: string[]): string {
-  const um = nomes.length === 1;
-  return (
-    `${nomes.join(', ')} ${um ? 'está' : 'estão'} na despensa sem quantidade, e por isso ` +
-    `ainda não ${um ? 'abate' : 'abatem'} nada. Diga quanto tem na aba Despensa para ` +
-    'descontar da compra.'
-  );
-}
-
 function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <View style={styles.linha}>
@@ -184,7 +171,6 @@ const styles = StyleSheet.create({
   abatidoTexto: { flex: 1 },
   abatidoNota: { ...typography.bodySm, color: colors.onSurfaceVariant },
   abatidoValor: { ...typography.bodyMd, color: colors.primary },
-  semQuantidade: { ...typography.bodySm, color: colors.onSurfaceVariant, marginTop: spacing.xs },
 
   progresso: { gap: spacing.xs, marginTop: spacing.xs },
   progressoTexto: { ...typography.bodySm, color: colors.onSurfaceVariant },

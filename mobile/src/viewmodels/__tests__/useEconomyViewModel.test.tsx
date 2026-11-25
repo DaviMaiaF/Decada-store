@@ -52,7 +52,6 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
     purchased: false,
     purchased_at: null,
     pantry_savings: '0.00',
-    pantry_unmeasured: false,
     is_extra: false,
     ...over,
   };
@@ -153,15 +152,6 @@ describe('resumir', () => {
       { id: 'b', nome: 'Frango', valor: 12.5, inteiro: true },
       { id: 'a', nome: 'Ovos', valor: 2.25, inteiro: false },
     ]);
-  });
-
-  it('aponta o que está em casa sem quantidade', () => {
-    const ovos = { ...item({ id: 'x' }).product, name: 'Ovos' };
-    const resumo = resumir(
-      lista([item({ id: 'a', product: ovos, pantry_unmeasured: true }), item({ id: 'b' })]),
-    );
-
-    expect(resumo.semQuantidade).toEqual(['Ovos']);
   });
 
   it('separa carrinho e falta, sem contar o que a despensa dispensou', () => {

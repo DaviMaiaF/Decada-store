@@ -136,9 +136,8 @@ O `GET /shopping-lists/{id}` traz `outdated_items`, o que divergiu desde a gera�
 item tem um `change`: `produto_trocado`, `nao_confirmado` e `novo_confirmado` vêm do plano;
 `despensa_alterada` diz que a despensa de hoje abateria daquela linha outra quantidade que a
 gravada — só acontece na lista com Pix pendente, porque nas outras o servidor corrige o
-desconto ao mudar a despensa. O `ListaDesatualizada` escolhe o título por eles. Cada item
-traz também `pantry_unmeasured`: a despensa tem o produto sem quantidade, e ele ainda não
-abate nada. Como a despensa muda a lista, cadastrar, editar ou remover item da despensa
+desconto ao mudar a despensa. O `ListaDesatualizada` escolhe o título por eles. Como a
+despensa muda a lista, cadastrar, editar ou remover item da despensa
 invalida `['shopping-list']` além de `['pantry']`.
 
 ### Pagamento simulado

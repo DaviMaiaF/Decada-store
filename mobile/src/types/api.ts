@@ -123,11 +123,6 @@ export interface ShoppingListItem {
   /** O que a despensa poupou neste item. Nulo quando não há preço. */
   pantry_savings: string | null;
   /**
-   * A despensa tem este produto, mas sem quantidade: não abate nada da compra
-   * até a pessoa dizer quanto tem. Calculado na leitura da lista.
-   */
-  pantry_unmeasured: boolean;
-  /**
    * Item que a pessoa acrescentou, e não veio do plano alimentar.
    *
    * É o que diz à tela que este pode sair da lista: item prescrito, não —

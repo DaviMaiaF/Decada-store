@@ -242,7 +242,7 @@ def test_despensa_de_outro_usuario_nao_entra_na_conta(db_session, usuario, catal
     assert resultado.shopping_list.items[0].quantity == Decimal("1.200")
 
 
-def test_item_da_despensa_sem_quantidade_nao_abate(db_session, usuario, catalogo_carregado):
+def test_item_da_despensa_sem_quantidade_abate_tudo(db_session, usuario, catalogo_carregado):
     frango = catalogo_carregado(FRANGO)
     _guardar(db_session, PantryItem(raw_description="frango", product=frango), usuario)
 
@@ -253,8 +253,9 @@ def test_item_da_despensa_sem_quantidade_nao_abate(db_session, usuario, catalogo
     resultado = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
     item = resultado.shopping_list.items[0]
 
-    assert item.quantity == Decimal("1.200")
-    assert item.quantity_from_pantry == Decimal("0.000")
+    assert item.quantity == Decimal("0.000")
+    assert item.quantity_from_pantry == Decimal("1.200")
+    assert item.dispensed_by_pantry
 
 
 # --------------------------------------------------------------------------
@@ -781,14 +782,14 @@ def test_despensa_igual_a_da_geracao_nao_avisa(db_session, usuario, catalogo_car
     assert _divergencias(db_session, lista) == []
 
 
-def test_item_da_despensa_sem_quantidade_nao_avisa(db_session, usuario, catalogo_carregado):
-    # Sem quantidade não abate nada, e a lista já mandava comprar tudo.
+def test_item_da_despensa_sem_quantidade_avisa(db_session, usuario, catalogo_carregado):
+    # Sem quantidade abate a linha inteira, e a lista mandava comprar tudo.
     frango = catalogo_carregado(FRANGO)
     lista = _lista_de_um_item(db_session, usuario, frango)
 
     _frango_em_casa(db_session, usuario, frango, None)
 
-    assert _divergencias(db_session, lista) == []
+    assert _mudancas(db_session, lista) == [(DESCRICAO_FRANGO, PlanChange.DESPENSA_ALTERADA)]
 
 
 def test_sobra_acima_do_que_a_linha_pedia_nao_avisa(db_session, usuario, catalogo_carregado):
@@ -947,14 +948,17 @@ def test_embalado_so_poupa_quando_tira_uma_embalagem(db_session, usuario, catalo
     assert lista.items[0].pantry_savings == Decimal("0.00")
 
 
-def test_despensa_sem_quantidade_nao_muda_a_lista(db_session, usuario, catalogo_carregado):
+def test_despensa_sem_quantidade_dispensa_o_item(db_session, usuario, catalogo_carregado):
+    # "Tenho frango", sem dizer quanto: o frango sai da compra.
     frango = catalogo_carregado(FRANGO)
     lista = _lista_de_um_item(db_session, usuario, frango)
+    total = lista.estimated_total
 
     _frango_em_casa(db_session, usuario, frango, None)
 
-    assert not _aplicar(db_session, lista)
-    assert lista.items[0].quantity == Decimal("1.200")
+    assert _aplicar(db_session, lista)
+    assert lista.items[0].dispensed_by_pantry
+    assert lista.items[0].pantry_savings == total
 
 
 def test_linha_ja_comprada_nao_muda(db_session, usuario, catalogo_carregado):

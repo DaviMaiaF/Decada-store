@@ -747,7 +747,7 @@ describe('quantidade do item da despensa', () => {
     expect(adicionar).not.toHaveBeenCalled();
   });
 
-  it('avisa que item vinculado sem quantidade também não desconta', async () => {
+  it('avisa que item vinculado sem quantidade sai inteiro da compra', async () => {
     lerDespensa.mockResolvedValue([
       naDespensa({ id: '1', product: produto('Aveia em flocos') }),
     ]);
@@ -756,7 +756,7 @@ describe('quantidade do item da despensa', () => {
 
     expect(
       await screen.findByText(
-        '1 item está ligado a um produto mas não tem quantidade, então também não desconta da sua lista de compras.',
+        '1 item está sem quantidade, então sai inteiro da sua lista de compras. Se tem só um pouco, toque nele e diga quanto.',
       ),
     ).toBeTruthy();
   });

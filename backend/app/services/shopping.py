@@ -45,7 +45,7 @@ from app.models import (
     ShoppingListItem,
 )
 from app.models.enums import MeasurementUnit, PaymentStatus, PlanChange, PlanItemStatus
-from app.services.pantry import available_quantity, coverage, ensure_measurable, user_pantry
+from app.services.pantry import coverage, ensure_measurable, pantry_cover, user_pantry
 from app.services.pricing import (
     ShoppingListCost,
     list_total,
@@ -259,7 +259,8 @@ def apply_pantry(shopping_list: ShoppingList, pantry_items: Sequence[PantryItem]
 
     Cada linha cobre o que compra mais o que veio de casa; isso não muda. O que
     muda é a divisão entre as duas partes, pela despensa de agora — com o mesmo
-    teto da geração: ter três quilos em casa não faz a linha ter pedido três.
+    teto da geração: ter três quilos em casa não faz a linha ter pedido três. O
+    item da despensa sem quantidade cobre a linha inteira (`pantry_cover`).
 
     O preço é o congelado na geração (`reprice_with_snapshot`). Assim a
     diferença no total é só a despensa, e é isso que a aba Economia mostra.
@@ -281,8 +282,7 @@ def apply_pantry(shopping_list: ShoppingList, pantry_items: Sequence[PantryItem]
             continue
 
         covered = item.quantity + item.quantity_from_pantry
-        available, _ = available_quantity(pantry_items, item.product)
-        from_pantry = min(available, covered).quantize(Decimal("0.001"))
+        from_pantry = pantry_cover(pantry_items, item.product, covered)
 
         if from_pantry == item.quantity_from_pantry.quantize(Decimal("0.001")):
             continue
@@ -431,10 +431,9 @@ def _pantry_changes(
             continue
 
         covered = list_item.quantity + list_item.quantity_from_pantry
-        available, _ = available_quantity(pantry_items, list_item.product)
         # Mesmo teto da geração: ter três quilos em casa não faz a linha ter
         # pedido três quilos. Por isso sobra em casa não é divergência.
-        from_pantry_now = min(available, covered).quantize(Decimal("0.001"))
+        from_pantry_now = pantry_cover(pantry_items, list_item.product, covered)
 
         if from_pantry_now != list_item.quantity_from_pantry.quantize(Decimal("0.001")):
             changes.append(OutdatedItem(list_item.plan_item, PlanChange.DESPENSA_ALTERADA))

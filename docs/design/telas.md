@@ -180,7 +180,6 @@ desconto foi calculado com a despensa de antes. Ficam de fora, de propósito:
 
 - **sobra acima do pedido** — o abatimento é limitado ao que a linha pedia, então ter
   mais em casa não muda nada;
-- **item sem quantidade** — não abate, e a lista já sabia disso;
 - **linha comprada e lista paga** — depois da compra a pessoa guarda o que trouxe na
   despensa, e o aviso pediria uma lista nova do que já está em casa;
 - **avulso** — o aviso mostra a descrição do item do plano, e o avulso não tem; ele é
@@ -334,7 +333,8 @@ pessoa não fazer, e ela só abate da compra se existir quando a lista é gerada
 diz o que ela vai precisar, então o cartão pergunta só por isso
 (`usePantryGuideViewModel`). Quem decide é a pessoa (decisão 11): nada entra sem o toque em
 "Tenho". O item entra como o da foto — vinculado ao produto e **sem quantidade** —, então
-conta para as receitas na hora e só abate da compra depois que a pessoa disser quanto tem.
+conta para as receitas na hora e **tira o produto inteiro da compra**: "tenho ovo" é ter o
+bastante. Quem tem só um pouco toca no item e diz quanto, e aí o abatimento é parcial.
 "Não tenho" não grava nada e vale só para a sessão. Produto repetido no plano aparece uma
 vez, e com a despensa sem carregar o cartão não pergunta.
 
@@ -464,7 +464,6 @@ despensa: mudar a despensa refaz o desconto da lista ainda não paga, e a Despen
 |---|---|---|
 | "A despensa poupou R$ X" | ✅ | `ShoppingListItem.pantry_savings`, somado na lista |
 | O que a despensa abateu, item a item | ✅ | Cada item com `pantry_savings` maior que zero, do que mais poupou ao que menos poupou; "não precisa comprar" quando `dispensed_by_pantry` |
-| Produto em casa sem quantidade | ✅ | `pantry_unmeasured`, calculado na leitura da lista: a tela diz que ele ainda não abate e manda dizer quanto tem na Despensa |
 | Total estimado da compra | ✅ | `ShoppingList.estimated_total` |
 | Já no carrinho · ainda falta | ✅ | Soma de `estimated_cost` dos itens com `purchased` |
 | Itens com preço · sem preço na região | ✅ | Contagem sobre os itens |
