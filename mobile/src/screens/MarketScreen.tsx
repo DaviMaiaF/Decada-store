@@ -35,6 +35,7 @@ import CheckoutScreen from './CheckoutScreen';
 import { describeConfidence, describeOrigin, formatMoney, formatQuantity } from '../services/format';
 import { motion } from '../theme/motion';
 import { MIN_TOUCH_HEIGHT, colors, radius, spacing, typography } from '../theme/tokens';
+import type { CenarioDeCompra } from '../services/simulation';
 import type { ProductSuggestion, ShoppingList, ShoppingListItem, SimulatedItem } from '../types/api';
 import {
   useAddExtraItemViewModel,
@@ -116,6 +117,7 @@ export default function MarketScreen({
     return (
       <CheckoutScreen
         lista={vm.lista}
+        cenario={vm.cenario}
         onVoltar={vm.voltarALista}
         onGenerated={handleGeneratedList}
         onIrAoInicio={onCompraConcluida}
@@ -128,6 +130,7 @@ export default function MarketScreen({
       lista={vm.lista}
       shoppingReminder={shoppingReminder}
       onTrocarRegiao={vm.trocarRegiao}
+      cenario={vm.cenario}
       onFinalizar={vm.finalizar}
       onGenerated={handleGeneratedList}
     />
@@ -259,18 +262,21 @@ function ListaCarregada({
   lista,
   shoppingReminder,
   onTrocarRegiao,
+  cenario,
   onFinalizar,
   onGenerated,
 }: {
   lista: ShoppingList;
   shoppingReminder: ShoppingReminderViewModel;
   onTrocarRegiao: () => void;
-  /** Abre o checkout simulado. */
-  onFinalizar: () => void;
+  /** A simulação com que a pessoa voltou do checkout. */
+  cenario: CenarioDeCompra;
+  /** Abre o checkout simulado, levando a simulação: é ela que se paga. */
+  onFinalizar: (cenario: CenarioDeCompra) => void;
   /** Lista nova, gerada pelo aviso de plano alterado. */
   onGenerated: (listId: string, lista: ShoppingList) => void;
 }) {
-  const vm = useShoppingListViewModel(lista);
+  const vm = useShoppingListViewModel(lista, cenario);
   // Corredor que surge de um item acrescentado entra na hora.
   const cascata = useCascata(vm.porCorredor.length > 0);
 
@@ -320,7 +326,7 @@ function ListaCarregada({
           nenhum, e a tela seguinte diz isso antes de qualquer confirmação. */}
       <Button
         label="Finalizar compra (simulada)"
-        onPress={onFinalizar}
+        onPress={() => onFinalizar(vm.cenario)}
         disabled={vm.aComprar === 0}
       />
 
@@ -329,8 +335,8 @@ function ListaCarregada({
           <SectionTitle>Simulando a compra</SectionTitle>
           <Body muted>{vm.resumoDaSimulacao}</Body>
           <Body muted>
-            É só uma conta nesta tela. Sua lista continua inteira, e o plano da sua
-            nutricionista não muda.
+            Ao finalizar, o pagamento cobra este cenário. Sua lista continua inteira,
+            e o plano da sua nutricionista não muda.
           </Body>
           <Button label="Limpar simulação" variant="ghost" onPress={vm.limparSimulacao} />
         </Card>

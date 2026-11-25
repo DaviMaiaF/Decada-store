@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 
 import { http } from './http';
+import { type CenarioDeCompra, cenarioVazio } from './simulation';
 import type {
   Account,
   Candidate,
@@ -227,10 +228,31 @@ export const setItemPurchased = (listId: string, itemId: string, purchased: bool
  * Cartão recusado não é erro: volta 201 com `status: 'recusado'`. Erro (422) é
  * o cartão que o formulário de verdade também recusaria, e 409 é lista já paga.
  */
-export const payShoppingList = (listId: string, method: PaymentMethod, card?: CardInput) =>
+/**
+ * Paga a lista. Com cenário, paga o que foi simulado no Mercado: os itens que
+ * ficam fora e as quantidades mudadas. O valor quem calcula é o servidor.
+ */
+export const payShoppingList = (
+  listId: string,
+  method: PaymentMethod,
+  card?: CardInput,
+  cenario?: CenarioDeCompra,
+) =>
   request<Payment>(`/shopping-lists/${listId}/payments`, {
     method: 'POST',
-    body: card ? { method, card } : { method },
+    body: {
+      method,
+      ...(card ? { card } : {}),
+      ...(cenario && !cenarioVazio(cenario)
+        ? {
+            excluded_item_ids: cenario.excluidos,
+            quantities: Object.entries(cenario.quantidades).map(([item_id, item]) => ({
+              item_id,
+              quantity: item.quantity,
+            })),
+          }
+        : {}),
+    },
   });
 
 export const readPayments = (listId: string) =>

@@ -20,6 +20,7 @@ import { ListaDesatualizada } from '../components/ListaDesatualizada';
 import { PagamentoSimulado } from '../components/PagamentoSimulado';
 import { formatMoney, formatQuantity } from '../services/format';
 import { colors, spacing, typography } from '../theme/tokens';
+import type { CenarioDeCompra } from '../services/simulation';
 import type { ShoppingList } from '../types/api';
 import { useCheckoutViewModel } from '../viewmodels/useCheckoutViewModel';
 
@@ -28,11 +29,14 @@ export const AVISO_SIMULACAO =
 
 export default function CheckoutScreen({
   lista,
+  cenario,
   onVoltar,
   onGenerated,
   onIrAoInicio,
 }: {
   lista: ShoppingList;
+  /** A simulação do Mercado: é ela que se paga. */
+  cenario?: CenarioDeCompra;
   onVoltar: () => void;
   /** Lista nova, gerada pelo aviso de plano alterado. */
   onGenerated: (listId: string, lista: ShoppingList) => void;
@@ -46,12 +50,15 @@ export default function CheckoutScreen({
     pagamento,
     concluido,
     aComprar,
+    total,
+    simulando,
+    foraDaCompra,
     semPreco,
     temFicticio,
     confirmar,
     confirmando,
     falhou,
-  } = useCheckoutViewModel(lista);
+  } = useCheckoutViewModel(lista, cenario);
 
   if (concluido) {
     return (
@@ -62,7 +69,7 @@ export default function CheckoutScreen({
         <Text style={[styles.titulo, styles.centro]}>Compra concluída</Text>
         <Body muted>
           {aComprar.length} item(ns) marcados como comprados, por cerca de{' '}
-          {formatMoney(lista.estimated_total)} em {lista.city} · {lista.state_code}.
+          {formatMoney(total)} em {lista.city} · {lista.state_code}.
         </Body>
         <Card style={styles.aviso}>
           <Body>{AVISO_SIMULACAO}</Body>
@@ -115,8 +122,15 @@ export default function CheckoutScreen({
       </Card>
 
       <Card style={styles.resumo}>
-        <Text style={styles.resumoRotulo}>TOTAL ESTIMADO</Text>
-        <Text style={styles.total}>{formatMoney(lista.estimated_total)}</Text>
+        <Text style={styles.resumoRotulo}>
+          {simulando ? 'TOTAL DA SIMULAÇÃO' : 'TOTAL ESTIMADO'}
+        </Text>
+        <Text style={styles.total}>{formatMoney(total)}</Text>
+        {simulando ? (
+          <Text style={styles.resumoRegiao}>
+            lista salva: {formatMoney(lista.estimated_total)}
+          </Text>
+        ) : null}
         <Text style={styles.resumoRegiao}>
           {lista.city} · {lista.state_code}
         </Text>
@@ -126,6 +140,12 @@ export default function CheckoutScreen({
           antigo quem trocou o item na Dieta depois de gerar. */}
       <ListaDesatualizada lista={lista} onGenerated={onGenerated} />
 
+      {foraDaCompra > 0 ? (
+        <Body muted>
+          {foraDaCompra} item(ns) ficaram fora desta compra na simulação. Eles continuam
+          na lista, a comprar.
+        </Body>
+      ) : null}
       {semPreco > 0 ? (
         <Body muted>
           {semPreco} item(ns) sem preço coletado nesta região não entram no total.
@@ -140,7 +160,10 @@ export default function CheckoutScreen({
         <View key={item.id} style={styles.linha}>
           <View style={styles.linhaTexto}>
             <Text style={styles.nome}>{item.product.name}</Text>
-            <Text style={styles.detalhe}>{formatQuantity(item.quantity, item.unit)}</Text>
+            <Text style={styles.detalhe}>
+              {formatQuantity(item.quantity, item.unit)}
+              {item.simulado ? ' · simulado' : ''}
+            </Text>
           </View>
           <Text style={styles.preco}>{formatMoney(item.estimated_cost)}</Text>
         </View>
