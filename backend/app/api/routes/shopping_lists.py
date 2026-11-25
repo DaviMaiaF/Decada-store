@@ -21,7 +21,7 @@ from app.schemas.shopping_list import (
     SimulatedItemOut,
     SimulationIn,
 )
-from app.services.pantry import user_pantry
+from app.services.pantry import available_quantity, user_pantry
 from app.services.shopping import (
     add_extra_item,
     generate_shopping_list,
@@ -164,13 +164,25 @@ def read_shopping_list(
     corredor é decisão de quem exibe, não do servidor.
 
     Traz também o que mudou no plano e na despensa desde a geração, para a tela
-    avisar que a lista ficou para trás em vez de mostrar o retrato antigo calada.
+    avisar que a lista ficou para trás em vez de mostrar o retrato antigo calada,
+    e, item a item, se a despensa tem o produto sem quantidade — o que ainda não
+    abate nada da compra.
     """
     shopping_list = _get_list(session, user, list_id)
     pantry_items = user_pantry(session, user.id)
+    lida = ShoppingListOut.model_validate(shopping_list)
 
-    return ShoppingListOut.model_validate(shopping_list).model_copy(
+    return lida.model_copy(
         update={
+            "items": [
+                item.model_copy(
+                    update={
+                        "pantry_unmeasured": not item.purchased
+                        and available_quantity(pantry_items, original.product)[1]
+                    }
+                )
+                for item, original in zip(lida.items, shopping_list.items, strict=True)
+            ],
             "outdated_items": [
                 OutdatedItemOut(
                     plan_item_id=outdated.plan_item.id,

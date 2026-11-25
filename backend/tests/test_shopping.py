@@ -934,7 +934,8 @@ def test_embalado_so_poupa_quando_tira_uma_embalagem(db_session, usuario, catalo
     plano = _plano(usuario, _item(1, "300 g de queijo minas", "300", G, queijo))
     db_session.add(plano)
     db_session.flush()
-    lista = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA).shopping_list
+    gerada = generate_shopping_list(db_session, plano, "DF", "Brasília", reference=AGORA)
+    lista = gerada.shopping_list
     custo = lista.items[0].estimated_cost
 
     _guardar(db_session, PantryItem(raw_description="queijo", product=queijo,

@@ -53,7 +53,12 @@ export function useCheckoutViewModel(
     .map((item) => {
       const simulado = cenario.quantidades[item.id];
       return simulado
-        ? { ...item, quantity: simulado.quantity, estimated_cost: simulado.estimated_cost, simulado: true }
+        ? {
+            ...item,
+            quantity: simulado.quantity,
+            estimated_cost: simulado.estimated_cost,
+            simulado: true,
+          }
         : { ...item, simulado: false };
     });
   // O mesmo valor que o servidor cobra: sem simulação, o total salvo da lista;

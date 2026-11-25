@@ -54,6 +54,7 @@ function item(over: Partial<ShoppingListItem> & { id: string }): ShoppingListIte
     purchased: false,
     purchased_at: null,
     pantry_savings: '0.00',
+    pantry_unmeasured: false,
     is_extra: false,
     ...over,
   };
@@ -116,6 +117,30 @@ it('mostra o que a despensa poupou, somando os itens', async () => {
   );
 
   expect(await screen.findByText('R$ 14,75')).toBeTruthy();
+});
+
+it('mostra item por item o que a despensa abateu', async () => {
+  const ovos = { ...item({ id: 'x' }).product, name: 'Ovos brancos' };
+  await montar(
+    lista([
+      item({ id: 'a', product: ovos, pantry_savings: '9.90', dispensed_by_pantry: true }),
+      item({ id: 'b', pantry_savings: '0.00' }),
+    ]),
+  );
+
+  expect(await screen.findByText('O que a despensa abateu')).toBeTruthy();
+  expect(screen.getByText('Ovos brancos')).toBeTruthy();
+  expect(screen.getByText('− R$ 9,90')).toBeTruthy();
+  expect(screen.getByText(/não precisa comprar/)).toBeTruthy();
+});
+
+it('avisa do item em casa sem quantidade, que ainda não abate', async () => {
+  const ovos = { ...item({ id: 'x' }).product, name: 'Ovos brancos' };
+  await montar(lista([item({ id: 'a', product: ovos, pantry_unmeasured: true })]));
+
+  expect(
+    await screen.findByText(/Ovos brancos está na despensa sem\s+quantidade/),
+  ).toBeTruthy();
 });
 
 it('não inventa economia quando a despensa não tirou nada do carrinho', async () => {

@@ -1326,3 +1326,22 @@ def test_lista_paga_nao_muda_com_a_despensa(client, marina, db_session):
     depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
     assert depois["items"][0]["quantity"] == antes["items"][0]["quantity"]
     assert depois["estimated_total"] == antes["estimated_total"]
+
+
+def test_item_na_despensa_sem_quantidade_aparece_na_lista(client, marina, db_session):
+    # Quem marca "tenho ovo" sem dizer quanto esperava ver o ovo abatido, e a
+    # tela precisa dizer por que não foi.
+    plano_id, frango = plano_confirmado(client, marina, db_session)
+    lista_id = _gerar_lista(client, marina, plano_id)
+    antes = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert antes["items"][0]["pantry_unmeasured"] is False
+
+    client.post(
+        "/pantry",
+        headers=_headers(marina),
+        json={"raw_description": "frango", "product_id": str(frango.id)},
+    )
+
+    depois = client.get(f"/shopping-lists/{lista_id}", headers=_headers(marina)).json()
+    assert depois["items"][0]["pantry_unmeasured"] is True
+    assert depois["estimated_total"] == antes["estimated_total"]
