@@ -92,8 +92,9 @@ export function useMarketViewModel(listId: string | null) {
 /**
  * O que há em casa, perguntado antes de gerar a lista.
  *
- * A despensa é descontada quando a lista é gerada, e a lista fica congelada: quem
- * gera com a despensa vazia leva a compra inteira. Por isso a pergunta vem antes,
+ * A despensa é descontada quando a lista é gerada; mudar a despensa depois
+ * corrige a lista, mas quem gera com a despensa vazia vê a compra inteira até
+ * cadastrar o que tem. Por isso a pergunta vem antes,
  * mas não trava — "não tenho nada" e simplesmente gerar são respostas válidas.
  * "Não tenho nada" conclui a etapa Despensa da trilha, como o botão da aba.
  * Lê a mesma chave da aba Despensa, então cadastrar lá aparece aqui na volta.

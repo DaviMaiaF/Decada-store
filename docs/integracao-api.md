@@ -135,9 +135,11 @@ de pé; o app não o usa.
 O `GET /shopping-lists/{id}` traz `outdated_items`, o que divergiu desde a geração. Cada
 item tem um `change`: `produto_trocado`, `nao_confirmado` e `novo_confirmado` vêm do plano;
 `despensa_alterada` diz que a despensa de hoje abateria daquela linha outra quantidade que a
-gravada. O `ListaDesatualizada` escolhe o título por eles. Como a divergência da despensa é
-calculada na leitura, cadastrar, editar ou remover item da despensa invalida
-`['shopping-list']` além de `['pantry']`.
+gravada — só acontece na lista com Pix pendente, porque nas outras o servidor corrige o
+desconto ao mudar a despensa. O `ListaDesatualizada` escolhe o título por eles. Cada item
+traz também `pantry_unmeasured`: a despensa tem o produto sem quantidade, e ele ainda não
+abate nada. Como a despensa muda a lista, cadastrar, editar ou remover item da despensa
+invalida `['shopping-list']` além de `['pantry']`.
 
 ### Pagamento simulado
 
@@ -146,12 +148,13 @@ Nada é cobrado: o Pix passa pelo Abacate Pay em modo de teste e o cartão é si
 
 | Método | Rota | Função |
 |---|---|---|
-| POST | `/shopping-lists/{id}/payments` | `payShoppingList` — Pix, ou cartão com os dados do formulário |
+| POST | `/shopping-lists/{id}/payments` | `payShoppingList` — Pix, ou cartão com os dados do formulário; com a simulação do Mercado, leva `excluded_item_ids` e `quantities`, e o servidor refaz o valor |
 | GET | `/shopping-lists/{id}/payments` | `readPayments` — é por aqui que o checkout sabe que a lista já foi paga |
 | GET | `/shopping-lists/{id}/payments/{payment}` | `readPayment` — o Pix pendente é consultado a cada 5 segundos; o servidor confere no provedor |
 | POST | `/shopping-lists/{id}/payments/{payment}/confirmation` | `confirmPayment` — simula o Pix recebido ou o cartão que saiu da análise |
 
-O Pix responde `503` quando o provedor está fora do ar ou sem chave. Falha na consulta
+O Pix responde `503` quando o provedor está fora do ar ou sem chave. No cenário simulado,
+item que não é da lista responde `404`, e o mesmo item tirado e com outra quantidade, `422`. Falha na consulta
 periódica não aparece na tela: a próxima tenta de novo.
 
 `POST /webhooks/abacatepay` é chamada pelo Abacate Pay, não pelo app. Sem token de usuário:
